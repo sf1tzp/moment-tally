@@ -71,7 +71,7 @@ Vocabulary drifts — one week says `project`, a stray day says `proj`. Mark Rev
 
 ![Mark Review listing mark keys with usage counts and total time](readme-images/label-review.png)
 
-There's more — a launcher of one-click tally cards, a calendar where overlapping timers share columns, and an interactive onboarding that teaches the mark model. See every surface in motion at [momenttally.com/features](https://momenttally.com/features).
+There's more — a launcher of one-click tally cards, a calendar where overlapping timers share columns, and an interactive onboarding that teaches the mark model. See every surface in motion at [moment-tally.com/features](https://moment-tally.com/features).
 
 ## Try it: Demo Mode
 
