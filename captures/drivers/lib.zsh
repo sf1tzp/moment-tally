@@ -48,6 +48,41 @@ rtype() { cliclick -w 85 "t:$1"; }
 # Menu type-select on an already-open NSMenu (longest-name wins prefix races).
 menu_pick() { sleep 0.6; cliclick -w 100 "t:$1"; sleep 0.3; key_return; }
 
+# Popover driving (shared by stills.zsh and popover-motion.zsh). The popover
+# resolves as window 1 while open, even with the main window on screen.
+toggle_popover() { ax 'click menu bar item 1 of menu bar 2' >/dev/null; sleep 1.2; }
+
+# help_point <substr> -> "x,y" of the popover element whose help contains substr
+help_point() {
+  osascript <<EOF
+tell application "System Events" to tell process "$APP"
+  set g to group 1 of window 1
+  set hs to help of UI elements of g
+  set ps to position of UI elements of g
+  repeat with i from 1 to (count hs)
+    try
+      if (item i of hs) contains "$1" then
+        return ((item 1 of item i of ps) as text) & "," & ((item 2 of item i of ps) as text)
+      end if
+    end try
+  end repeat
+  return ""
+end tell
+EOF
+}
+
+# stop_all_timers — opens the popover, clicks every Stop button (help "Stop"),
+# closes it again. A running tally dims its launcher card, so still batches
+# that show the launcher want an idle state.
+stop_all_timers() {
+  toggle_popover
+  local p
+  while p=$(help_point "Stop" | tr -d ' '); [[ -n $p ]]; do
+    cliclick "c:$((${p%,*}+8)),$((${p#*,}+8))"; sleep 1
+  done
+  toggle_popover
+}
+
 # still <out.png> <window-title-or-empty> — window-ID capture (native shadow).
 still() {
   local id; id=$(winid "$2")

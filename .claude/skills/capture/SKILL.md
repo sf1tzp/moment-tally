@@ -27,7 +27,7 @@ pipeline overview.
 1. **Build from the commit you'll vouch for, in a worktree.** The provenance
    manifest stamps `HEAD` at export, and the README exports land in the tree
    you run from — so work from a fresh worktree branch off origin/main
-   (`git worktree add ~/worktrees/PrimeTime/captures-<date> -b
+   (`git worktree add ~/worktrees/moment-tally/captures-<date> -b
    captures-<date> origin/main`), never a primary checkout. There:
    `swift build`, then launch `./.build/debug/MomentTally --demo` (demo mode
    never touches the Keychain, so the unsigned binary launches with zero

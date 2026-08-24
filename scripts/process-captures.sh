@@ -19,16 +19,20 @@ done
 [[ -d "$RAW" ]] || { echo "error: $RAW does not exist — capture first (/capture skill)" >&2; exit 1; }
 mkdir -p "$OUT"
 
-# One line per output: id<TAB>kind<TAB>to<TAB>path<TAB>format<TAB>width<TAB>fps<TAB>theme
+# One |-delimited line per output: id|kind|to|path|format|width|fps|theme.
+# NOT @tsv: tab is IFS whitespace, so `read` collapses runs of tabs and an
+# empty width/fps would shift `theme` into the wrong variable (shipped dark
+# captures as -light renditions until 2026-08-24). A non-whitespace IFS
+# preserves empty fields.
 outputs() {
     yq -o=json '.' "$SHOTS" | jq -r '
         .shots[] | . as $s | .outputs[] |
         [$s.id, $s.kind, .to, .path, .format,
-         (.width // ""), (.fps // ""), (.theme // "")] | @tsv'
+         (.width // "" | tostring), (.fps // "" | tostring), (.theme // "")] | join("|")'
 }
 
 missing=()
-while IFS=$'\t' read -r id kind to path format width fps theme; do
+while IFS='|' read -r id kind to path format width fps theme; do
     ext=png; [[ "$kind" == recording ]] && ext=mov
     # theme: light renditions come from the <id>-light raw; default is dark.
     raw="$RAW/$id${theme:+-$theme}.$ext"
@@ -42,9 +46,12 @@ while IFS=$'\t' read -r id kind to path format width fps theme; do
     if [[ "$to" == appstore ]]; then
         # Mac App Store screenshots must be exactly 16:10 (2880×1800 here),
         # flattened RGB. Fit the capture into a 90% box and overlay it — alpha
-        # intact, so the window shadow lands softly — on the charcoal canvas.
+        # intact, so the window shadow lands softly — on a canvas matching the
+        # rendition's theme: charcoal for dark, the website's light surface
+        # grey for theme:light.
+        canvas=0x17151a; [[ "$theme" == light ]] && canvas=0xf5f5f7
         ffmpeg -nostdin -v error -y \
-            -f lavfi -i "color=c=0x17151a:s=2880x1800" -i "$raw" \
+            -f lavfi -i "color=c=$canvas:s=2880x1800" -i "$raw" \
             -filter_complex "[1]scale=2592:1620:force_original_aspect_ratio=decrease:flags=lanczos[fg];[0][fg]overlay=(W-w)/2:(H-h)/2:format=auto,format=rgb24" \
             -frames:v 1 -update 1 "$dst"
         echo "  $id → $(basename "$dst")"

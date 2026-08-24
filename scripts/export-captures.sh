@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Export processed renditions (captures/out/) into their consumer repos and
 # stamp provenance manifests. Destinations come from captures/shots.yaml:
-#   to: readme   → this repo (run the pipeline from a PrimeTime worktree
+#   to: readme   → this repo (run the pipeline from a moment-tally worktree
 #                  branch, so these exports land on that branch)
 #   to: website  → $1 if given (used as-is: tests, one-offs); otherwise a
 #                  dated worktree of the website checkout
-#                  (~/worktrees/primetime-website/captures-<date>, branched
+#                  (~/worktrees/moment-tally-website/captures-<date>, branched
 #                  from origin/main) — the primary checkout
-#                  ($MOMENTTALLY_WEBSITE_DIR, default ~/primetime-website) is
+#                  ($MOMENTTALLY_WEBSITE_DIR, default ~/moment-tally-website) is
 #                  never written to directly, per the worktree-PR convention
 #   to: appstore → this repo (captures/appstore/) — hand-uploaded to App
 #                  Store Connect, committed for provenance like readme assets
@@ -35,14 +35,14 @@ done
 if [[ $# -ge 1 ]]; then
     WEBSITE="$1"
 else
-    REPO="${MOMENTTALLY_WEBSITE_DIR:-$HOME/primetime-website}"
+    REPO="${MOMENTTALLY_WEBSITE_DIR:-$HOME/moment-tally-website}"
     [[ -e "$REPO/.git" ]] \
         || { echo "error: '$REPO' is not a git checkout (set MOMENTTALLY_WEBSITE_DIR)" >&2; exit 1; }
     # Local date, not UTC: the capture worktree convention (captures-<date>)
     # uses local dates, and a UTC evening rollover otherwise splits the pair
     # into two differently-dated worktrees.
     BRANCH="captures-$(date +%F)"
-    WEBSITE="$HOME/worktrees/primetime-website/$BRANCH"
+    WEBSITE="$HOME/worktrees/moment-tally-website/$BRANCH"
     if [[ ! -e "$WEBSITE/.git" ]]; then
         git -C "$REPO" fetch origin
         if git -C "$REPO" show-ref --verify -q "refs/heads/$BRANCH"; then
@@ -54,7 +54,7 @@ else
 fi
 # .git is a file in worktrees, a directory in primary checkouts — test both.
 [[ -e "$WEBSITE/.git" && -d "$WEBSITE/static/screenshots" ]] \
-    || { echo "error: '$WEBSITE' is not a primetime-website checkout" >&2; exit 1; }
+    || { echo "error: '$WEBSITE' is not a moment-tally-website checkout" >&2; exit 1; }
 
 SHOTS_JSON="$(yq -o=json '.' "$SHOTS")"
 

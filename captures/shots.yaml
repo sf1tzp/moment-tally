@@ -18,9 +18,10 @@
 #     to      readme | website | appstore  (destination roots: this repo /
 #             $MOMENTTALLY_WEBSITE_DIR / this repo — see
 #             scripts/export-captures.sh). appstore renditions are composited
-#             onto a flattened 2880×1800 canvas (dark charcoal #17151a) to
-#             meet the Mac App Store 16:10 screenshot spec; upload the files
-#             in captures/appstore/ to App Store Connect by hand.
+#             onto a flattened 2880×1800 canvas — dark charcoal #17151a, or
+#             light #f5f5f7 for theme:light renditions — to meet the Mac App
+#             Store 16:10 screenshot spec; upload the files in
+#             captures/appstore/ to App Store Connect by hand.
 #     path    destination-repo-relative path
 #     format  png | webp | gif | mp4
 #     width   target pixel width; omit to keep the native (2x retina) size.
@@ -29,7 +30,9 @@
 #     theme   light — rendition comes from the light-appearance capture
 #             captures/raw/<id>-light.png. Omitted = dark, the canonical
 #             theme; recordings are dark-only. The website swaps still
-#             images to the -light variant when its light theme is active.
+#             images to the -light variant when its light theme is active;
+#             appstore light renditions ship alongside the dark set for the
+#             App Store presentation.
 
 shots:
   - id: popover
@@ -43,6 +46,7 @@ shots:
       Settings… rows below.
     outputs:
       - { to: appstore, path: captures/appstore/popover.png, format: png }
+      - { to: appstore, path: captures/appstore/popover-light.png, format: png, theme: light }
 
   - id: popover-motion
     kind: recording
@@ -77,9 +81,12 @@ shots:
       Launcher tab of the Moment Tally window: the quick-start grid of seeded
       tallies — the work cards (Client Rebrand, Wedding Shoot) next to
       the quick-marks-only hobby cards (Cooking, Workout, Reading), each
-      with its own icon and colour, plus the dashed New Tally card.
+      with its own icon and colour, plus the dashed New Tally card. No
+      timer running: a running tally dims its card, and the seed launches
+      with the wedding-shoot timer active — stop timers first.
     outputs:
       - { to: appstore, path: captures/appstore/launcher.png, format: png }
+      - { to: appstore, path: captures/appstore/launcher-light.png, format: png, theme: light }
 
   - id: launcher-motion
     kind: recording
@@ -104,6 +111,7 @@ shots:
       - { to: website, path: static/screenshots/label-sets.webp, format: webp }
       - { to: website, path: static/screenshots/label-sets-light.webp, format: webp, theme: light }
       - { to: appstore, path: captures/appstore/label-sets.png, format: png }
+      - { to: appstore, path: captures/appstore/label-sets-light.png, format: png, theme: light }
 
   - id: log
     kind: still
@@ -118,6 +126,7 @@ shots:
       - { to: website, path: static/screenshots/log-light.webp, format: webp, theme: light }
       - { to: readme, path: readme-images/log-view.png, format: png }
       - { to: appstore, path: captures/appstore/log.png, format: png }
+      - { to: appstore, path: captures/appstore/log-light.png, format: png, theme: light }
 
   - id: calendar
     kind: still
@@ -131,6 +140,7 @@ shots:
       - { to: website, path: static/screenshots/calendar.webp, format: webp }
       - { to: website, path: static/screenshots/calendar-light.webp, format: webp, theme: light }
       - { to: appstore, path: captures/appstore/calendar.png, format: png }
+      - { to: appstore, path: captures/appstore/calendar-light.png, format: png, theme: light }
 
   - id: history
     kind: still
@@ -144,6 +154,7 @@ shots:
       - { to: website, path: static/screenshots/history-light.webp, format: webp, theme: light }
       - { to: readme, path: readme-images/history-view.png, format: png }
       - { to: appstore, path: captures/appstore/history.png, format: png }
+      - { to: appstore, path: captures/appstore/history-light.png, format: png, theme: light }
 
   - id: history-motion
     kind: recording
@@ -167,6 +178,7 @@ shots:
     outputs:
       - { to: readme, path: readme-images/label-review.png, format: png }
       - { to: appstore, path: captures/appstore/label-review.png, format: png }
+      - { to: appstore, path: captures/appstore/label-review-light.png, format: png, theme: light }
 
   - id: label-review-motion
     kind: recording
@@ -191,3 +203,4 @@ shots:
       - { to: website, path: static/screenshots/settings.webp, format: webp }
       - { to: website, path: static/screenshots/settings-light.webp, format: webp, theme: light }
       - { to: appstore, path: captures/appstore/settings.png, format: png }
+      - { to: appstore, path: captures/appstore/settings-light.png, format: png, theme: light }

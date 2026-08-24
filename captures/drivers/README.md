@@ -16,12 +16,12 @@ compile on demand). `lib.zsh` refuses to run a batch on a 1x display
 | # | Script | Precondition | Notes |
 |---|--------|--------------|-------|
 | 1 | `onboarding-motion.zsh` | fresh `--demo` launch, welcome up | verified beats |
-| 2 | `stills.zsh` | fresh relaunch, onboarding skipped | all dark + light stills except popover; stages week-nav/History/Marks |
+| 2 | `stills.zsh` | fresh relaunch, onboarding skipped | all dark + light stills except popover; stops timers (running card dims), stages week-nav/History/Marks |
 | 3 | `history-motion.zsh` | after stills.zsh | verified beats; restores its staging |
 | 4 | `launcher-motion.zsh` | after stills | REHEARSE-VERIFY: starts an activity:bike timer |
 | 5 | `label-review-motion.zsh` | LAST window recording | REHEARSE-VERIFY: approves the proj→project merge (mutates data) |
 | 6 | `popover-motion.zsh` | fresh relaunch, **no app windows** | REHEARSE-VERIFY: solid wallpaper, needs running seed timer |
-| 7 | `popover-motion.zsh still` | after 6 | stops timers, captures idle popover still |
+| 7 | `popover-motion.zsh still` | after 6 | stops timers, captures idle popover still, dark + light |
 
 Between 5 and 6: quit and relaunch `--demo` (resets the merge, the bike timer,
 and restores the seeded running timer), skip onboarding, close the main window.

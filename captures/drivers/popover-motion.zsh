@@ -18,28 +18,10 @@ set -e
 source "${0:a:h}/lib.zsh"
 WALL_PLIST=~/Library/Application\ Support/com.apple.wallpaper/Store/Index.plist
 
-toggle_popover() { ax 'click menu bar item 1 of menu bar 2' >/dev/null; sleep 1.2; }
+# toggle_popover / help_point / stop_all_timers live in lib.zsh (shared with
+# stills.zsh since the launcher stills need an idle state too).
 popover_geom() { # -> PX PY PW PH  (popover = the untitled window)
   read PX PY PW PH < <("$(helper winlist)" "$APP" | awk -F'|' '$3=="" {print $4; exit}' | tr ',' ' ')
-}
-
-# help_point <substr> -> "x,y" of the popover element whose help contains substr
-help_point() {
-  osascript <<EOF
-tell application "System Events" to tell process "$APP"
-  set g to group 1 of window 1
-  set hs to help of UI elements of g
-  set ps to position of UI elements of g
-  repeat with i from 1 to (count hs)
-    try
-      if (item i of hs) contains "$1" then
-        return ((item 1 of item i of ps) as text) & "," & ((item 2 of item i of ps) as text)
-      end if
-    end try
-  end repeat
-  return ""
-end tell
-EOF
 }
 
 click_help() { # click_help <substr> <dx> <dy>
@@ -69,16 +51,22 @@ restore_wallpaper() {
 
 if [[ $1 == still ]]; then
   OUT=${2:-$REPO_ROOT/captures/raw/popover.png}
-  toggle_popover
-  # stop every running timer (Stop buttons carry help "Stop"), then re-open idle
-  while p=$(help_point "Stop" | tr -d ' '); [[ -n $p ]]; do
-    cliclick "c:$((${p%,*}+8)),$((${p#*,}+8))"; sleep 1
-  done
-  toggle_popover; sleep 0.5; toggle_popover   # close + reopen to settle
+  stop_all_timers; sleep 0.5
+  toggle_popover                              # reopen idle for the capture
   frontmost; sleep 0.5
   still "$OUT" ""
   toggle_popover
   echo "popover still -> $OUT"
+  # light variant for the appstore batch: flip appearance, reopen, recapture
+  LIGHT="${OUT%.png}-light.png"
+  osascript -e 'tell app "System Events" to tell appearance preferences to set dark mode to false'
+  sleep 3
+  toggle_popover; frontmost; sleep 0.5
+  still "$LIGHT" ""
+  toggle_popover
+  osascript -e 'tell app "System Events" to tell appearance preferences to set dark mode to true'
+  sleep 2
+  echo "popover light still -> $LIGHT"
   exit 0
 fi
 
