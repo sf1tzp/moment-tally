@@ -21,7 +21,7 @@ package struct User: Decodable, Equatable {
     }
 }
 
-/// A key/value pair attached to a timespan — e.g. `repo: moment-tally`.
+/// A key/value pair attached to a timespan — e.g. `recipe: sourdough`.
 package struct SpanLabel: Hashable {
     package let key: String
     package let value: String

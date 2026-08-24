@@ -49,36 +49,37 @@ final class WalkthroughModel {
             ?? Calendar.current.startOfDay(for: Date())
     }
 
-    /// The clean four-key week: `repo` / `feat` / `type` / `client`, small
-    /// stable vocabularies, one fact per key. Two meetings sit on a repo and
-    /// feature (a design meeting is still project work) — the fused-facts
-    /// smell needs meetings inside the fusion to prove its counter-example.
-    /// The other meetings deliberately carry no `repo` — "decide what
-    /// untagged means" is part of the story.
+    /// The clean four-key week — `project` / `deliverable` / `type` /
+    /// `client`, a freelance creative's schema (#27) — small stable
+    /// vocabularies, one fact per key. Two meetings sit on a project and
+    /// deliverable (an album consult is still project work) — the
+    /// fused-facts smell needs meetings inside the fusion to prove its
+    /// counter-example. The other meetings deliberately carry no `project`
+    /// — "decide what untagged means" is part of the story.
     static let baseWeek: [DemoSpan] = [
-        DemoSpan(id: 0, day: 0, startHour: 9, hours: 2.5, labels: week("moment-tally", "onboarding", "development", "sfi")),
-        DemoSpan(id: 1, day: 0, startHour: 11.5, hours: 0.5, labels: [SpanLabel(key: "type", value: "meeting"), SpanLabel(key: "client", value: "sfi")]),
-        DemoSpan(id: 2, day: 0, startHour: 13, hours: 3, labels: week("moment-tally", "charts", "development", "sfi")),
+        DemoSpan(id: 0, day: 0, startHour: 9, hours: 2.5, labels: week("wedding-shoot", "album", "editing", "hartleys")),
+        DemoSpan(id: 1, day: 0, startHour: 11.5, hours: 0.5, labels: [SpanLabel(key: "type", value: "meeting"), SpanLabel(key: "client", value: "hartleys")]),
+        DemoSpan(id: 2, day: 0, startHour: 13, hours: 3, labels: week("wedding-shoot", "teasers", "editing", "hartleys")),
         DemoSpan(id: 3, day: 1, startHour: 9, hours: 1, labels: [SpanLabel(key: "type", value: "meeting"), SpanLabel(key: "client", value: "acme")]),
-        DemoSpan(id: 4, day: 1, startHour: 10, hours: 3, labels: week("acme-app", "billing", "development", "acme")),
-        DemoSpan(id: 5, day: 1, startHour: 14, hours: 2, labels: week("acme-app", "billing", "review", "acme")),
-        DemoSpan(id: 6, day: 2, startHour: 9, hours: 3, labels: week("moment-tally", "onboarding", "development", "sfi")),
-        DemoSpan(id: 7, day: 2, startHour: 13, hours: 2, labels: week("website", "landing", "development", "sfi")),
-        DemoSpan(id: 8, day: 2, startHour: 15, hours: 1, labels: week("moment-tally", "charts", "review", "sfi")),
-        DemoSpan(id: 9, day: 3, startHour: 9, hours: 2, labels: week("acme-app", "billing", "support", "acme")),
-        DemoSpan(id: 10, day: 3, startHour: 11, hours: 1, labels: week("moment-tally", "onboarding", "meeting", "sfi")),
-        DemoSpan(id: 11, day: 3, startHour: 13, hours: 4, labels: week("moment-tally", "onboarding", "development", "sfi")),
-        DemoSpan(id: 12, day: 4, startHour: 9, hours: 2, labels: week("website", "landing", "review", "sfi")),
-        DemoSpan(id: 13, day: 4, startHour: 11, hours: 1, labels: week("acme-app", "billing", "meeting", "acme")),
-        DemoSpan(id: 14, day: 4, startHour: 13, hours: 2, labels: week("moment-tally", "charts", "development", "sfi")),
-        DemoSpan(id: 15, day: 4, startHour: 15, hours: 1, labels: [SpanLabel(key: "repo", value: "moment-tally"), SpanLabel(key: "type", value: "ops"), SpanLabel(key: "client", value: "sfi")]),
-        DemoSpan(id: 16, day: 5, startHour: 10, hours: 2, labels: week("website", "landing", "development", "sfi")),
+        DemoSpan(id: 4, day: 1, startHour: 10, hours: 3, labels: week("rebrand", "logo-v2", "editing", "acme")),
+        DemoSpan(id: 5, day: 1, startHour: 14, hours: 2, labels: week("rebrand", "logo-v2", "retouching", "acme")),
+        DemoSpan(id: 6, day: 2, startHour: 9, hours: 3, labels: week("wedding-shoot", "album", "editing", "hartleys")),
+        DemoSpan(id: 7, day: 2, startHour: 13, hours: 2, labels: week("menu-shoot", "menu-board", "editing", "violet-cafe")),
+        DemoSpan(id: 8, day: 2, startHour: 15, hours: 1, labels: week("wedding-shoot", "teasers", "retouching", "hartleys")),
+        DemoSpan(id: 9, day: 3, startHour: 9, hours: 2, labels: week("rebrand", "logo-v2", "revisions", "acme")),
+        DemoSpan(id: 10, day: 3, startHour: 11, hours: 1, labels: week("wedding-shoot", "album", "meeting", "hartleys")),
+        DemoSpan(id: 11, day: 3, startHour: 13, hours: 4, labels: week("wedding-shoot", "album", "editing", "hartleys")),
+        DemoSpan(id: 12, day: 4, startHour: 9, hours: 2, labels: week("menu-shoot", "menu-board", "retouching", "violet-cafe")),
+        DemoSpan(id: 13, day: 4, startHour: 11, hours: 1, labels: week("rebrand", "logo-v2", "meeting", "acme")),
+        DemoSpan(id: 14, day: 4, startHour: 13, hours: 2, labels: week("wedding-shoot", "teasers", "editing", "hartleys")),
+        DemoSpan(id: 15, day: 4, startHour: 15, hours: 1, labels: [SpanLabel(key: "project", value: "wedding-shoot"), SpanLabel(key: "type", value: "invoicing"), SpanLabel(key: "client", value: "hartleys")]),
+        DemoSpan(id: 16, day: 5, startHour: 10, hours: 2, labels: week("menu-shoot", "menu-board", "editing", "violet-cafe")),
     ]
 
-    private static func week(_ repo: String, _ feat: String, _ type: String,
+    private static func week(_ project: String, _ deliverable: String, _ type: String,
                              _ client: String) -> [SpanLabel] {
-        [SpanLabel(key: "repo", value: repo),
-         SpanLabel(key: "feat", value: feat),
+        [SpanLabel(key: "project", value: project),
+         SpanLabel(key: "deliverable", value: deliverable),
          SpanLabel(key: "type", value: type),
          SpanLabel(key: "client", value: client)]
     }
@@ -108,11 +109,11 @@ final class WalkthroughModel {
             case .unboundedValues:
                 "Values become whatever got typed in the moment — keyboard mash that mirrors nothing — so no two moments agree and nothing accumulates."
             case .fusedFacts:
-                "One mark fuses repo, feature, and type into a single value — group by any one of them and there is nothing left to join on."
+                "One mark fuses project, deliverable, and type into a single value — group by any one of them and there is nothing left to join on."
             case .driftingKeys:
-                "A few recent moments say proj, the rest of the week says repo. Each chart only sees its own key; history silently splits into two series."
+                "A few recent moments say proj, the rest of the week says project. Each chart only sees its own key; history silently splits into two series."
             case .approximateNaming:
-                "moment-tally and MomentTally are the same project to you, but joins are exact — the charts count them as two."
+                "wedding-shoot and WeddingShoot are the same project to you, but joins are exact — the charts count them as two."
             }
         }
 
@@ -120,9 +121,9 @@ final class WalkthroughModel {
         var fix: String {
             switch self {
             case .unboundedValues:
-                "Values should mirror something — a feature, a ticket, a system you join against. feat: issue-12345 is great; if it helps you stay organized across systems, go with it. Mash that mirrors nothing belongs in the note."
+                "Values should mirror something — a deliverable, an invoice, a system you join against. deliverable: invoice-1041 is great; if it helps you stay organized across systems, go with it. Mash that mirrors nothing belongs in the note."
             case .fusedFacts:
-                "One fact per key — repo: moment-tally, feat: onboarding, type: feature — so every question keeps an axis to group by."
+                "One fact per key — project: wedding-shoot, deliverable: album, type: editing — so every question keeps an axis to group by."
             case .driftingKeys:
                 "Pick key names once and stick to them. Mark Review can merge a drifted key back into one series."
             case .approximateNaming:
@@ -134,10 +135,10 @@ final class WalkthroughModel {
         /// walkthrough pins its charts to it while the smell is active.
         var demoKey: String {
             switch self {
-            case .unboundedValues: "feat"
+            case .unboundedValues: "deliverable"
             case .fusedFacts: "type"
-            case .driftingKeys: "repo"
-            case .approximateNaming: "repo"
+            case .driftingKeys: "project"
+            case .approximateNaming: "project"
             }
         }
 
@@ -147,11 +148,11 @@ final class WalkthroughModel {
         var examples: [(label: String, good: Bool)] {
             switch self {
             case .unboundedValues:
-                // Ticket numbers are the *forge-mirroring* pattern, not the
+                // Invoice numbers are the *books-mirroring* pattern, not the
                 // smell (momenttally.com/case-study/joined-to-what-shipped).
-                [("feat: onboarding", true),
-                 ("feat: issue-12345", true),
-                 ("feat: asdklfjasdf", false)]
+                [("deliverable: album", true),
+                 ("deliverable: invoice-1041", true),
+                 ("deliverable: asdklfjasdf", false)]
             default:
                 []
             }
@@ -165,9 +166,9 @@ final class WalkthroughModel {
             case .fusedFacts:
                 "Tidier-looking but incoherent: broad questions like “how much meeting time across all projects?” have nothing left to join on."
             case .driftingKeys:
-                "Hours go missing: only the repo half of the week matches — the proj half silently drops out."
+                "Hours go missing: only the project half of the week matches — the proj half silently drops out."
             case .approximateNaming:
-                "A consistency problem: moment-tally and MomentTally count as two, and joins with other systems stop lining up."
+                "A consistency problem: wedding-shoot and WeddingShoot count as two, and joins with other systems stop lining up."
             }
         }
     }
@@ -179,7 +180,7 @@ final class WalkthroughModel {
     var activeSmell: SchemaSmell?
 
     /// The tag key the mini charts group by.
-    var groupKey = "repo"
+    var groupKey = "project"
 
     /// The demo week as the active smell leaves it.
     var spans: [DemoSpan] { Self.apply(activeSmell, to: Self.baseWeek) }
@@ -191,35 +192,35 @@ final class WalkthroughModel {
             return spans
         case .fusedFacts:
             return spans.map { span in
-                guard let repo = span.value(of: "repo") else { return span }
+                guard let project = span.value(of: "project") else { return span }
                 var out = span
-                let fused = [repo, span.value(of: "feat"), span.value(of: "type")]
+                let fused = [project, span.value(of: "deliverable"), span.value(of: "type")]
                     .compactMap { $0 }.joined(separator: "-")
-                out.labels = span.labels.filter { !["repo", "feat", "type"].contains($0.key) }
+                out.labels = span.labels.filter { !["project", "deliverable", "type"].contains($0.key) }
                     + [SpanLabel(key: "work", value: fused)]
                 return out
             }
         case .driftingKeys:
-            // Only the website project's late-week spans drift — a couple of
+            // Only the menu shoot's late-week spans drift — a couple of
             // hours, an "oof, I missed a bit" rather than half the week gone.
             return spans.map { span in
-                guard span.day >= 3, span.value(of: "repo") == "website"
+                guard span.day >= 3, span.value(of: "project") == "menu-shoot"
                 else { return span }
                 var out = span
                 out.labels = span.labels.map {
-                    $0.key == "repo" ? SpanLabel(key: "proj", value: $0.value) : $0
+                    $0.key == "project" ? SpanLabel(key: "proj", value: $0.value) : $0
                 }
                 return out
             }
         case .approximateNaming:
-            let nearMisses = ["moment-tally": "MomentTally", "acme-app": "acme_app"]
+            let nearMisses = ["wedding-shoot": "WeddingShoot", "rebrand": "re-brand"]
             return spans.map { span in
                 // Only some spans drift — that's what makes it split rather
                 // than rename.
                 guard span.day >= 3 else { return span }
                 var out = span
                 out.labels = span.labels.map { label in
-                    guard label.key == "repo",
+                    guard label.key == "project",
                           let miss = nearMisses[label.value] else { return label }
                     return SpanLabel(key: label.key, value: miss)
                 }
@@ -228,7 +229,7 @@ final class WalkthroughModel {
         case .unboundedValues:
             // Not a naming drift — the values are keyboard mash that mirrors
             // nothing, one per span, so nothing repeats. Deliberately no
-            // ticket numbers here: issue-12345 mirrors the forge and is an
+            // invoice numbers here: invoice-1041 mirrors the books and is an
             // encouraged pattern, not this smell.
             let junk = ["asdklfjasdf", "blah", "stuff", "asdf", "zzz",
                         "final-2", "jjj", "qq", "jkljkl", "tmp", "x2",
@@ -236,7 +237,7 @@ final class WalkthroughModel {
             return spans.map { span in
                 var out = span
                 out.labels = span.labels.map {
-                    $0.key == "feat"
+                    $0.key == "deliverable"
                         ? SpanLabel(key: $0.key, value: junk[span.id % junk.count])
                         : $0
                 }
@@ -251,7 +252,7 @@ final class WalkthroughModel {
     /// first, then whatever the smells introduced — so a group-by picker can
     /// show `proj` appearing next to `repo` when keys drift.
     var groupableKeys: [String] {
-        let known = ["repo", "feat", "type", "client"]
+        let known = ["project", "deliverable", "type", "client"]
         let present = Set(spans.flatMap { $0.labels.map(\.key) })
         return known.filter(present.contains)
             + present.subtracting(known).sorted()
@@ -269,7 +270,7 @@ final class WalkthroughModel {
     /// grey series label that owns those hours — nil when nothing is hidden.
     private func missingSeries(for key: String) -> (culprit: String, label: String)? {
         switch (activeSmell, key) {
-        case (.driftingKeys, "repo"): ("proj", Self.driftedSeriesLabel)
+        case (.driftingKeys, "project"): ("proj", Self.driftedSeriesLabel)
         case (.fusedFacts, "type"): ("work", Self.fusedSeriesLabel)
         default: nil
         }
@@ -358,13 +359,12 @@ final class WalkthroughModel {
     static func keyColor(_ key: String) -> Color {
         let hex: String
         switch key {
-        case "repo": hex = "#007aff"
-        case "feat": hex = "#ec407a"
+        case "project": hex = "#f06292"
+        case "deliverable": hex = "#007aff"   // also the concept page's valueless label
         case "type": hex = "#30b0c7"
         case "client": hex = "#5856d6"
-        case "proj": hex = "#007aff"   // drifted `repo` — same hue on purpose
+        case "proj": hex = "#f06292"   // drifted `project` — same hue on purpose
         case "work": hex = "#ff2d55"
-        case "issue": hex = "#66bb6a"   // the concept page's valueless label
         case "topic": hex = "#af52de"   // the Studying card's valueless label
         case "book": hex = "#26a69a"   // the Leisure persona's teal
         default: hex = "#546e7a"
@@ -378,42 +378,35 @@ final class WalkthroughModel {
     /// so the walkthrough demos it too, still without touching the user's
     /// palette.
     private static let valueColors: [String: String] = [
-        ValueColorKey.join("repo", "moment-tally"): "#f7b060",   // Programming
-        ValueColorKey.join("repo", "website"): "#42a5f5",
-        ValueColorKey.join("repo", "acme-app"): "#66bb6a",
-        ValueColorKey.join("feat", "onboarding"): "#30b0c7",
-        ValueColorKey.join("feat", "charts"): "#af52de",
-        ValueColorKey.join("feat", "billing"): "#f06292",
-        ValueColorKey.join("feat", "landing"): "#66bb6a",
-        ValueColorKey.join("type", "development"): "#007aff",
-        ValueColorKey.join("type", "review"): "#34c759",
+        ValueColorKey.join("project", "wedding-shoot"): "#f7b060",   // the hero apricot
+        ValueColorKey.join("project", "menu-shoot"): "#ffd60a",
+        ValueColorKey.join("project", "rebrand"): "#58d8ad",
+        ValueColorKey.join("deliverable", "album"): "#30b0c7",
+        ValueColorKey.join("deliverable", "teasers"): "#ff2d55",
+        ValueColorKey.join("deliverable", "logo-v2"): "#42a5f5",
+        ValueColorKey.join("deliverable", "menu-board"): "#66bb6a",
+        ValueColorKey.join("type", "editing"): "#00add8",
+        ValueColorKey.join("type", "retouching"): "#af52de",
         // Meetings are overhead, not identity — a muted tinted grey, so they
         // recede next to the work types.
         ValueColorKey.join("type", "meeting"): "#8d6e63",
-        ValueColorKey.join("type", "support"): "#af52de",
-        ValueColorKey.join("type", "ops"): "#66bb6a",
-        // The planning / review / debugging trio the concept page's mock
-        // set and the Programming persona share — the demo seed's hues
-        // (persona orange / green / red, one per value).
-        ValueColorKey.join("type", "planning"): "#ff9500",
-        ValueColorKey.join("type", "debugging"): "#ff2d55",
-        // SFI in company red — sfi-website's streetfortress wordmark fill
-        // (`text only.svg`, = --streetfortress-red); the contract client in
-        // the Volunteering persona's pink.
-        ValueColorKey.join("client", "sfi"): "#d44141",
-        ValueColorKey.join("client", "acme"): "#ec407a",
+        ValueColorKey.join("type", "invoicing"): "#66bb6a",
+        // The design / revisions / invoicing trio the concept page's mock
+        // set and the Freelance persona share — the demo seed's hues.
+        ValueColorKey.join("type", "design"): "#007aff",
+        ValueColorKey.join("type", "revisions"): "#ff9500",
+        ValueColorKey.join("client", "hartleys"): "#ec407a",
+        ValueColorKey.join("client", "acme"): "#dac96e",
+        ValueColorKey.join("client", "violet-cafe"): "#af52de",
         // The persona cards' example pairs, pinned so each card's pills
         // and chips read as distinct hues — the hash fallback happily
         // hands neighbours the same colour. Demo-seed hexes reused where
-        // the values overlap (baldurs-gate, the-wayfinder).
-        ValueColorKey.join("repo", "sfi/moment-tally"): "#00add8",   // traggo blue
+        // the values overlap (the-wayfinder, ted-lasso).
         ValueColorKey.join("course", "linear-algebra"): "#42a5f5",   // Studying
         ValueColorKey.join("type", "lecture"): "#34c759",
         ValueColorKey.join("type", "group-session"): "#ff9500",
         ValueColorKey.join("type", "homework"): "#ec407a",
-        ValueColorKey.join("project", "wedding-shoot"): "#f06292",   // Creative Work
         ValueColorKey.join("type", "photoshoot"): "#42a5f5",
-        ValueColorKey.join("type", "editing"): "#5856d6",
         ValueColorKey.join("book", "the-wayfinder"): "#26a69a",      // Leisure
         ValueColorKey.join("game", "baldurs-gate"): "#d84315",       // Streaming
         ValueColorKey.join("show", "ted-lasso"): "#ff9500",
@@ -429,7 +422,7 @@ final class WalkthroughModel {
         // The missing-time pseudo-series are deliberately hueless.
         guard !missingSeriesLabels.contains(value) else { return .gray.opacity(0.45) }
         guard !value.isEmpty else { return keyColor(key) }
-        let lookupKey = key == "proj" ? "repo" : key
+        let lookupKey = key == "proj" ? "project" : key
         if let hex = valueColors[ValueColorKey.join(lookupKey, value)],
            let fixed = Color(hex: hex) {
             return fixed
@@ -464,8 +457,8 @@ final class WalkthroughModel {
     /// The labels on the mocked running span. Starts mid-thought so the very
     /// first interaction is adding the missing pill.
     var mockupLabels: [SpanLabel] = [
-        SpanLabel(key: "repo", value: "moment-tally"),
-        SpanLabel(key: "type", value: "feature"),
+        SpanLabel(key: "project", value: "wedding-shoot"),
+        SpanLabel(key: "type", value: "editing"),
     ]
 
     /// The mocked span's note — edited by the mockup's inline editor, like

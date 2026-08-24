@@ -1,9 +1,9 @@
 #!/bin/zsh
 # Menu-bar popover recording (~20s) + the idle popover still.
 #
-# Scene: demo's running timer active -> open popover -> hover Meridian Website
-# so its quick-mark chips expand -> start a timer via the +standup chip ->
-# stop the running repo:infrastructure timer. Then (still mode) stop all
+# Scene: demo's running timer active -> open popover -> hover Wedding Shoot
+# so its quick-mark chips expand -> start a timer via the +consult chip ->
+# stop the running wedding-shoot editing timer. Then (still mode) stop all
 # timers, reopen, capture the idle popover still.
 #
 # The scene records over a plain desktop: this script swaps in a solid
@@ -95,12 +95,12 @@ toggle_popover           # ...closed again; the take re-opens it on camera
 drive() {
   sleep 1.5
   toggle_popover; sleep 2
-  # hover Meridian Website row (2nd quick-start row), entering at its own y
+  # hover Wedding Shoot row (2nd quick-start row), entering at its own y
   cliclick "m:$((PX-40)),$((PY+236))" w:200 "m:$((PX+60)),$((PY+236))" w:300 "m:$((PX+146)),$((PY+236))" w:800
   sleep 1.2                      # chips expanded
-  click_help "standup" || true   # start meeting:standup timer
+  click_help "consult" || true   # start meeting:consult timer
   sleep 2.5
-  click_help "Stop" || true      # stop the repo:infrastructure timer
+  click_help "Stop" || true      # stop the wedding-shoot editing timer
   sleep 3
   cliclick "m:$((PX+150)),$((PY+500))"
 }

@@ -72,16 +72,16 @@ import Testing
     @Test func contentCountsForTheMidWeekLayout() {
         let spans = seed(now: wednesday)
         // The trailing month behind Wed 2026-07-29 runs Mon Jun 29 – Tue
-        // Jul 28: 22 weekdays cycling A,B,C,D (A×6 + B×6 at 7 spans, C×5 +
-        // D×5 at 6 spans = 144) + 8 weekend days alternating W1/W2 (24)
-        // + today (6).
-        #expect(spans.count == 174)
+        // Jul 28: 22 weekdays cycling A,B,C,D (A×6 + B×6 + D×5 at 7 spans,
+        // C×5 at 6 spans = 149) + 8 weekend days alternating W1/W2
+        // (4×3 + 4×4 = 28) + today (6).
+        #expect(spans.count == 183)
         // Five cards since #189 culled the cast for screenshot presentation
-        // (the shelved sets survive as comments in DemoSeed.tagSets).
+        // (the shelved set survives as a comment in DemoSeed.tagSets).
         #expect(DemoSeed.tagSets.count == 5)
         #expect(Set(DemoSeed.tagSets.compactMap(\.symbolName)).count == 5)  // distinct symbols
         #expect(DemoSeed.labelDefinitions.count == 11)
-        #expect(DemoSeed.valueColors.count == 32)
+        #expect(DemoSeed.valueColors.count == 33)
         // Notes on many spans, so Log and Calendar popovers have texture.
         #expect(spans.filter { !$0.note.isEmpty }.count >= 10)
     }
@@ -104,12 +104,12 @@ import Testing
             // plus one today.
             #expect(spans.filter(\.labels.isEmpty).count >= 5)
 
-            // The proj/repo drift for Label Review — `proj: company-website`
-            // spans to move onto the canonical `repo:` key (#172's capture).
+            // The proj/project drift for Mark Review — `proj: menu-shoot`
+            // spans to move onto the canonical `project:` key (#172's capture).
             let labels = spans.flatMap(\.labels)
-            #expect(labels.filter { $0.key == "proj" && $0.value == "company-website" }
+            #expect(labels.filter { $0.key == "proj" && $0.value == "menu-shoot" }
                 .count >= 8)
-            #expect(labels.contains { $0.key == "repo" && $0.value == "company-website" })
+            #expect(labels.contains { $0.key == "project" && $0.value == "menu-shoot" })
 
             // History's combined view needs real co-occurrence on all three
             // showcased pairings: type × project, type × client,
@@ -126,8 +126,8 @@ import Testing
             // Every leisure chip value shows up in history, so the Launcher
             // hover video always has populated cards to point at.
             let values = { (key: String) in Set(labels.filter { $0.key == key }.map(\.value)) }
-            #expect(values("game") == ["baldurs-gate", "no-mans-sky", "cyberpunk"])
-            #expect(values("activity") == ["bike", "run", "gym"])
+            #expect(values("recipe") == ["sourdough", "focaccia", "pad-thai"])
+            #expect(values("activity") == ["bike", "run", "yoga"])
             #expect(values("book") == ["the-director", "crux", "the-wayfinder"])
 
             // At least one genuine overlap among *finished* spans (a
@@ -153,15 +153,15 @@ import Testing
             let quick = DemoSeed.quickLabels(forSetNamed: set.name)
             #expect(quick?.isEmpty == false, "\(set.name) has no quick labels")
         }
-        // The work set carries the type trio; the full-service client set
-        // adds the meeting chips on top.
-        let type = DemoSeed.quickLabels(forSetNamed: "Moment Tally App")!
-        #expect(type.map(\.value) == ["planning", "review", "debugging"])
+        // The design engagement carries the type trio; the full-service
+        // photography set adds the meeting chips on top.
+        let type = DemoSeed.quickLabels(forSetNamed: "Client Rebrand")!
+        #expect(type.map(\.value) == ["design", "revisions", "invoicing"])
         #expect(type.allSatisfy { $0.key == "type" })
-        #expect(DemoSeed.quickLabels(forSetNamed: "Meridian Website")!.count == 6)
+        #expect(DemoSeed.quickLabels(forSetNamed: "Wedding Shoot")!.count == 6)
         // The leisure sets are quick-labels-only: chips with no presets, and
         // a colorHex so their launcher cards aren't accent-grey.
-        for name in ["Gaming", "Workout", "Reading"] {
+        for name in ["Kitchen", "Workout", "Reading"] {
             let set = DemoSeed.tagSets.first { $0.name == name }!
             #expect(set.tags.isEmpty)
             #expect(set.colorHex != nil)
@@ -170,20 +170,20 @@ import Testing
 
     @Test func valuelessLabelsSeedTheFillInPerStartStory() {
         // Since the #189 cull the fill-in-per-start story (#149/#162) rides
-        // on one card: Moment Tally App's value-less `issue:` — quick-starting
-        // it opens the editor with the empty value focused.
-        let rows = DemoSeed.tagSets.first { $0.name == "Moment Tally App" }!.tags
-        #expect(rows.contains { $0.key == "issue" && $0.value.isEmpty })
+        // on one card: Client Rebrand's value-less `deliverable:` —
+        // quick-starting it opens the editor with the empty value focused.
+        let rows = DemoSeed.tagSets.first { $0.name == "Client Rebrand" }!.tags
+        #expect(rows.contains { $0.key == "deliverable" && $0.value.isEmpty })
     }
 
-    @Test func valueColorsDifferentiateTheCompanyRepos() {
+    @Test func valueColorsDifferentiateTheProjects() {
         let colors = DemoSeed.valueColors
-        let website = colors[ValueColorKey.join("repo", "company-website")]
-        let server = colors[ValueColorKey.join("repo", "infrastructure")]
-        #expect(website != nil && server != nil && website != server)
+        let menu = colors[ValueColorKey.join("project", "menu-shoot")]
+        let wedding = colors[ValueColorKey.join("project", "wedding-shoot")]
+        #expect(menu != nil && wedding != nil && menu != wedding)
         // The drifted spelling matches the canonical one, so the mistake
-        // reads in Label Review rather than on every pill.
-        #expect(colors[ValueColorKey.join("proj", "company-website")] == website)
+        // reads in Mark Review rather than on every pill.
+        #expect(colors[ValueColorKey.join("proj", "menu-shoot")] == menu)
     }
 
     // MARK: Isolation from the real store

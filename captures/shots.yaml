@@ -37,8 +37,8 @@ shots:
     surface: menu-bar popover
     scene: |
       Popover open under the menu-bar status item, idle (no timer running).
-      Quick-start rows for the seeded tallies (Moment Tally App, Meridian
-      Website, Gaming, Workout, Reading — the first two with their baked-in
+      Quick-start rows for the seeded tallies (Client Rebrand, Wedding
+      Shoot, Kitchen, Workout, Reading — the first two with their baked-in
       mark chips visible) plus the Tallies / Log / Calendar / History /
       Settings… rows below.
     outputs:
@@ -49,10 +49,10 @@ shots:
     surface: menu-bar popover
     scene: |
       ~20s. Start with the demo's running timer active. Click the status
-      item to open the popover; rest the pointer on the Meridian Website
+      item to open the popover; rest the pointer on the Wedding Shoot
       quick-start row so its quick-mark chips expand (the type:/meeting:
-      chip rows). Then start a timer using Meridian's "standup" quick mark,
-      and stop the active "repo: infrastructure" timer.
+      chip rows). Then start a timer using Wedding Shoot's "consult" quick
+      mark, and stop the active "wedding-shoot editing" timer.
       Record over a plain desktop (hide other windows, set a solid dark wallpaper) — the
       wallpaper shows through around the popover, and a detailed one
       balloons the README GIF roughly 8x.
@@ -75,8 +75,8 @@ shots:
     surface: window / Launcher tab
     scene: |
       Launcher tab of the Moment Tally window: the quick-start grid of seeded
-      tallies — the work cards (Moment Tally App, Meridian Website) next to
-      the quick-marks-only hobby cards (Gaming, Workout, Reading), each
+      tallies — the work cards (Client Rebrand, Wedding Shoot) next to
+      the quick-marks-only hobby cards (Kitchen, Workout, Reading), each
       with its own icon and colour, plus the dashed New Tally card.
     outputs:
       - { to: appstore, path: captures/appstore/launcher.png, format: png }
@@ -85,7 +85,7 @@ shots:
     kind: recording
     surface: window / Launcher tab
     scene: |
-      ~15s. Mouse over the hobby cards in turn — Gaming, Reading, then
+      ~15s. Mouse over the hobby cards in turn — Kitchen, Reading, then
       Workout — letting each card's quick-mark chips show; finish by
       clicking Workout's `+bike` chip so an `activity: bike` timer starts
       and the Workout card lights up as running.
@@ -96,10 +96,10 @@ shots:
     kind: still
     surface: window / Tallies tab
     scene: |
-      Tallies tab: the seeded tallies in the sidebar (Moment Tally App, Meridian
-      Website, Gaming, Workout, Reading) with Moment Tally App selected — card
-      preview, marks editor, and its value-less `issue` mark shown with an
-      empty value field.
+      Tallies tab: the seeded tallies in the sidebar (Client Rebrand, Wedding
+      Shoot, Kitchen, Workout, Reading) with Client Rebrand selected — card
+      preview, marks editor, and its value-less `deliverable` mark shown with
+      an empty value field.
     outputs:
       - { to: website, path: static/screenshots/label-sets.webp, format: webp }
       - { to: website, path: static/screenshots/label-sets-light.webp, format: webp, theme: light }
@@ -163,7 +163,7 @@ shots:
     scene: |
       Marks tab surfacing the demo seed's deliberate `proj:` vs
       `project:` key drift — the `proj` key row expanded to show its lone
-      `company-website` value (10×) beside the canonical `project` key.
+      `menu-shoot` value (10×) beside the canonical `project` key.
     outputs:
       - { to: readme, path: readme-images/label-review.png, format: png }
       - { to: appstore, path: captures/appstore/label-review.png, format: png }
@@ -172,8 +172,8 @@ shots:
     kind: recording
     surface: window / Marks tab
     scene: |
-      ~20s. Expand the drifted `proj` key to surface its `company-website`
-      value beside the canonical `project` key. Drag the `company-website`
+      ~20s. Expand the drifted `proj` key to surface its `menu-shoot`
+      value beside the canonical `project` key. Drag the `menu-shoot`
       value from `proj` onto `project`, show the staged move sentence at
       the bottom, then Approve Changes so the tree visibly collapses to one
       key fewer (`project` absorbs the spans).

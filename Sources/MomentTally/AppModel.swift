@@ -56,9 +56,9 @@ final class AppModel {
 
     /// Quick labels per label set, keyed by the set's UUID string — one-click
     /// refinements the popover and Launcher offer on hover (#61): a set covers
-    /// the focus area (`repo:`, `feat:`) and a quick label hones in
+    /// the focus area (`project:`, `client:`) and a quick label hones in
     /// (`type: review`). Per-set rather than global so e.g. a Workout set
-    /// isn't offered `type: programming`; the copy/paste clipboard below
+    /// isn't offered `type: design`; the copy/paste clipboard below
     /// spreads one list across sets without retyping. Persisted in the local
     /// store next to the set members, so they ride label-set sync and follow
     /// the user across Macs (#92). Entries for deleted sets linger
@@ -78,7 +78,7 @@ final class AppModel {
     }
 
     /// When on, tags are coloured by their `key: value` pair (using the local
-    /// overrides below) instead of only by key, so `repo: foo` and `repo: bar`
+    /// overrides below) instead of only by key, so `recipe: sourdough` and `recipe: focaccia`
     /// can look different. On by default — differentiating spans by value is
     /// Moment Tally's headline improvement over vanilla traggo, with key colours
     /// remaining useful for navigating Tag Review; an explicitly stored false

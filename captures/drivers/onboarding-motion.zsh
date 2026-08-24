@@ -26,7 +26,7 @@ drive() {
   rapproach 407 313; sleep 0.4; rtype "focused"; sleep 1.0                         # value
   rapproach 548 375; sleep 1.2                                                     # Done
   next
-  # p2 — Group by: repo -> type
+  # p2 — Group by: project -> type
   sleep 2.0
   rmove 493 128; sleep 0.15; rapproach 493 160; menu_pick "type"; sleep 2.0
   next
@@ -43,11 +43,11 @@ drive() {
   rmove 175 236; sleep 0.15; rapproach 175 297; sleep 1.0                          # +review
   rapproach 105 297; sleep 1.2                                                     # +planning (swaps in)
   next
-  # p6 — open Programming persona (body click; the ⊕ ignores synthetic clicks)
+  # p6 — open Freelance persona (body click; the ⊕ ignores synthetic clicks)
   sleep 1.2
   cliclick "m:$((WX-47)),$((WY+172))" w:150 "m:$((WX+73)),$((WY+172))" w:150 \
            "m:$((WX+187)),$((WY+172))" w:350 "c:$((WX+187)),$((WY+172))"; sleep 1.2
-  rapproach 157 166; sleep 0.3; rtype "Moment Tally App"; sleep 1.3                # name field
+  rapproach 157 166; sleep 0.3; rtype "Client Rebrand"; sleep 1.3                # name field
   next
   # p7 — dwell to the end
   sleep 2; rmove 353 266

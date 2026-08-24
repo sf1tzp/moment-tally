@@ -188,7 +188,7 @@ private struct HelpSection: Identifiable {
                 Rule(
                     heading: "One fact per key",
                     detail: """
-                    `repo`, `feature`, and `type` as three keys filter and join \
+                    `project`, `deliverable`, and `type` as three keys filter and join \
                     independently; welded into one value they can only match whole.
                     """),
                 Rule(
@@ -200,8 +200,9 @@ private struct HelpSection: Identifiable {
                 Rule(
                     heading: "Mirror systems you'll join against",
                     detail: """
-                    To line time up with source control, use the forge's exact naming \
-                    (`repo: sfi/moment-tally`, not `repo: moment-tally`) — joins are literal.
+                    To line time up with your invoices, calendar, or course catalogue, \
+                    use that system's exact naming (`client: acme-inc`, not \
+                    `client: acme`) — joins are literal.
                     """),
                 Rule(
                     heading: "Decide what unmarked means",
@@ -211,11 +212,12 @@ private struct HelpSection: Identifiable {
                     """),
             ],
             footer: """
-            A starter schema that covers most work: `repo: sfi/moment-tally`, \
-            `feat: mark-review`, `type: review`, `client: acme` — hours per client, \
-            review share per repo, and moment-to-PR joins, with no hierarchy decided up \
-            front. Start smaller if in doubt: a key is easy to add and painful to \
-            rename (though Mark Review can rescue a drifted schema after the fact).
+            A starter schema that covers most work: `project: wedding-shoot`, \
+            `deliverable: album`, `type: editing`, `client: hartleys` — hours per \
+            client, editing share per project, and moment-to-invoice joins, with no \
+            hierarchy decided up front. Start smaller if in doubt: a key is easy to \
+            add and painful to rename (though Mark Review can rescue a drifted \
+            schema after the fact).
 
             The full guide, with worked examples of schemas going wrong, is at \
             [momenttally.com/docs/marks](https://momenttally.com/docs/marks).
@@ -232,32 +234,32 @@ private struct HelpSection: Identifiable {
                     heading: "Quick marks only",
                     detail: """
                     A tally with *no* preset marks, just one chip per thing: a \
-                    **Gaming** tally whose chips are `game: baldurs-gate`, \
-                    `game: no-mans-sky`, `game: cyberpunk`; a **Workout** tally with \
-                    `activity: bike` / `run` / `gym`; a **Reading** tally with a chip \
+                    **Kitchen** tally whose chips are `recipe: sourdough`, \
+                    `recipe: focaccia`, `recipe: pad-thai`; a **Workout** tally with \
+                    `activity: bike` / `run` / `yoga`; a **Reading** tally with a chip \
                     per book. Great for the simple stuff you do regularly — adding \
                     or retiring a chip never touches the time already tracked.
                     """),
                 Rule(
                     heading: "Leave a value blank on purpose",
                     detail: """
-                    A tally can carry a mark with an **empty value** — say \
-                    **Frontend Work** and **Backend Work**, each pinning its \
-                    `repo:` and sharing a value-less `feature:`. Starting one \
-                    opens the editor with that empty value focused: paste the \
-                    feature (or issue number) and the timer is already running. \
-                    Perfect when the value changes too often for dedicated tallies, \
-                    and the shared key links time across everything else.
+                    A tally can carry a mark with an **empty value** — say an \
+                    **Client Rebrand** tally pinning its `client:` and carrying a \
+                    value-less `deliverable:`. Starting it opens the editor with \
+                    that empty value focused: type the deliverable (or paste an \
+                    invoice number) and the timer is already running. Perfect \
+                    when the value changes too often for dedicated tallies, and \
+                    the shared key links time across everything else.
                     """),
                 Rule(
                     heading: "Scale out to clients and projects",
                     detail: """
-                    One tally per engagement — `client: client-a` + \
-                    `project: blue-sky` baked in, value-less `repo:` and `issue:` \
+                    One tally per engagement — `client: acme` + \
+                    `project: rebrand` baked in, a value-less `deliverable:` \
                     to fill per start, and `type:` / `meeting:` quick marks on \
                     top. The same month then cuts cleanly by type × project, \
                     type × client, or meeting × client in History's combined \
-                    view, so billing and ceremony overhead fall out of the chart.
+                    view, so billing and meeting overhead fall out of the chart.
                     """),
             ]),
         HelpSection(

@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Marks tab recording (~20s): expand the drifted `proj` key, drag its
-# company-website value onto the canonical `project` key, show the staged
+# menu-shoot value onto the canonical `project` key, show the staged
 # sentence, Approve Changes so the tree collapses.
 #
 # MUTATES DEMO DATA (the merge is approved) — run this LAST among the window
@@ -22,8 +22,9 @@ ax 'click button "Marks" of toolbar 1 of window "Moment Tally"' >/dev/null; slee
 
 rows_y() { ax 'get position of rows of outline 1 of scroll area 1 of group 1 of group 1 of window "Moment Tally"' | tr ',' '\n' | awk 'NR%2==0' | tr -d ' '; }
 
-# Key row order (2026-08-13 seed): feature meeting project type activity book
-# client game issue repo proj -> project = row 3, proj = last.
+# Key row order — RE-VERIFY against the 2026-08 broad-audience seed (keys:
+# client project proj deliverable type meeting recipe activity book lang
+# show); the drag below assumes project = row 3, proj = last.
 PROJECT_Y=$(rows_y | sed -n 3p)
 PROJ_Y=$(rows_y | tail -1)
 

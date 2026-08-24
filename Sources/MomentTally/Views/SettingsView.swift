@@ -193,7 +193,7 @@ struct GeneralSettingsView: View {
         }
         Section("Marks") {
             Toggle("Colour marks by value", isOn: $model.colorTagsByValue)
-            Text("Pick a colour per key: value pair, so e.g. repo: foo and repo: bar look different. Pairs without an override keep their key colour.")
+            Text("Pick a colour per key: value pair, so e.g. recipe: sourdough and recipe: focaccia look different. Pairs without an override keep their key colour.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

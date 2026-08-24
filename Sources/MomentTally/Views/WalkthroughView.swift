@@ -55,7 +55,7 @@ struct WalkthroughView: View {
         // Healing a smell can strand the page-2 picker on a key the dataset no
         // longer has (e.g. `proj` after healing drifting keys) — fall back.
         .onChange(of: walkthrough.groupableKeys) { _, keys in
-            if !keys.contains(walkthrough.groupKey) { walkthrough.groupKey = "repo" }
+            if !keys.contains(walkthrough.groupKey) { walkthrough.groupKey = "project" }
         }
     }
 
@@ -587,7 +587,7 @@ private struct LabelingSchemesPage: View {
                caption: "A simple 'book' mark can track any number of books."),
         Scheme(keys: ["project", "type"],
                caption: "Two marks can cover most general types of work."),
-        Scheme(keys: ["repo", "feat", "client", "type"],
+        Scheme(keys: ["project", "deliverable", "client", "type"],
                caption: "Four marks can cover complex workflows."),
     ]
 
@@ -659,7 +659,7 @@ private struct LabelingSchemesPage: View {
     /// kept as a note so the context sticks to the span without a new key.
     private var dilemmaCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("“I'm on the backend feature but went down a rabbit hole setting up CA trust — should I mark it problem: certificate-trust?”")
+            Text("“I'm editing the wedding album but went down a rabbit hole recovering the second shooter's corrupted memory card — should I mark it problem: corrupted-card?”")
                 .font(.callout.italic())
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -674,14 +674,14 @@ private struct LabelingSchemesPage: View {
                     .foregroundStyle(.tertiary)
                 VStack(alignment: .leading, spacing: 3) {
                     FlowLayout(spacing: 4) {
-                        TagPill(key: "repo", value: "sfi/backend",
-                                color: WalkthroughModel.color(key: "repo",
-                                                              value: "sfi/backend"))
-                        TagPill(key: "feat", value: "registry-auth",
-                                color: WalkthroughModel.color(key: "feat",
-                                                              value: "registry-auth"))
+                        TagPill(key: "project", value: "wedding-shoot",
+                                color: WalkthroughModel.color(key: "project",
+                                                              value: "wedding-shoot"))
+                        TagPill(key: "deliverable", value: "album",
+                                color: WalkthroughModel.color(key: "deliverable",
+                                                              value: "album"))
                     }
-                    Text("Rabbit hole: CA trust for the internal registry.")
+                    Text("Rabbit hole: recovering the corrupted memory card.")
                         .font(.caption)
                         .italic()
                         .foregroundStyle(.secondary)
@@ -725,9 +725,9 @@ private struct SmellsPage: View {
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     // Each smell pins the charts to the key that shows its
-                    // damage best; healthy weeks default to repo.
+                    // damage best; healthy weeks default to project.
                     MiniChartsPane(walkthrough: walkthrough,
-                                   fixedKey: walkthrough.activeSmell?.demoKey ?? "repo")
+                                   fixedKey: walkthrough.activeSmell?.demoKey ?? "project")
                     if let smell = walkthrough.activeSmell {
                         smellDetail(smell)
                     } else {
@@ -774,9 +774,9 @@ private struct SmellsPage: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         case .driftingKeys:
-            let pct = Int((walkthrough.missingSeconds(for: "repo")
+            let pct = Int((walkthrough.missingSeconds(for: "project")
                 / max(walkthrough.weekTotalSeconds, 1) * 100).rounded())
-            Text("You queried repo: — but \(pct)% of your time was accidentally marked proj:. It rides along here greyed out as missing time; the real History tab would simply drop it.")
+            Text("You queried project: — but \(pct)% of your time was accidentally marked proj:. It rides along here greyed out as missing time; the real History tab would simply drop it.")
                 .font(.caption)
                 .foregroundStyle(.red)
                 .fixedSize(horizontal: false, vertical: true)
@@ -867,17 +867,17 @@ private struct LabelSetsConceptPage: View {
         let value: String
     }
 
-    private static let baked = SpanLabel(key: "repo", value: "moment-tally")
+    private static let baked = SpanLabel(key: "project", value: "rebrand")
     /// The valueless label: no value baked into the set, so every start
     /// prompts for one.
-    private static let valuelessKey = "issue"
-    private static let quicks = [Quick(key: "type", value: "planning"),
-                                 Quick(key: "type", value: "review"),
-                                 Quick(key: "type", value: "debugging")]
+    private static let valuelessKey = "deliverable"
+    private static let quicks = [Quick(key: "type", value: "design"),
+                                 Quick(key: "type", value: "revisions"),
+                                 Quick(key: "type", value: "invoicing")]
 
     @State private var applied: Quick?
-    @State private var issueValue = ""
-    @FocusState private var issueFocused: Bool
+    @State private var valueDraft = ""
+    @FocusState private var valueFocused: Bool
 
     private var anim: Animation? { reduceMotion ? nil : .easeOut(duration: 0.2) }
 
@@ -912,7 +912,7 @@ private struct LabelSetsConceptPage: View {
                 start(applying: nil)
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Moment Tally")
+                    Text("Client Rebrand")
                         .font(.callout)
                     .padding(.top, 4)
                     FlowLayout(spacing: 4) {
@@ -964,8 +964,8 @@ private struct LabelSetsConceptPage: View {
     /// blank the valueless field, and focus it — the #149 flow in miniature.
     private func start(applying quick: Quick?) {
         withAnimation(anim) { applied = quick }
-        issueValue = ""
-        issueFocused = true
+        valueDraft = ""
+        valueFocused = true
     }
 
     private func badge(_ number: Int) -> some View {
@@ -1015,7 +1015,7 @@ private struct LabelSetsConceptPage: View {
                 TagPill(key: Self.baked.key, value: Self.baked.value,
                         color: WalkthroughModel.color(key: Self.baked.key,
                                                       value: Self.baked.value))
-                issueField
+                valuelessField
                 if let applied {
                     TagPill(key: applied.key, value: applied.value,
                             color: WalkthroughModel.color(key: applied.key,
@@ -1028,12 +1028,12 @@ private struct LabelSetsConceptPage: View {
 
     /// The valueless label at start time: a pill-shaped field awaiting its
     /// value, focused by every mock start.
-    private var issueField: some View {
+    private var valuelessField: some View {
         HStack(spacing: 3) {
             Text("\(Self.valuelessKey):")
-            TextField("12345", text: $issueValue)
+            TextField("logo-v2", text: $valueDraft)
                 .textFieldStyle(.plain)
-                .focused($issueFocused)
+                .focused($valueFocused)
                 .frame(width: 64)
         }
         .font(.caption2)
@@ -1074,19 +1074,22 @@ private struct WalkthroughPersona: Identifiable {
     /// The conventional quick-label key — adopted outright on page 6.
     static let quickKey = "type"
 
-    /// The App Store submission's four: common cases over coverage.
-    /// Programming deliberately mirrors the concept page's mock set —
-    /// same valueless `issue:`, same quick-label trio — so the card reads
-    /// as "that thing you just clicked around, for real". Leisure is the
-    /// quick-labels-only set the concept page's caption promised.
+    /// The App Store submission's four: common cases over coverage, and —
+    /// per the #27 breadth pass — none of them programmer-centric (the old
+    /// Programming card's `repo:`/`issue:` examples read as insider
+    /// vocabulary to the wider audience). Freelance deliberately mirrors
+    /// the concept page's mock set — same valueless `deliverable:`, same
+    /// quick-label trio — so the card reads as "that thing you just
+    /// clicked around, for real". Leisure is the quick-labels-only set
+    /// the concept page's caption promised.
     static let all: [WalkthroughPersona] = [
-        WalkthroughPersona(name: "Programming", symbol: "chevron.left.forwardslash.chevron.right",
-                           rows: [("repo", "sfi/moment-tally"),
-                                  ("issue", nil)],
-                           nameExample: "Moment Tally App",
-                           quickLabels: [("type", "planning"),
-                                         ("type", "review"),
-                                         ("type", "debugging")]),
+        WalkthroughPersona(name: "Freelance", symbol: "briefcase",
+                           rows: [("client", "acme"),
+                                  ("deliverable", nil)],
+                           nameExample: "Client Rebrand",
+                           quickLabels: [("type", "design"),
+                                         ("type", "revisions"),
+                                         ("type", "invoicing")]),
         WalkthroughPersona(name: "Studying", symbol: "graduationcap",
                            rows: [("course", "linear-algebra"),
                                   ("topic", nil)],
@@ -1149,7 +1152,7 @@ private struct CreateLabelSetsPage: View {
         /// A value with no key can't become a label — the one refusal left.
         var missingKey: Bool { trimmedKey.isEmpty && !trimmedValue.isEmpty }
         /// A key with no value is legal: the set prompts for the value on
-        /// every start (the concept page's issue: workflow) — worth a
+        /// every start (the concept page's deliverable: workflow) — worth a
         /// heads-up in the editor, not a refusal.
         var valueless: Bool { !trimmedKey.isEmpty && trimmedValue.isEmpty }
     }
@@ -1276,7 +1279,7 @@ private struct CreateLabelSetsPage: View {
                         } else {
                             // A nil example is a valueless label — a bare
                             // `key:` pill in the key's colour, like the
-                            // concept page's issue:.
+                            // concept page's deliverable:.
                             ForEach(persona.rows, id: \.key) { row in
                                 TagPill(key: row.key, value: row.example ?? "",
                                         color: WalkthroughModel.color(key: row.key,
