@@ -161,7 +161,7 @@ import Testing
         #expect(DemoSeed.quickLabels(forSetNamed: "Wedding Shoot")!.count == 6)
         // The leisure sets are quick-labels-only: chips with no presets, and
         // a colorHex so their launcher cards aren't accent-grey.
-        for name in ["Kitchen", "Workout", "Reading"] {
+        for name in ["Cooking", "Workout", "Reading"] {
             let set = DemoSeed.tagSets.first { $0.name == name }!
             #expect(set.tags.isEmpty)
             #expect(set.colorHex != nil)

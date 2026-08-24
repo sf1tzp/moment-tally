@@ -38,7 +38,7 @@ shots:
     scene: |
       Popover open under the menu-bar status item, idle (no timer running).
       Quick-start rows for the seeded tallies (Client Rebrand, Wedding
-      Shoot, Kitchen, Workout, Reading — the first two with their baked-in
+      Shoot, Cooking, Workout, Reading — the first two with their baked-in
       mark chips visible) plus the Tallies / Log / Calendar / History /
       Settings… rows below.
     outputs:
@@ -76,7 +76,7 @@ shots:
     scene: |
       Launcher tab of the Moment Tally window: the quick-start grid of seeded
       tallies — the work cards (Client Rebrand, Wedding Shoot) next to
-      the quick-marks-only hobby cards (Kitchen, Workout, Reading), each
+      the quick-marks-only hobby cards (Cooking, Workout, Reading), each
       with its own icon and colour, plus the dashed New Tally card.
     outputs:
       - { to: appstore, path: captures/appstore/launcher.png, format: png }
@@ -85,7 +85,7 @@ shots:
     kind: recording
     surface: window / Launcher tab
     scene: |
-      ~15s. Mouse over the hobby cards in turn — Kitchen, Reading, then
+      ~15s. Mouse over the hobby cards in turn — Cooking, Reading, then
       Workout — letting each card's quick-mark chips show; finish by
       clicking Workout's `+bike` chip so an `activity: bike` timer starts
       and the Workout card lights up as running.
@@ -97,7 +97,7 @@ shots:
     surface: window / Tallies tab
     scene: |
       Tallies tab: the seeded tallies in the sidebar (Client Rebrand, Wedding
-      Shoot, Kitchen, Workout, Reading) with Client Rebrand selected — card
+      Shoot, Cooking, Workout, Reading) with Client Rebrand selected — card
       preview, marks editor, and its value-less `deliverable` mark shown with
       an empty value field.
     outputs:

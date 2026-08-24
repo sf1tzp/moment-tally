@@ -234,7 +234,7 @@ private struct HelpSection: Identifiable {
                     heading: "Quick marks only",
                     detail: """
                     A tally with *no* preset marks, just one chip per thing: a \
-                    **Kitchen** tally whose chips are `recipe: sourdough`, \
+                    **Cooking** tally whose chips are `recipe: sourdough`, \
                     `recipe: focaccia`, `recipe: pad-thai`; a **Workout** tally with \
                     `activity: bike` / `run` / `yoga`; a **Reading** tally with a chip \
                     per book. Great for the simple stuff you do regularly — adding \
