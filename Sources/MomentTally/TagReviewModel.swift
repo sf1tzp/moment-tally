@@ -42,6 +42,20 @@ struct StagedChange: Identifiable {
         fromKey == other.fromKey && fromValue == other.fromValue
             && spanIDs == other.spanIDs
     }
+
+    /// `row` with this change applied, or unchanged when it doesn't match.
+    /// The one rewrite rule for everything that stores marks as key/value
+    /// rows outside the spans themselves — label sets and quick labels —
+    /// so a rename can't update one and strand the other (#177).
+    func applied(to row: TagRow, toKey: String) -> TagRow {
+        var row = row
+        if normalizeKey(row.key) == fromKey,
+           fromValue == nil || row.value == fromValue {
+            row.key = toKey
+            if let toValue { row.value = toValue }
+        }
+        return row
+    }
 }
 
 extension Sequence<StagedChange> {
@@ -103,6 +117,10 @@ final class TagReviewModel {
     @ObservationIgnored private var cancelBatch = false
     /// Invalidates in-flight scans when the range changes mid-fetch.
     @ObservationIgnored private var scanGeneration = 0
+    /// The `AppModel.spanDataVersion` the current `spans` snapshot reflects
+    /// (#225). Captured when a scan starts, so a mutation landing mid-scan
+    /// still reads as stale afterwards. -1 = never scanned.
+    @ObservationIgnored private var scannedVersion = -1
 
     init(app: AppModel) {
         self.app = app
@@ -113,6 +131,7 @@ final class TagReviewModel {
     /// mean nothing in the other store.
     func reset() {
         scanGeneration += 1     // invalidates any in-flight scan
+        scannedVersion = -1
         spans = []
         hasScanned = false
         isScanning = false
@@ -127,6 +146,7 @@ final class TagReviewModel {
         guard let backend = app.api, app.isReady else { return }
         scanGeneration += 1
         let generation = scanGeneration
+        scannedVersion = app.spanDataVersion
         isScanning = true
         scannedCount = 0
         defer { if generation == scanGeneration { isScanning = false } }
@@ -157,6 +177,17 @@ final class TagReviewModel {
             guard generation == scanGeneration else { return }
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Rescan when span data changed under the last scan (#225) — the
+    /// store-observation replacement for the manual Rescan habit. The view
+    /// calls it on appearance and whenever `spanDataVersion` bumps while
+    /// visible; a fresh snapshot is a no-op. Never during an apply: the
+    /// rewrite maintains `spans` itself and marks the snapshot current.
+    func rescanIfStale() async {
+        guard hasScanned, !isApplying,
+              scannedVersion != app.spanDataVersion else { return }
+        await scan()
     }
 
     // MARK: Stats
@@ -299,11 +330,12 @@ final class TagReviewModel {
                     : tag
             }
         }
-        // Whole-value (and whole-key) changes update local tag sets and
-        // per-value colour overrides too, or quick-starting a set would
-        // recreate the old spelling and the renamed value would lose its
-        // colour. Subset moves leave both alone — the value (and its colour)
-        // still legitimately means the rest.
+        // Whole-value (and whole-key) changes update local tag sets, quick
+        // labels, and per-value colour overrides too, or quick-starting a
+        // set (or clicking a quick chip) would recreate the old spelling and
+        // the renamed value would lose its colour (#177). Subset moves leave
+        // all three alone — the value (and its colour) still legitimately
+        // means the rest.
         if change.spanIDs == nil {
             updateTagSets(for: change, toKey: toKey)
             app.migrateValueColors(fromKey: change.fromKey, fromValue: change.fromValue,
@@ -315,16 +347,11 @@ final class TagReviewModel {
     private func updateTagSets(for change: StagedChange, toKey: String) {
         app.tagSets = app.tagSets.map { set in
             var set = set
-            set.tags = set.tags.map { row in
-                var row = row
-                if normalizeKey(row.key) == change.fromKey,
-                   change.fromValue == nil || row.value == change.fromValue {
-                    row.key = toKey
-                    if let toValue = change.toValue { row.value = toValue }
-                }
-                return row
-            }
+            set.tags = set.tags.map { change.applied(to: $0, toKey: toKey) }
             return set
+        }
+        app.quickLabels = app.quickLabels.mapValues { rows in
+            rows.map { change.applied(to: $0, toKey: toKey) }
         }
     }
 
@@ -356,6 +383,11 @@ final class TagReviewModel {
         // The rewrite may have touched the running timer or loaded history.
         await app.refresh()
         await app.history.reloadIfLoaded()
+        // Publish the mutation like every other write path — but this
+        // snapshot already reflects it (spans were patched in the loop), so
+        // mark it current rather than triggering a rescan of our own work.
+        app.noteSpanDataChanged()
+        scannedVersion = app.spanDataVersion
         app.syncSoon()
     }
 }

@@ -109,6 +109,63 @@ import Testing
     }
 }
 
+/// Label-set and quick-label rows following Mark Review rewrites (#177) —
+/// `StagedChange.applied(to:toKey:)` is the one rewrite rule both stores
+/// share, so a rename can't update sets and strand the quick labels.
+@Suite struct StagedChangeRowRewriteTests {
+
+    @Test func valueRenameRewritesMatchingRow() {
+        let change = StagedChange(fromKey: "client", fromValue: "foo",
+                                  toKey: "client", toValue: "Foo Co.", spanIDs: nil)
+        let row = change.applied(to: TagRow(key: "client", value: "foo"), toKey: "client")
+        #expect(row.key == "client" && row.value == "Foo Co.")
+    }
+
+    @Test func valueRenameLeavesOtherValuesAndKeys() {
+        let change = StagedChange(fromKey: "client", fromValue: "foo",
+                                  toKey: "client", toValue: "Foo Co.", spanIDs: nil)
+        let otherValue = TagRow(key: "client", value: "bar")
+        let otherKey = TagRow(key: "type", value: "foo")
+        #expect(change.applied(to: otherValue, toKey: "client") == otherValue)
+        #expect(change.applied(to: otherKey, toKey: "client") == otherKey)
+    }
+
+    @Test func keyRenameCarriesEveryValue() {
+        // fromValue nil = the whole key; values ride along unchanged.
+        let change = StagedChange(fromKey: "proj", fromValue: nil,
+                                  toKey: "project", toValue: nil, spanIDs: nil)
+        let row = change.applied(to: TagRow(key: "proj", value: "foo"), toKey: "project")
+        #expect(row.key == "project" && row.value == "foo")
+    }
+
+    @Test func moveKeepingValueRewritesKeyOnly() {
+        // toValue nil on a value move = each row keeps its value.
+        let change = StagedChange(fromKey: "proj", fromValue: "foo",
+                                  toKey: "focus", toValue: nil, spanIDs: nil)
+        let row = change.applied(to: TagRow(key: "proj", value: "foo"), toKey: "focus")
+        #expect(row.key == "focus" && row.value == "foo")
+    }
+
+    @Test func rowKeyMatchesAfterNormalization() {
+        // Row keys are user-typed in the set editor; matching goes through
+        // normalizeKey like every other comparison against scanned keys.
+        let change = StagedChange(fromKey: "my-music", fromValue: "jazz",
+                                  toKey: "my-music", toValue: "blues", spanIDs: nil)
+        let row = change.applied(to: TagRow(key: " My Music ", value: "jazz"),
+                                 toKey: "my-music")
+        #expect(row.key == "my-music" && row.value == "blues")
+    }
+
+    @Test func rowIdentitySurvivesRewrite() {
+        // TagRow ids are view-local focus anchors (#134); the rewrite must
+        // not hand rows fresh identities.
+        let original = TagRow(key: "client", value: "foo")
+        let change = StagedChange(fromKey: "client", fromValue: "foo",
+                                  toKey: "client", toValue: "Foo Co.", spanIDs: nil)
+        #expect(change.applied(to: original, toKey: "client").id == original.id)
+    }
+}
+
 /// Per-value colour overrides following Label Review rewrites (#69) — before
 /// this, a staged rename silently dropped the value's colour.
 @Suite struct ValueColorMigrationTests {

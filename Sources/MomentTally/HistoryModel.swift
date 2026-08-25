@@ -315,6 +315,7 @@ final class HistoryModel {
             await reload()
             await reloadRangeIfLoaded()
             await app.refresh()   // the edit may have touched the running timer
+            app.noteSpanDataChanged()
             app.syncSoon()
             return true
         } catch {
@@ -331,6 +332,7 @@ final class HistoryModel {
             await reload()
             await reloadRangeIfLoaded()
             await app.refresh()
+            app.noteSpanDataChanged()
             app.syncSoon()
         } catch {
             errorMessage = error.localizedDescription

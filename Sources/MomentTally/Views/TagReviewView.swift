@@ -20,9 +20,10 @@ private struct TagMovePayload: Codable, Transferable {
 /// distinct-value counts surface the messy keys (typos, near-duplicates,
 /// casing drift) that quietly fragment the charts. Values expand into their
 /// instances; renames are staged from the pencil, and dragging a value (or a
-/// shift-click selection of instances) onto another key stages a move. Staged
-/// changes collect in the Approve Changes pane at the bottom as a red/green
-/// diff and apply as one batch.
+/// shift-click selection of instances) onto another key — or onto another
+/// value, to land on that exact spelling — stages a move. Staged changes
+/// collect in the Approve Changes pane at the bottom as a red/green diff and
+/// apply as one batch.
 struct TagReviewView: View {
     @Environment(AppModel.self) private var model
 
@@ -87,7 +88,16 @@ struct TagReviewView: View {
             approvePane
         }
         .task {
+            // First appearance scans; re-selections of the tab only refetch
+            // when an edit elsewhere made the snapshot stale (#225).
             if !review.hasScanned { await review.scan() }
+            else { await review.rescanIfStale() }
+        }
+        // Edits landing while the tab is frontmost (the popover's timer
+        // controls, a CLI write, a sync pull) refresh the scan live — the
+        // store publishes, this surface reacts (#225).
+        .onChange(of: model.spanDataVersion) {
+            Task { await review.rescanIfStale() }
         }
         .sheet(item: $renameTarget) { target in
             RenameSheet(key: target.key, value: target.value) {
@@ -144,7 +154,11 @@ struct TagReviewView: View {
                         valueGroup(key: stat.key, value: value)
                     }
                 } label: {
+                    // Only instance rows join the multi-select: a key or
+                    // value row swept into a shift-click range would silently
+                    // add its whole subtree to the payload.
                     keyRow(stat)
+                        .selectionDisabled()
                 }
             }
         }
@@ -214,17 +228,24 @@ struct TagReviewView: View {
                     // Running spans can't be staged (see movableMatches);
                     // their rows are inert — no selection, no drag. The Log
                     // hand-off still works: its editor edits live timers.
-                    instanceRow(span)
-                        .onTapGesture(count: 2) { openInLog(span) }
+                    instanceRow(span, key: key, value: value.value)
+                        .simultaneousGesture(TapGesture(count: 2).onEnded { openInLog(span) })
+                        .selectionDisabled()
                         .help("Still running — stop it before moving it. Double-click to edit in the Log.")
                 } else {
-                    instanceRow(span)
-                        .onTapGesture(count: 2) { openInLog(span) }
-                        .tag(instance.rowID)
+                    // Selection and drag initiation belong to the underlying
+                    // NSTableView, which only sees presses the row content
+                    // doesn't consume — so the double-click must be a
+                    // *simultaneous* gesture. A plain .onTapGesture holds
+                    // every mouse-down (waiting for the second click) and
+                    // deadens its whole hit area to clicks and drags alike.
+                    instanceRow(span, key: key, value: value.value)
                         .draggable(instancePayload(key: key, value: value.value, span: span)) {
                             TagPill(key: key, value: value.value,
                                     color: model.tagColor(for: key, value: value.value))
                         }
+                        .simultaneousGesture(TapGesture(count: 2).onEnded { openInLog(span) })
+                        .tag(instance.rowID)
                         .help("Drag to move · double-click to edit in the Log")
                 }
             }
@@ -234,6 +255,27 @@ struct TagReviewView: View {
                     TagPill(key: key, value: value.value,
                             color: model.tagColor(for: key, value: value.value))
                 }
+                // Value rows accept drops too (#184): landing instances (or a
+                // whole value) here stages a move to *this* key and value —
+                // the direct gesture for "these three spans were planning,
+                // not review". Key-row drops still exist for values that
+                // don't have a row yet (the staged value stays editable).
+                .dropDestination(for: TagMovePayload.self) { items, _ in
+                    var accepted = false
+                    for item in items {
+                        // Dropping a value (or instances) on their own row
+                        // changes nothing.
+                        guard item.key != key || item.value != value.value else { continue }
+                        model.review.stage(StagedChange(
+                            fromKey: item.key, fromValue: item.value,
+                            toKey: key, toValue: value.value,
+                            spanIDs: item.spanIDs))
+                        accepted = true
+                    }
+                    if accepted { selectedInstances.removeAll() }
+                    return accepted
+                }
+                .selectionDisabled()   // see keyRow — instance rows only
         }
         .padding(.leading, 17)   // align under the key name, past the swatch
     }
@@ -271,25 +313,46 @@ struct TagReviewView: View {
         }
     }
 
-    /// One matched timespan under a value: date, duration, note. Selectable
-    /// (shift-click for ranges) and draggable — dragging a selected row drags
-    /// the whole selection.
-    private func instanceRow(_ span: TimeSpan) -> some View {
-        HStack(spacing: 8) {
+    /// One matched timespan under a value: date, duration, the span's *other*
+    /// marks, note. Selectable (shift-click for ranges) and draggable —
+    /// dragging a selected row drags the whole selection.
+    ///
+    /// The other marks are what tell instances apart when a value is shared
+    /// widely (#223): under `type: editing`, the `client:`/`project:` pills
+    /// are the only way to pick out the spans worth moving. The mark being
+    /// reviewed is omitted — it's the group header right above.
+    private func instanceRow(_ span: TimeSpan, key: String, value: String) -> some View {
+        let others = span.labels.filter { $0.key != key || $0.value != value }
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(span.start.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
                 .monospacedDigit()
             Text(span.isRunning ? "running" : formatDuration(span.durationSeconds))
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
-            if !span.note.isEmpty {
-                Text(span.note)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                if !others.isEmpty {
+                    FlowLayout(spacing: 4) {
+                        ForEach(others, id: \.self) { tag in
+                            TagPill(key: tag.key, value: tag.value,
+                                    color: model.tagColor(for: tag.key, value: tag.value))
+                        }
+                    }
+                }
+                if !span.note.isEmpty {
+                    Text(span.note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 0)
         }
         .padding(.leading, 17)
+        // Text and pills don't hit-test the gaps between them; the explicit
+        // shape gives the double-click gesture the whole row face. It must
+        // pair with non-consuming gestures only (see the call site), or it
+        // deadens the row to the table's selection and drag handling.
+        .contentShape(Rectangle())
     }
 
     /// Hand a span to the Log tab and switch over — the same #130 hand-off
@@ -337,7 +400,7 @@ struct TagReviewView: View {
             if review.staged.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "tray")
-                    Text("Nothing staged — drag a value (or selected instances) onto another key, or stage a rename from a pencil.")
+                    Text("Nothing staged — drag a value (or selected instances) onto another key or value, or stage a rename from a pencil.")
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

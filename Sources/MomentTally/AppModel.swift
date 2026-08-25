@@ -372,6 +372,7 @@ final class AppModel {
         engine.onLocalChange = { [weak self] in
             guard let self else { return }
             self.reloadFromStore()
+            self.noteSpanDataChanged()
             Task {
                 await self.refresh()
                 await self.history.reloadIfLoaded()
@@ -379,6 +380,22 @@ final class AppModel {
         }
         engine.startPeriodicSync()
         syncEngine = engine
+    }
+
+    /// Monotonic version of the span data, bumped by every mutation funnel —
+    /// timer start/stop/edit here, Log/Calendar edits in `HistoryModel`,
+    /// Mark Review rewrites, sync pulls, and the CLI's cross-process signal.
+    /// Surfaces that hold their own span snapshot observe it and refetch
+    /// when stale instead of asking the user to refresh (#225): compare the
+    /// version you loaded at, re-check on appearance, and `.onChange` on it
+    /// while visible. Mark Review's `rescanIfStale` is the pattern to copy.
+    private(set) var spanDataVersion = 0
+
+    /// Span data changed somewhere — tell observing surfaces. Call it next
+    /// to `syncSoon()` on every span write path (and on the pull paths,
+    /// which don't sync back).
+    func noteSpanDataChanged() {
+        spanDataVersion += 1
     }
 
     /// A local mutation happened — reconcile soon. Called by every write
@@ -634,6 +651,7 @@ final class AppModel {
             errorMessage = nil
             await refresh()
             await history.reloadIfLoaded()
+            noteSpanDataChanged()
             syncSoon()
             return created
         } catch {
@@ -673,6 +691,7 @@ final class AppModel {
             replaceActiveTimer(with: updated)
             errorMessage = nil
             await history.reloadIfLoaded()
+            noteSpanDataChanged()
             syncSoon()
             return true
         } catch {
@@ -693,6 +712,7 @@ final class AppModel {
             errorMessage = nil
             await refresh()
             await history.reloadIfLoaded()
+            noteSpanDataChanged()
             syncSoon()
         } catch {
             errorMessage = error.localizedDescription
@@ -723,6 +743,7 @@ final class AppModel {
             errorMessage = nil
             await refresh()
             await history.reloadIfLoaded()
+            noteSpanDataChanged()
             syncSoon()
             return updated
         } catch {
@@ -915,6 +936,7 @@ final class AppModel {
                 guard let self else { return }
                 await self.refresh()
                 await self.history.reloadIfLoaded()
+                self.noteSpanDataChanged()
                 self.syncSoon()
             }
         }
