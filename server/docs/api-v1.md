@@ -14,7 +14,7 @@ this page covers the concepts and the operations a client needs.
   (e.g. `repo: moment-tally`, `type: review`). The Prometheus mental model:
   time series with dimensions.
 - **Label definition** — registers a key for a user: the key plus its
-  display colour and any per-value colour overrides. A key must be defined
+  display color and any per-value color overrides. A key must be defined
   before it can appear on a timespan.
 - **Label set** — a named, ordered, launchable combination of labels with an
   SF Symbol icon (the launcher cards in the mac app).
@@ -32,12 +32,12 @@ requests as `Authorization: traggo <token>`. Device management
 `updateUser`, `removeUser` — admin only) are unchanged. A GraphQL
 playground is served on `GET /graphql` for browsers.
 
-## Label definitions and colours
+## Label definitions and colors
 
 ```graphql
 type LabelDefinition {
     key: String!
-    color: String!                     # the key colour (hex, e.g. "#2196f3")
+    color: String!                     # the key color (hex, e.g. "#2196f3")
     valueColors: [LabelValueColor!]!   # per-value overrides, sorted by value
     usages: Int!                       # how many of the user's timespans use the key
 }
@@ -56,14 +56,14 @@ Mutations:
 
 - `createLabelDefinition(key, color)` / `updateLabelDefinition(key, newKey,
   color)` / `removeLabelDefinition(key)` — key CRUD. Renaming a key
-  rewrites it on the user's timespans, dashboard entries, and value-colour
-  rows; removing deletes its timespan labels and value colours.
-- `setLabelValueColor(key, value, color)` — set or replace the colour
+  rewrites it on the user's timespans, dashboard entries, and value-color
+  rows; removing deletes its timespan labels and value colors.
+- `setLabelValueColor(key, value, color)` — set or replace the color
   override for one value of a key. Returns the updated definition.
 - `clearLabelValueColor(key, value)` — remove the override; the value falls
-  back to the key colour.
+  back to the key color.
 
-Value colours are per user, per key, per value — the server-side
+Value colors are per user, per key, per value — the server-side
 replacement for the mac app's local `valueColors` overlay.
 
 ## Label sets
@@ -110,7 +110,7 @@ enforced where labels attach to timespans.
 The server keeps a collection of template label sets (no owner, flagged
 `default_collection`). When a user is created — via the `createUser`
 mutation, the admin CLI, or the fresh-database default admin — the
-collection is copied to them, and a label definition (colour
+collection is copied to them, and a label definition (color
 `#2196f3`) is created for every referenced key they don't already have.
 The collection is managed with the admin CLI:
 
@@ -155,19 +155,19 @@ and those settings were web-UI-shaped with no Moment Tally consumer.
 ## User preferences
 
 The minimal per-user client state a second device should inherit.
-Colouring *data* (key and value colours) already syncs via
+Coloring *data* (key and value colors) already syncs via
 `LabelDefinition`; these two preferences are what remains:
 
 ```graphql
 type UserPreferences {
-    colorByValue: Boolean!      # colour timespans by label value
+    colorByValue: Boolean!      # color timespans by label value
     menuLabelSetLimit: Int!     # how many label sets the menu shows (0 = all)
 }
 ```
 
 - `userPreferences: UserPreferences!` — the current user's preferences;
-  fresh-user defaults are `colorByValue = true` (value-based colouring is
-  Moment Tally's default behaviour — key colours remain for navigating Label
+  fresh-user defaults are `colorByValue = true` (value-based coloring is
+  Moment Tally's default behaviour — key colors remain for navigating Label
   Review) and `menuLabelSetLimit = 5`.
 - `setUserPreferences(preferences: InputUserPreferences!)` — replaces both
   values.
@@ -217,11 +217,11 @@ Running spans travel through the feed like any other change.
 `deletedAt >= since`, so a deletion is re-delivered rather than ever
 missed (dropping an already-absent span is a no-op). Tombstones whose id
 is a live timespan again are suppressed. Deletions of snapshot-pulled
-entities (label sets, definitions, value colours) need no tombstones: a
+entities (label sets, definitions, value colors) need no tombstones: a
 record the client knew as synced that is absent from the next snapshot
 was deleted on the server.
 
-Low-cardinality entities — `labelDefinitions` (key and value colours ride
+Low-cardinality entities — `labelDefinitions` (key and value colors ride
 along), `labelSets` (quick labels ride along), `userPreferences` — sync
 by whole snapshot each pass; their `updatedAt` values drive the same
 last-writer-wins rule. The optional `position` argument on

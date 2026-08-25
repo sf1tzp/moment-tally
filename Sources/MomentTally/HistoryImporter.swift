@@ -15,7 +15,7 @@ struct ImportSummary: Equatable {
 
 /// One-shot import of a backend's full history into the local store (#30):
 /// every finished *and* running timespan, plus label definitions with their
-/// key colours. Tag sets and value colours never cross — they were always
+/// key colors. Tag sets and value colors never cross — they were always
 /// local, whichever backend was active.
 ///
 /// Generic over `any Backend` as the source, so the whole engine — the paged
@@ -29,8 +29,8 @@ struct ImportSummary: Equatable {
 /// a previous run are *not* deleted locally, and local edits to an imported
 /// span are overwritten by a re-run (the source stays the record of truth for
 /// what it exports — real bidirectionality is phase 6). The same
-/// source-of-truth rule sets the colour merge policy: an imported key colour
-/// replaces the local one, because the colours a user picked over time at the
+/// source-of-truth rule sets the color merge policy: an imported key color
+/// replaces the local one, because the colors a user picked over time at the
 /// source beat the auto-created defaults that usually sit locally.
 struct HistoryImporter {
     let source: any Backend

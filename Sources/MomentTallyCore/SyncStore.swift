@@ -27,7 +27,7 @@ struct SyncMapRow: Codable, FetchableRecord, PersistableRecord {
 
 /// A local deletion not yet pushed. `target` is the server-side identity to
 /// delete: a server id for spans and label sets, a key␟value composite for
-/// value colours.
+/// value colors.
 struct SyncTombstoneRow: Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = "sync_tombstone"
     var entity: String
@@ -382,7 +382,7 @@ package extension LocalBackend {
                 } else {
                     // The server (via another client) deleted the key; the
                     // local copy was in sync, so mirror the deletion. Clean
-                    // value colours of the key follow; dirty ones stay and
+                    // value colors of the key follow; dirty ones stay and
                     // re-create the definition when they push.
                     try db.execute(sql: "DELETE FROM label_definition WHERE key = ?",
                                    arguments: [key])
@@ -404,7 +404,7 @@ package extension LocalBackend {
     }
 
     /// Every locally known definition key — the engine uses this to create
-    /// definitions for label keys that dirty spans or value colours
+    /// definitions for label keys that dirty spans or value colors
     /// reference but no definition covers.
     func definitionKeys() async throws -> Set<String> {
         try await dbQueue.read { db in
@@ -413,7 +413,7 @@ package extension LocalBackend {
     }
 
     /// Insert a definition already known to the server (engine-created as a
-    /// prerequisite for a span or colour push): born clean.
+    /// prerequisite for a span or color push): born clean.
     func insertCleanDefinition(key: String, color: String) async throws {
         try await dbQueue.write { db in
             try db.execute(
@@ -422,7 +422,7 @@ package extension LocalBackend {
         }
     }
 
-    // MARK: Value colours — snapshot merge
+    // MARK: Value colors — snapshot merge
 
     func mergeRemoteValueColors(_ remote: [RemoteLabelDefinition]) async throws
         -> (pushes: [ValueColorPush], changed: Bool) {
@@ -717,9 +717,9 @@ package extension LocalBackend {
 
     private static func insertCleanLabelSet(_ remote: RemoteLabelSet, localId: String,
                                             position: Int, _ db: Database) throws {
-        // color: nil — the card colour is local-only, so the server has
+        // color: nil — the card color is local-only, so the server has
         // nothing to say about it. (The merge's *update* path keeps the
-        // local colour the same way: it never assigns `row.color`.)
+        // local color the same way: it never assigns `row.color`.)
         try LabelSetRow(id: localId, name: remote.name, symbol: remote.symbolName,
                         color: nil, position: position, dirty: false,
                         modifiedAt: nil).insert(db)

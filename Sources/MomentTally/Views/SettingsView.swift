@@ -42,7 +42,7 @@ struct GeneralSettingsView: View {
                         .textSelection(.enabled)
                 }
                 HStack {
-                    Text("Save every moment, mark, colour, and tally as a JSON file — an archive of the database above.")
+                    Text("Save every moment, mark, color, and tally as a JSON file — an archive of the database above.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -113,11 +113,11 @@ struct GeneralSettingsView: View {
                         model.disconnectSyncServer()
                     }
                 }
-                Text("Everything syncs: moments, mark keys and colours, tallies, and the settings below. Edits made offline catch up on the next sync.")
+                Text("Everything syncs: moments, mark keys and colors, tallies, and the settings below. Edits made offline catch up on the next sync.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Text("Optional: connect a sync server to share moments, tallies, and colours across your Macs. Everything keeps working offline; changes sync in the background.")
+                Text("Optional: connect a sync server to share moments, tallies, and colors across your Macs. Everything keeps working offline; changes sync in the background.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 TextField("Server URL", text: $syncURL)
@@ -185,15 +185,13 @@ struct GeneralSettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        Section("Launcher") {
-            Toggle("Gradient launcher cards", isOn: $model.gradientLauncherCards)
-            Text("Cards (and the menu's quick-start tiles) take a colour gradient derived from their colour — the moment-tally.com tile look. Off keeps flat colour fills.")
+        Section("Marks") {
+            Toggle("Color marks by value", isOn: $model.colorTagsByValue)
+            Text("Pick a color per key: value pair, so e.g. recipe: sourdough and recipe: focaccia look different. Pairs without an override keep their key color.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        }
-        Section("Marks") {
-            Toggle("Colour marks by value", isOn: $model.colorTagsByValue)
-            Text("Pick a colour per key: value pair, so e.g. recipe: sourdough and recipe: focaccia look different. Pairs without an override keep their key colour.")
+            Toggle("Show keys on quick label chips", isOn: $model.showQuickLabelKeys)
+            Text("Chips in the menu and on Launcher cards read “+type: review” instead of “+review” — handy when a tally’s quick labels span several keys.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -248,7 +246,7 @@ struct GeneralSettingsView: View {
     private var importSection: some View {
         @Bindable var model = model
         return Section("Import from Traggo") {
-            Text("Copy a Traggo server’s full history — finished and running moments, plus mark keys and their colours — into the local database. Safe to run again: moments already imported are updated, not duplicated.")
+            Text("Copy a Traggo server’s full history — finished and running moments, plus mark keys and their colors — into the local database. Safe to run again: moments already imported are updated, not duplicated.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             TextField("Server URL", text: $model.serverURL)
@@ -480,7 +478,7 @@ struct TagSetDetailView: View {
                         RowReorderGrip(tag: tag, dragged: $dragged)
                         // With no effective labels every row is keyless, so
                         // instead of a disabled swatch each row offers the
-                        // set's fallback card colour — the first place a
+                        // set's fallback card color — the first place a
                         // quick-labels-only set's owner looks for it. The
                         // first typed key swaps it back to the tag picker.
                         if tagSet.labels.isEmpty {
@@ -518,7 +516,7 @@ struct TagSetDetailView: View {
                 }
                 HStack(spacing: 6) {
                     // A set with no rows at all (quick labels do the work)
-                    // still needs somewhere to pick its card colour — the
+                    // still needs somewhere to pick its card color — the
                     // swatch sits where the first row's would.
                     if tagSet.tags.isEmpty {
                         CardColorPicker(colorHex: $tagSet.colorHex)
@@ -537,16 +535,24 @@ struct TagSetDetailView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if tagSet.labels.isEmpty {
-                    Text("With no marks, the swatch picks this tally’s Launcher card colour instead. Card colours are saved on this Mac.")
+                    Text("With no marks, the swatch picks this tally’s Launcher card color instead. Card colors are saved on this Mac.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             quickLabelsSection
-            // Last deliberately: the icon is cosmetic next to the labels and
-            // quick labels that define what the set *does*.
-            Section("Launcher icon") {
+            // Last deliberately: the card's look is cosmetic next to the
+            // labels and quick labels that define what the set *does*.
+            Section("Launcher card") {
                 SymbolPicker(selection: $tagSet.symbolName)
+                // Per-card since #226 — one gradient per grid read fine, a
+                // whole grid of neighbouring hues did not. Unset means on.
+                Toggle("Color gradient", isOn: Binding(
+                    get: { tagSet.gradient ?? true },
+                    set: { tagSet.gradient = $0 }))
+                Text("The card (and the menu's quick-start tile) takes the moment-tally.com tile gradient derived from its color. Off keeps a flat fill. Saved on this Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -632,21 +638,21 @@ struct TagSetDetailView: View {
             set: { model.quickLabels[tagSet.id.uuidString] = $0 })
     }
 
-    /// Key and value colours both live in the local database (and follow the
+    /// Key and value colors both live in the local database (and follow the
     /// user across Macs once a sync server is connected), so the story is
     /// just "per pair" vs "per key".
     private var colorCaption: String {
         model.colorTagsByValue
-            ? "Colours are saved per key: value pair and override the key’s colour. Right-click a swatch to go back to the key colour."
-            : "Colours are saved per mark key, so recolouring a key here also changes it in every other tally that uses it."
+            ? "Colors are saved per key: value pair and override the key’s color. Right-click a swatch to go back to the key color."
+            : "Colors are saved per mark key, so recoloring a key here also changes it in every other tally that uses it."
     }
 }
 
-/// The fallback-colour swatch for a set's launcher card, shown in place of
-/// `TagColorPicker` when the set has no labels to borrow a colour from (a
+/// The fallback-color swatch for a set's launcher card, shown in place of
+/// `TagColorPicker` when the set has no labels to borrow a color from (a
 /// quick-labels-only set). Binds straight to `TagSet.colorHex` — a per-set,
-/// local-only colour, unlike the shared tag palette the other swatches edit.
-/// Right-click to go back to the accent colour.
+/// local-only color, unlike the shared tag palette the other swatches edit.
+/// Right-click to go back to the accent color.
 private struct CardColorPicker: View {
     @Binding var colorHex: String?
 
@@ -657,10 +663,10 @@ private struct CardColorPicker: View {
         ), supportsOpacity: false)
         .labelsHidden()
         .contextMenu {
-            Button("Use accent colour") { colorHex = nil }
+            Button("Use accent color") { colorHex = nil }
                 .disabled(colorHex == nil)
         }
-        .help("Launcher card colour")
+        .help("Launcher card color")
     }
 }
 

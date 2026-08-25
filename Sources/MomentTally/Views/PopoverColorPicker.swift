@@ -6,13 +6,13 @@ import AppKit
 /// opens wherever it last was, and that the non-activating MenuBarExtra
 /// window can neither position nor reliably re-front (#142). Here the swatch
 /// instead opens a small picker popover anchored to its leading edge, right
-/// next to the row it colours: preset swatches, an HSB wheel with a
+/// next to the row it colors: preset swatches, an HSB wheel with a
 /// brightness bar, and an eyedropper (`NSColorSampler`, which needs no
-/// colour panel).
+/// color panel).
 ///
-/// Write paths match `TagColorPicker`: with "colour by value" on (and a
+/// Write paths match `TagColorPicker`: with "color by value" on (and a
 /// non-empty value) it edits the local per-`key: value` override, otherwise
-/// the tag key's server-side colour. The right-click "Use key colour" menu
+/// the tag key's server-side color. The right-click "Use key color" menu
 /// for the override case carries over too. Window surfaces (Settings, Log
 /// editor, Onboarding) keep `TagColorPicker` — the shared panel behaves
 /// conventionally in a regular activating window.
@@ -42,10 +42,10 @@ struct PopoverTagColorPicker: View {
         .buttonStyle(.plain)
         .opacity(keyEmpty ? 0.5 : 1)
         .disabled(keyEmpty)
-        .help("Choose colour")
+        .help("Choose color")
         .contextMenu {
             if valueMode {
-                Button("Use key colour") {
+                Button("Use key color") {
                     model.clearValueColor(key: key, value: value)
                 }
                 .disabled(model.valueColor(key: key, value: value) == nil)
@@ -62,7 +62,7 @@ struct PopoverTagColorPicker: View {
 private struct ColorPickerPanel: View {
     let selection: Binding<Color>
 
-    // The wheel edits local HSB state, seeded from the bound colour when the
+    // The wheel edits local HSB state, seeded from the bound color when the
     // popover opens. Round-tripping every drag tick through the binding would
     // quantise hue/sat via the stored hex and make the thumb jitter (a grey
     // resolves to hue 0, snapping the thumb to 3 o'clock mid-drag).
@@ -105,7 +105,7 @@ private struct ColorPickerPanel: View {
                     Image(systemName: "eyedropper")
                 }
                 .buttonStyle(.borderless)
-                .help("Pick colour from screen")
+                .help("Pick color from screen")
             }
         }
         .padding(12)
@@ -145,7 +145,7 @@ private struct ColorPickerPanel: View {
 /// Hue/saturation disc: hue is the angle, saturation the radius, like the
 /// system picker's wheel. Drawn as an angular hue sweep under a white
 /// radial wash (desaturation towards the centre) under a black veil for the
-/// current brightness, so the wheel always previews achievable colours.
+/// current brightness, so the wheel always previews achievable colors.
 private struct ColorWheel: View {
     @Binding var hue: Double
     @Binding var saturation: Double

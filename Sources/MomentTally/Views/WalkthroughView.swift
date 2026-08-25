@@ -9,7 +9,7 @@ import MomentTallyCore
 /// activated on page 4 keeps corrupting the charts until it is healed.
 ///
 /// - `walkthrough` — the shared dataset: the demo week, the group-by key, the
-///   schema-smell selection, aggregation, and colours.
+///   schema-smell selection, aggregation, and colors.
 /// - `replay` — a revisit from Help (issue #192): the tally-creation page goes
 ///   read-only and the footer wording drops the first-run framing.
 /// - `onBack` — return to the Welcome step; nil on replay (no Welcome).
@@ -324,7 +324,7 @@ private struct SpanIsLabelsPage: View {
     // MARK: The inline editor (mirrors MenuContentView.timerEditor)
 
     /// Same rows as the real editor, minus `TagColorPicker` — that writes the
-    /// user's colour store, which the walkthrough's demo data must not touch —
+    /// user's color store, which the walkthrough's demo data must not touch —
     /// so a static swatch stands in. Return in a label field, or focus moving
     /// anywhere, commits the drafts to the pills; Done just closes.
     private var mockEditor: some View {
@@ -418,7 +418,7 @@ private struct AggregatePage: View {
                     MiniChartsPane(walkthrough: walkthrough)
                         .frame(width: 270)
                 }
-                Text("Colours follow marks around: the same color on the marks and in the charts. Customize colors to your liking in Settings!")
+                Text("Colors follow marks around: the same color on the marks and in the charts. Customize colors to your liking in Settings!")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -958,6 +958,8 @@ private struct LabelSetsConceptPage: View {
         Button {
             start(applying: quick)
         } label: {
+            // The default chip spelling — the walkthrough's mock predates
+            // any preference tweaking, so it shows the stock look (#186).
             Text("+\(quick.value)")
         }
         .buttonStyle(QuickLabelChipStyle(
@@ -1131,7 +1133,7 @@ private struct WalkthroughPersona: Identifiable {
 ///
 /// On `replay` the page is a look-don't-touch catalogue: the editor never
 /// opens (re-adding a persona to a configured account would duplicate
-/// tallies and overwrite value colours — the dedupe is name-based only),
+/// tallies and overwrite value colors — the dedupe is name-based only),
 /// and the footer points at Settings → Tallies instead.
 private struct CreateLabelSetsPage: View {
     @Environment(AppModel.self) private var model
@@ -1148,7 +1150,7 @@ private struct CreateLabelSetsPage: View {
         }
 
     /// One editable label row in the persona editor — the popover editor's
-    /// key/value rows plus a colour swatch, with the persona's example as
+    /// key/value rows plus a color swatch, with the persona's example as
     /// placeholder on seeded rows.
     private struct DraftRow: Identifiable {
         let id = UUID()
@@ -1309,7 +1311,7 @@ private struct CreateLabelSetsPage: View {
                             }
                         } else {
                             // A nil example is a valueless label — a bare
-                            // `key:` pill in the key's colour, like the
+                            // `key:` pill in the key's color, like the
                             // concept page's deliverable:.
                             ForEach(persona.rows, id: \.key) { row in
                                 TagPill(key: row.key, value: row.example ?? "",
@@ -1439,9 +1441,9 @@ private struct CreateLabelSetsPage: View {
             // hint ("Pick something readable like …"), and Add stays
             // disabled until the user names the set themselves.
             draftName = ""
-            // Swatches start on the walkthrough's colour for the example, so
+            // Swatches start on the walkthrough's color for the example, so
             // the editor matches the card the user just clicked; quick-label
-            // seeds prefer a colour the user's palette already has.
+            // seeds prefer a color the user's palette already has.
             draftRows = persona.rows.map {
                 DraftRow(key: $0.key, value: "",
                          color: WalkthroughModel.color(key: $0.key, value: $0.example ?? ""),
@@ -1459,7 +1461,7 @@ private struct CreateLabelSetsPage: View {
 
     /// The persona editor: the popover's editable key/value rows (add,
     /// remove, retype — the seeded keys are suggestions, not law) with a
-    /// colour swatch per row.
+    /// color swatch per row.
     private func editor(for persona: Persona) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -1606,7 +1608,7 @@ private struct CreateLabelSetsPage: View {
     /// the set prompts for it per start (the caption above says so), and
     /// quick-labels-only sets are a real pattern. The refusal is shown, not
     /// written: the offending key fields outline red and the add button
-    /// shakes. Chosen colours go through the model's per-value colour store.
+    /// shakes. Chosen colors go through the model's per-value color store.
     private func add(_ persona: Persona) {
         let rows = draftRows.filter { !$0.isBlank }
         let quickRows = quickDrafts.filter { !$0.isBlank }
@@ -1623,9 +1625,9 @@ private struct CreateLabelSetsPage: View {
         let name = draftName.trimmingCharacters(in: .whitespaces)
         let tags = rows.map { TagRow(key: $0.trimmedKey, value: $0.trimmedValue) }
         let quickTags = quickRows.map { TagRow(key: $0.trimmedKey, value: $0.trimmedValue) }
-        // Chosen colours — a valueless row has no pair to colour; the value
+        // Chosen colors — a valueless row has no pair to color; the value
         // arrives at start time. (Edit-mode swatches were seeded from the
-        // palette, so an untouched swatch writes back its own colour.)
+        // palette, so an untouched swatch writes back its own color.)
         for row in rows + quickRows where !row.trimmedValue.isEmpty {
             model.setValueColor(key: row.trimmedKey, value: row.trimmedValue,
                                 color: row.color)
@@ -1715,7 +1717,7 @@ private struct SurfacesPage: View {
         Surface(symbol: "stethoscope", name: "Mark Review",
                 blurb: "Merge drifted keys and stray values. With Moment Tally it's easy to catch these outliers and correct them before they impact downstream."),
         Surface(symbol: "gear", name: "Settings",
-                blurb: "Sync, colours, and everything else."),
+                blurb: "Sync, colors, and everything else."),
     ]
 
     var body: some View {

@@ -72,7 +72,7 @@ import Testing
         let macA = try await makeMac(name: "a")
         let macB = try await makeMac(name: "b")
 
-        // Mac A: a running span with a label, a tag set, and a value colour.
+        // Mac A: a running span with a label, a tag set, and a value color.
         try await macA.store.createLabelDefinition(key: key, color: "#123456")
         try macA.store.saveValueColors([ValueColorKey.join(key, "live"): "#654321"])
         var setsA = try macA.store.loadTagSets()
@@ -122,7 +122,7 @@ import Testing
         #expect(backOnA.first?.isRunning == false)
         #expect(backOnA.first?.note == "stopped on B \(marker)")
 
-        // Mac A recolours the key; B inherits it.
+        // Mac A recolors the key; B inherits it.
         try await macA.store.updateLabelDefinition(key: key, color: "#abcdef")
         try await sync(macA)
         try await sync(macB)
@@ -137,7 +137,7 @@ import Testing
         try await sync(macA)
         #expect(try await markedSpans(macA.store, marker: marker).isEmpty)
 
-        // Cleanup: drop this run's tag set + value colour on A, propagate.
+        // Cleanup: drop this run's tag set + value color on A, propagate.
         try macA.store.saveTagSets(try macA.store.loadTagSets()
             .filter { $0.name != "Set \(marker)" })
         try macA.store.saveValueColors([:])

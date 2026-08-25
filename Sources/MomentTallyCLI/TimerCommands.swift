@@ -30,7 +30,7 @@ struct Start: AsyncParsableCommand {
                     + ". Stop it first with `moment-tally stop`.")
             }
             // The same guard the app applies on start: every key needs a
-            // definition (with the same default colour) so the new span's
+            // definition (with the same default color) so the new span's
             // labels render everywhere.
             let known = Set(try await backend.labelDefinitions().map(\.key))
             for label in labels where !known.contains(label.key) {

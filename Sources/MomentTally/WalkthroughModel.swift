@@ -9,7 +9,7 @@ import Observation
 /// and heal — so the model is shared across steps rather than per-step
 /// fixtures.
 ///
-/// It is deliberately independent of the user's real data and colours: the
+/// It is deliberately independent of the user's real data and colors: the
 /// walkthrough must tell the same story on a fresh install, in demo mode, and
 /// on a database full of unrelated tags.
 @MainActor
@@ -162,7 +162,7 @@ final class WalkthroughModel {
         var sideEffect: String {
             switch self {
             case .unboundedValues:
-                "A colour explosion — the donut scatters into one-off slices too small to mean anything."
+                "A color explosion — the donut scatters into one-off slices too small to mean anything."
             case .fusedFacts:
                 "Tidier-looking but incoherent: broad questions like “how much meeting time across all projects?” have nothing left to join on."
             case .driftingKeys:
@@ -352,9 +352,9 @@ final class WalkthroughModel {
             .addingTimeInterval(hour * 3600)
     }
 
-    // MARK: Colours
+    // MARK: Colors
 
-    /// Fixed key colours for pills, matching the demo seed's definitions where
+    /// Fixed key colors for pills, matching the demo seed's definitions where
     /// they overlap — the walkthrough never reads the user's palette.
     static func keyColor(_ key: String) -> Color {
         let hex: String
@@ -372,9 +372,9 @@ final class WalkthroughModel {
         return Color(hex: hex) ?? .gray
     }
 
-    /// Fixed per-`key: value` colours for every base-week value, modelled on
+    /// Fixed per-`key: value` colors for every base-week value, modelled on
     /// `DemoSeed.valueColors` (reusing its hexes where the values overlap) —
-    /// colouring by pair rather than key is Moment Tally's headline improvement,
+    /// coloring by pair rather than key is Moment Tally's headline improvement,
     /// so the walkthrough demos it too, still without touching the user's
     /// palette.
     private static let valueColors: [String: String] = [
@@ -400,7 +400,7 @@ final class WalkthroughModel {
         ValueColorKey.join("client", "violet-cafe"): "#af52de",
         // The persona cards' example pairs, pinned so each card's pills
         // and chips read as distinct hues — the hash fallback happily
-        // hands neighbours the same colour. Demo-seed hexes reused where
+        // hands neighbours the same color. Demo-seed hexes reused where
         // the values overlap (the-wayfinder, ted-lasso).
         ValueColorKey.join("course", "linear-algebra"): "#42a5f5",   // Studying
         ValueColorKey.join("type", "lecture"): "#34c759",
@@ -412,11 +412,11 @@ final class WalkthroughModel {
         ValueColorKey.join("show", "ted-lasso"): "#ff9500",
     ]
 
-    /// The colour for a demo pill or chart series: the fixed pair colour when
+    /// The color for a demo pill or chart series: the fixed pair color when
     /// the value is known, a deterministic palette pick for smell-generated
     /// values (so unbounded values visibly explode into arbitrary hues), and
-    /// the key colour when there is no value to colour by. A drifted `proj`
-    /// keeps `repo`'s colours, like the demo seed — the drift loses hours,
+    /// the key color when there is no value to color by. A drifted `proj`
+    /// keeps `repo`'s colors, like the demo seed — the drift loses hours,
     /// not hues.
     static func color(key: String, value: String) -> Color {
         // The missing-time pseudo-series are deliberately hueless.
@@ -434,7 +434,7 @@ final class WalkthroughModel {
                                           "#34c759", "#ff9500", "#5856d6", "#af52de"]
         .compactMap { Color(hex: $0) }
 
-    /// djb2 — `String.hashValue` is seeded per process, and these colours
+    /// djb2 — `String.hashValue` is seeded per process, and these colors
     /// must survive relaunches.
     private static func stableHash(_ string: String) -> Int {
         var hash = 5381
@@ -444,7 +444,7 @@ final class WalkthroughModel {
         return hash
     }
 
-    /// Chart series colours for a grouping: the same per-value colours the
+    /// Chart series colors for a grouping: the same per-value colors the
     /// pills wear, so a slice is findable in the week list by hue alone.
     func colorMap(for totals: [SeriesTotal], key: String) -> [String: Color] {
         Dictionary(uniqueKeysWithValues: totals.map {

@@ -147,7 +147,7 @@ package protocol SyncServerAPI {
     func updateTimeSpan(id: Int, start: Date, end: Date?, labels: [SpanLabel], note: String) async throws
     func removeTimeSpan(id: Int) async throws
 
-    // Push — label definitions and value colours
+    // Push — label definitions and value colors
     func createLabelDefinition(key: String, color: String) async throws
     func updateLabelDefinition(key: String, color: String) async throws
     func setLabelValueColor(key: String, value: String, color: String) async throws

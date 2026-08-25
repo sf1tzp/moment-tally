@@ -4,7 +4,7 @@ import GRDB
 // MARK: - Export document (#57)
 
 /// The JSON snapshot of everything the local store owns: timespans with their
-/// labels, label definitions, per-value colour overrides, and label sets with
+/// labels, label definitions, per-value color overrides, and label sets with
 /// their members. Schema-versioned so the format can evolve and a future
 /// import can validate what it's reading; sync bookkeeping (dirty flags,
 /// server mappings, tombstones) stays out — it describes a connection, not
@@ -60,10 +60,13 @@ package struct LocalExport: Codable, Equatable {
         package var id: String
         package var name: String
         package var symbol: String?
-        /// Fallback launcher-card colour ("#rrggbb") for a set with no
+        /// Fallback launcher-card color ("#rrggbb") for a set with no
         /// labels. Nil (and omitted from the JSON, like `filter`) when unset,
-        /// so colourless exports encode exactly as before the field existed.
+        /// so colorless exports encode exactly as before the field existed.
         package var color: String?
+        /// Per-card gradient toggle (#226). Nil (and omitted, like `color`)
+        /// when unset — meaning gradient on.
+        package var gradient: Bool?
         package var labels: [Label]
         /// The set's quick labels (#92), in offer order. Nil (and omitted,
         /// like `color`) when the set has none.
@@ -152,7 +155,7 @@ package extension LocalBackend {
                 }
                 return LocalExport.LabelSet(
                     id: row.id, name: row.name, symbol: row.symbol,
-                    color: row.color,
+                    color: row.color, gradient: row.gradient,
                     labels: (membersBySet[row.id] ?? []).map {
                         LocalExport.Label(key: $0.key, value: $0.value)
                     },

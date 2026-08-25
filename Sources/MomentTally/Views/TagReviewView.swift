@@ -282,9 +282,9 @@ struct TagReviewView: View {
 
     private func valueRow(key: String, value: ValueStat) -> some View {
         HStack(spacing: 8) {
-            // With "colour by value" on, the swatch edits the per-value
+            // With "color by value" on, the swatch edits the per-value
             // override in place (#69). Otherwise (and for the value-less
-            // row) values can only render the key's colour, so a read-only
+            // row) values can only render the key's color, so a read-only
             // dot mirroring the key row is honest.
             if model.colorTagsByValue && !value.value.isEmpty {
                 TagColorPicker(key: key, value: value.value)
@@ -485,11 +485,11 @@ struct TagReviewView: View {
     /// editable value field (when the change carries one). `toKey` is the
     /// *effective* target — key renames staged earlier folded in — so the
     /// pane describes what approving will actually do. Labels render as
-    /// `TagPill`s in their real colours, matching the review list and the
-    /// drag preview, instead of the generic red/green diff colouring (#69).
+    /// `TagPill`s in their real colors, matching the review list and the
+    /// drag preview, instead of the generic red/green diff coloring (#69).
     private func prose(for change: StagedChange, count: String, toKey: String) -> some View {
         // The target key may not exist yet; apply will create it carrying
-        // the source key's colour, so preview it that way.
+        // the source key's color, so preview it that way.
         let toColor = model.tagDefinitions.contains { $0.key == toKey }
             ? model.tagColor(for: toKey)
             : model.tagColor(for: change.fromKey)
@@ -558,7 +558,7 @@ private struct RenameSheet: View {
                 .textFieldStyle(.roundedBorder)
 
             Text(isKeyRename
-                 ? "Stages a rewrite of \(count) scanned \(count == 1 ? "moment" : "moments") to “\(normalizeKey(newSpelling))”, carrying the colour over. Applied from the Approve Changes pane; moments outside the scanned range keep the old key."
+                 ? "Stages a rewrite of \(count) scanned \(count == 1 ? "moment" : "moments") to “\(normalizeKey(newSpelling))”, carrying the color over. Applied from the Approve Changes pane; moments outside the scanned range keep the old key."
                  : "Stages a rewrite of \(count) scanned \(count == 1 ? "moment" : "moments") carrying “\(key): \(value ?? "")”. Applied from the Approve Changes pane; moments outside the scanned range keep the old value.")
                 .font(.caption)
                 .foregroundStyle(.secondary)

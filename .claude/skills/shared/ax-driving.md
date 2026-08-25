@@ -88,17 +88,17 @@ skills, so the two don't drift.
   Settings tab** — no separate settings window exists, and ⌘, does nothing.
   Onboarding's unnamed footer buttons are the last three of `group 1`
   (Back / Skip Tour / Next); pick "Skip Tour" as the ~85pt-wide one.
-- **Colour pickers drive fine end-to-end** (2026-08-03, card-colour verify):
+- **Color pickers drive fine end-to-end** (2026-08-03, card-color verify):
   click the `AXColorWell` swatch → panel appears as `window "Colors"` of the
   app process; a `cliclick` inside the wheel applies live to the SwiftUI
   binding (no OK step — unlike text fields, this path is trustworthy).
   Close it via `button 1 of window "Colors"` before driving on.
-- **The popover's anchored colour picker (#13) is invisible to AX windows**
+- **The popover's anchored color picker (#13) is invisible to AX windows**
   (2026-08-04): the child NSPopover never enumerates in `windows` of the
   process — the count stays 1 while it's plainly on screen. Screenshot to
   confirm it opened, then drive it by `cliclick` screen coords (the wheel
   and preset clicks apply live to the binding, same as the Colors panel).
-  The swatch buttons identify by `help` ("Choose colour").
+  The swatch buttons identify by `help` ("Choose color").
 - **NSColorSampler dismisses the MenuBarExtra popover** the moment its
   magnifier overlay appears (both the menu popover and the child picker
   close). The sample still lands — the callback fires and writes through

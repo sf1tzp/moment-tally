@@ -399,7 +399,7 @@ private struct RunningSessionEditor: View {
     }
 }
 
-/// The label rows shared by both editor regimes: one row per tag (colour
+/// The label rows shared by both editor regimes: one row per tag (color
 /// swatch, key, value, remove) plus the add-mark button.
 private struct LabelRowsEditor: View {
     @Binding var rows: [TagRow]

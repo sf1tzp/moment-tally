@@ -291,7 +291,7 @@ struct MomentTallyClient: SyncServerAPI {
         _ = try await run(query, variables: Variables(id: id), as: Payload.self)
     }
 
-    // MARK: Push — label definitions and value colours
+    // MARK: Push — label definitions and value colors
 
     func createLabelDefinition(key: String, color: String) async throws {
         struct Variables: Encodable { let key: String; let color: String }

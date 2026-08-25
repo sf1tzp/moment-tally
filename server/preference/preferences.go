@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Steven Fitzpatrick
 
 // Package preference implements Moment Tally v1 user preferences: the small
-// set of per-user client state a second device should inherit (colouring
+// set of per-user client state a second device should inherit (coloring
 // data itself syncs via label definitions).
 package preference
 

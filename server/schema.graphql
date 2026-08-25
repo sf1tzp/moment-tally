@@ -2,7 +2,7 @@
 #
 # Vocabulary (see gitea issue #27): a *label* is a key: value dimension
 # attached to a timespan; *label definitions* register a key with its display
-# colours; *label sets* are reusable, launchable label combinations.
+# colors; *label sets* are reusable, launchable label combinations.
 # The wire contract is Moment Tally's own from v1 on — it is not
 # traggo-compatible, although much of the implementation derives from traggo.
 
@@ -101,13 +101,13 @@ type DeletedTimeSpan {
     deletedAt: Time!
 }
 
-# Per-user preferences a second device should inherit. Colouring *data* (key
-# and value colours) already syncs via LabelDefinition; these are the
+# Per-user preferences a second device should inherit. Coloring *data* (key
+# and value colors) already syncs via LabelDefinition; these are the
 # remaining bits of per-user client state. Fresh-user defaults:
 # colorByValue = true, menuLabelSetLimit = 5.
 type UserPreferences {
-    # Colour timespans by label value — Moment Tally's default behaviour (key
-    # colours remain for navigating Label Review).
+    # Color timespans by label value — Moment Tally's default behaviour (key
+    # colors remain for navigating Label Review).
     colorByValue: Boolean!
     # How many label sets the menu shows (0 = all).
     menuLabelSetLimit: Int!
@@ -167,7 +167,7 @@ enum DeviceType {
 
 scalar Time
 
-# A label key's definition: the key colour plus any per-value colour
+# A label key's definition: the key color plus any per-value color
 # overrides, scoped to the current user.
 type LabelDefinition {
     key: String!
@@ -177,7 +177,7 @@ type LabelDefinition {
     updatedAt: Time!
 }
 
-# A colour override for one value of a label key.
+# A color override for one value of a label key.
 type LabelValueColor {
     value: String!
     color: String!

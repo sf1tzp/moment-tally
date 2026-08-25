@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Steven Fitzpatrick
 
-// Value colours: per-value colour overrides for a label key (Moment Tally v1).
-// The key colour lives on the label definition; these mutations manage the
+// Value colors: per-value color overrides for a label key (Moment Tally v1).
+// The key color lives on the label definition; these mutations manage the
 // LabelValueColor rows layered on top of it.
 
 package tag
@@ -17,7 +17,7 @@ import (
 	"momenttally.com/server/model"
 )
 
-// SetLabelValueColor sets (or replaces) the colour override for one value of
+// SetLabelValueColor sets (or replaces) the color override for one value of
 // a label key and returns the updated definition.
 func (r *ResolverForTag) SetLabelValueColor(ctx context.Context, key string, value string, color string) (*gqlmodel.LabelDefinition, error) {
 	userID := auth.GetUser(ctx).ID
@@ -51,8 +51,8 @@ func (r *ResolverForTag) SetLabelValueColor(ctx context.Context, key string, val
 	return labelDefinition(r.DB, userID, key)
 }
 
-// ClearLabelValueColor removes the colour override for one value of a label
-// key (the value falls back to the key colour) and returns the updated
+// ClearLabelValueColor removes the color override for one value of a label
+// key (the value falls back to the key color) and returns the updated
 // definition.
 func (r *ResolverForTag) ClearLabelValueColor(ctx context.Context, key string, value string) (*gqlmodel.LabelDefinition, error) {
 	userID := auth.GetUser(ctx).ID
@@ -69,7 +69,7 @@ func (r *ResolverForTag) ClearLabelValueColor(ctx context.Context, key string, v
 	return labelDefinition(r.DB, userID, key)
 }
 
-// labelDefinition loads a single definition (with usages and value colours)
+// labelDefinition loads a single definition (with usages and value colors)
 // in its external form.
 func labelDefinition(db *gorm.DB, userID int, key string) (*gqlmodel.LabelDefinition, error) {
 	definition := model.TagDefinition{}
@@ -100,7 +100,7 @@ func labelDefinition(db *gorm.DB, userID int, key string) (*gqlmodel.LabelDefini
 	}, nil
 }
 
-// valueColors loads the value colour overrides of one key in external form.
+// valueColors loads the value color overrides of one key in external form.
 func valueColors(db *gorm.DB, userID int, key string) ([]*gqlmodel.LabelValueColor, error) {
 	var rows []model.LabelValueColor
 	if err := db.
@@ -119,7 +119,7 @@ func valueColors(db *gorm.DB, userID int, key string) ([]*gqlmodel.LabelValueCol
 	return result, nil
 }
 
-// valueColorsByKey loads all value colour overrides of a user grouped by key.
+// valueColorsByKey loads all value color overrides of a user grouped by key.
 func valueColorsByKey(db *gorm.DB, userID int) (map[string][]*gqlmodel.LabelValueColor, error) {
 	var rows []model.LabelValueColor
 	if err := db.

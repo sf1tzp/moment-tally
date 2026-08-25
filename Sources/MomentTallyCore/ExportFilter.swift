@@ -141,7 +141,7 @@ package extension LocalExport {
     }
 
     /// A copy narrowed to the timespans the filter keeps, with the filter
-    /// recorded. Label definitions, value colours, and label sets are
+    /// recorded. Label definitions, value colors, and label sets are
     /// configuration, not time data — they pass through untouched, so the
     /// document stays valid importer input. An empty filter returns the
     /// document unchanged, with no filter record.

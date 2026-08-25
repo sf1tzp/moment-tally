@@ -9,7 +9,7 @@
 // Count what) are a fixed light grey, only Tally / counts. carry the brand
 // gradient. Each master therefore yields a pair:
 //   *-dark.png   — the master, downscaled to bundle size
-//   *-light.png  — the same, with low-saturation (ink) pixels recoloured to
+//   *-light.png  — the same, with low-saturation (ink) pixels recolored to
 //                  near-black; gradient pixels pass through untouched
 // Output lands in Sources/MomentTally/Resources/ and ships in the SwiftPM
 // resource bundle (Package.swift).
@@ -79,7 +79,7 @@ for job in jobs {
 }
 
 /// The tally-motif exports are already a light/dark pair (fully gradient
-/// ink, so no recolouring applies) — just the same downscale to ~3× the
+/// ink, so no recoloring applies) — just the same downscale to ~3× the
 /// About masthead's point size.
 let paired: [(source: String, name: String, height: Int)] = [
     ("Resources/tally_motif_dark.png", "Motif-dark", 384),

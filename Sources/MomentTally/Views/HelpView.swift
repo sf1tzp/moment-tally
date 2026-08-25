@@ -4,7 +4,7 @@ import SwiftUI
 /// interactive walkthrough explains the app better than any of the prose
 /// below it), then static copy explaining the data model and each surface of
 /// the app, one collapsible card per section (first card open by default).
-/// The subtleties documented here (key/value split, server-vs-local colours,
+/// The subtleties documented here (key/value split, server-vs-local colors,
 /// tag sets as launch presets, review rewrites bounded by the scan) otherwise
 /// live only in code comments — keep the sections short and cheap to amend as
 /// features change.
@@ -184,10 +184,10 @@ private struct HelpSection: Identifiable {
             A mark is a **key: value** pair on a moment, like `project: traggo`. Values \
             are free text; keys are lower-cased with spaces turned into “-”.
 
-            Mark **keys** each carry a colour, stored with your moments in the local \
-            database; recolouring a key changes it everywhere the key appears. *Colour \
+            Mark **keys** each carry a color, stored with your moments in the local \
+            database; recoloring a key changes it everywhere the key appears. *Color \
             marks by value* (on by default; see Settings) additionally lets you pick a \
-            colour per key: value pair, so moments differ by what they're about rather \
+            color per key: value pair, so moments differ by what they're about rather \
             than only by key.
 
             **Tallies** are named bundles of marks used to start moments with one \
@@ -199,7 +199,7 @@ private struct HelpSection: Identifiable {
 
             Everything above lives on this Mac by default. Connect a **sync server** \
             (see Settings) and it becomes yours-across-machines instead: moments, \
-            key and value colours, tallies, and the two settings below all follow \
+            key and value colors, tallies, and the two settings below all follow \
             your account to every connected Mac.
             """),
         HelpSection(

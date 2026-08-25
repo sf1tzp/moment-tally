@@ -33,7 +33,7 @@ import Testing
         try backend.saveValueColors([ValueColorKey.join("repo", "moment-tally"): "#123456"])
         let set = TagSet(name: "Review", tags: [TagRow(key: "repo", value: "moment-tally")],
                          symbolName: "hammer")
-        // A quick-labels-only set: no members, card colour of its own.
+        // A quick-labels-only set: no members, card color of its own.
         let gaming = TagSet(name: "Gaming", symbolName: "gamecontroller",
                             colorHex: "#aabbcc")
         try backend.saveTagSets([set, gaming])

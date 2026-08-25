@@ -280,7 +280,7 @@ struct HistoryChartsView: View {
     /// a span matching both groupings would double-count in a single stack.
     /// In combined mode that risk is gone (strict pairing lands each span in
     /// at most one pair), so the day collapses to a single stack of the same
-    /// folded pair series and colours as the combined donut.
+    /// folded pair series and colors as the combined donut.
     @ViewBuilder
     private var dailyBody: some View {
         let marks = dailyMarks
@@ -295,7 +295,7 @@ struct HistoryChartsView: View {
         }
     }
 
-    /// One bar-segment of the daily chart, colour resolved up front so the two
+    /// One bar-segment of the daily chart, color resolved up front so the two
     /// groupings can't collide on shared labels. `column` separates the
     /// groupings' stacks (never displayed — the legend is hidden).
     private struct DailyMark: Identifiable {
@@ -333,7 +333,7 @@ struct HistoryChartsView: View {
         return result
     }
 
-    /// Fold, rank, and colour one stack's daily series into marks.
+    /// Fold, rank, and color one stack's daily series into marks.
     private func marks(column: String, totals: [SeriesTotal],
                        daily: [DailyTotal], colors: [String: Color]) -> [DailyMark] {
         let rank = Dictionary(uniqueKeysWithValues:
@@ -425,7 +425,7 @@ struct HistoryChartsView: View {
     // MARK: Combined breakdown (two-level legend)
 
     /// One inner row of the combined breakdown: the full pair label (which
-    /// keys the colour map) plus the inner part shown under its heading.
+    /// keys the color map) plus the inner part shown under its heading.
     private struct CombinedRow: Identifiable {
         var id: String { pair }
         let pair: String
@@ -598,11 +598,11 @@ struct HistoryChartsView: View {
         return "\(minutes / 60)h \(minutes % 60)m"
     }
 
-    // MARK: Series colours (validated palette, fixed assignment)
+    // MARK: Series colors (validated palette, fixed assignment)
 
     /// A colorblind-validated categorical palette (light/dark variants). Series
     /// are assigned slots by alphabetical label order — stable across weeks and
-    /// grouping tweaks, so a series keeps its colour as data changes ("colour
+    /// grouping tweaks, so a series keeps its color as data changes ("color
     /// follows the entity, not its rank").
     private var palette: [Color] {
         let hexes = colorScheme == .dark
@@ -615,8 +615,8 @@ struct HistoryChartsView: View {
 
     /// Palette slots by alphabetical label order (plus the gray "Other") —
     /// the base assignment for both maps below, and the whole map for the
-    /// combined pair series: per-value override colours never apply to a
-    /// pair, since it spans two values and neither one's colour can claim it.
+    /// combined pair series: per-value override colors never apply to a
+    /// pair, since it spans two values and neither one's color can claim it.
     private func paletteSlots(for totals: [SeriesTotal]) -> [String: Color] {
         let labels = totals.map(\.label).filter { $0 != Self.otherLabel }.sorted()
         var map: [String: Color] = [Self.otherLabel: .gray]
@@ -628,7 +628,7 @@ struct HistoryChartsView: View {
 
     private func colorMap(for totals: [SeriesTotal], grouping: ChartGrouping) -> [String: Color] {
         var map = paletteSlots(for: totals)
-        // With "colour by value" on, user-picked overrides beat palette slots
+        // With "color by value" on, user-picked overrides beat palette slots
         // so the charts match the tag pills elsewhere in the app.
         if model.colorTagsByValue {
             for label in totals.map(\.label) where label != Self.otherLabel {
@@ -640,7 +640,7 @@ struct HistoryChartsView: View {
         return map
     }
 
-    /// The user's per-value colour for a series label, if one is set. Labels
+    /// The user's per-value color for a series label, if one is set. Labels
     /// are values when grouping by key, "key: value" for tag-set members.
     private func overrideColor(for label: String, grouping: ChartGrouping) -> Color? {
         switch grouping {

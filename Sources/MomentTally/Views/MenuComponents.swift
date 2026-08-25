@@ -66,8 +66,8 @@ struct HoverIconButtonStyle: ButtonStyle {
     }
 }
 
-/// A tag shown as a coloured capsule ("key: value"), coloured by the tag's
-/// server-side colour.
+/// A tag shown as a colored capsule ("key: value"), colored by the tag's
+/// server-side color.
 struct TagPill: View {
     let key: String
     let value: String
@@ -84,10 +84,11 @@ struct TagPill: View {
     }
 }
 
-/// One quick-label chip — "+value" in the label's colour. Clicking starts the
-/// set with the quick label applied, replacing the set's value for the same
-/// key (see `TagSet.labels(applying:)`). Shared by the popover's quick-start
-/// rows and the Launcher cards.
+/// One quick-label chip — "+value" in the label's color, or "+key: value"
+/// (the `TagPill` spelling) with the Show-keys preference on (#186). Clicking
+/// starts the set with the quick label applied, replacing the set's value for
+/// the same key (see `TagSet.labels(applying:)`). Shared by the popover's
+/// quick-start rows and the Launcher cards.
 struct QuickLabelChip: View {
     @Environment(AppModel.self) private var model
     let set: TagSet
@@ -113,7 +114,8 @@ struct QuickLabelChip: View {
                 }
             }
         } label: {
-            Text("+\(value.isEmpty ? key : value)")
+            Text(value.isEmpty ? "+\(key)"
+                 : model.showQuickLabelKeys ? "+\(key): \(value)" : "+\(value)")
         }
         .buttonStyle(QuickLabelChipStyle(color: model.tagColor(for: key, value: value),
                                          filled: filled))
@@ -123,7 +125,7 @@ struct QuickLabelChip: View {
 }
 
 /// A clickable capsule chip for quick labels — visually a `TagPill` that reads
-/// as an action rather than a fact. Outlined in the label's colour at rest,
+/// as an action rather than a fact. Outlined in the label's color at rest,
 /// filling with it on mouse-over. On busy backgrounds (the Launcher card
 /// scrim) the outline is too faint, so `filled` renders the fill at rest and
 /// moves the mouse-over feedback to a white ring instead.
@@ -165,9 +167,9 @@ struct QuickLabelChipStyle: ButtonStyle {
     }
 }
 
-/// A colour swatch for a tag. With "colour by value" on (and a non-empty
+/// A color swatch for a tag. With "color by value" on (and a non-empty
 /// value) it edits the local per-`key: value` override; otherwise it edits the
-/// tag key's server-side colour. Disabled when the key is blank. Shared by the
+/// tag key's server-side color. Disabled when the key is blank. Shared by the
 /// Tag Sets settings pane and the running-timer tag editor.
 struct TagColorPicker: View {
     @Environment(AppModel.self) private var model
@@ -185,7 +187,7 @@ struct TagColorPicker: View {
             .labelsHidden()
             .disabled(keyEmpty)
             .contextMenu {
-                Button("Use key colour") {
+                Button("Use key color") {
                     model.clearValueColor(key: key, value: value)
                 }
                 .disabled(model.valueColor(key: key, value: value) == nil)
@@ -202,7 +204,7 @@ struct TagColorPicker: View {
 }
 
 extension NSColorPanel {
-    /// Close the shared colour panel when the surface whose swatch opened it
+    /// Close the shared color panel when the surface whose swatch opened it
     /// goes away (the settings/onboarding window closing, the popover
     /// dismissing).
     ///
@@ -222,7 +224,7 @@ extension NSColorPanel {
 
 /// Shared metrics for key: value editor rows. Every label editor (popover
 /// timer editor, Tallies pane, log editor, the onboarding editors) follows
-/// the same anatomy: chip-shaped colour swatch, narrow key field with a "key"
+/// the same anatomy: chip-shaped color swatch, narrow key field with a "key"
 /// hint, standalone colon, wide value field with a "value" hint, then a
 /// borderless "+ Add Mark" button directly after the rows.
 enum LabelEditorStyle {

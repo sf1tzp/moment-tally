@@ -70,7 +70,7 @@ extension OnboardingWindowManager: NSWindowDelegate {
         model?.hasCompletedOnboarding = true
         // Drop the controller so a later show() starts a fresh sequence.
         windowController = nil
-        // The walkthrough's colour swatches front the shared colour panel;
+        // The walkthrough's color swatches front the shared color panel;
         // it follows its window (#142).
         NSColorPanel.closeShared()
     }

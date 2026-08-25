@@ -11,7 +11,7 @@ import AppKit
 /// read and write goes through it, no server required. Connecting a sync
 /// server doesn't switch backends; it attaches a `SyncEngine` that
 /// reconciles the same store with the server in the background, which is
-/// what turns tag sets, colours, and preferences from per-Mac into per-user.
+/// what turns tag sets, colors, and preferences from per-Mac into per-user.
 /// The old live-traggo mode is gone; `TraggoClient` survives only as the
 /// importer's source.
 @MainActor
@@ -77,10 +77,10 @@ final class AppModel {
         quickLabels[set.id.uuidString] ?? []
     }
 
-    /// When on, tags are coloured by their `key: value` pair (using the local
+    /// When on, tags are colored by their `key: value` pair (using the local
     /// overrides below) instead of only by key, so `recipe: sourdough` and `recipe: focaccia`
     /// can look different. On by default — differentiating spans by value is
-    /// Moment Tally's headline improvement over vanilla traggo, with key colours
+    /// Moment Tally's headline improvement over vanilla traggo, with key colors
     /// remaining useful for navigating Tag Review; an explicitly stored false
     /// (a user who turned it off) is respected. Syncs as a user preference
     /// when a server is connected.
@@ -91,7 +91,7 @@ final class AppModel {
         }
     }
 
-    /// Per-`key: value` colour overrides (hex strings), keyed by
+    /// Per-`key: value` color overrides (hex strings), keyed by
     /// `ValueColorKey.join` — first-class rows in the local store, and
     /// per-user (not per-Mac) once a sync server is connected.
     var valueColors: [String: String] {
@@ -108,12 +108,13 @@ final class AppModel {
         }
     }
 
-    /// Launcher cards (and the popover's mini tiles) draw the Studio tile
-    /// gradient derived from their colour (#201) instead of a flat fill.
-    /// Purely cosmetic, so deliberately local-only like `TagSet.colorHex` —
-    /// no `preferenceChanged()`, no sync schema change.
-    var gradientLauncherCards: Bool {
-        didSet { defaults.set(gradientLauncherCards, forKey: Keys.gradientLauncherCards) }
+    /// Quick label chips spell out their key — "+type: review" instead of
+    /// "+review" (#186). Off by default: chips usually live inside a set
+    /// whose context makes the key obvious, and the short form keeps the
+    /// Launcher card overlay tight. Purely cosmetic, so local-only — no
+    /// `preferenceChanged()`, no sync schema change.
+    var showQuickLabelKeys: Bool {
+        didSet { defaults.set(showQuickLabelKeys, forKey: Keys.showQuickLabelKeys) }
     }
 
     // MARK: Runtime state (observed by the UI)
@@ -191,7 +192,7 @@ final class AppModel {
     @ObservationIgnored private var tickTimer: Timer?
     /// Registration for the CLI's cross-process store-changed notification.
     @ObservationIgnored private var storeChangeObserver: NSObjectProtocol?
-    /// Debounce timers for per-key colour writes, so dragging in the colour
+    /// Debounce timers for per-key color writes, so dragging in the color
     /// picker doesn't fire an `updateTag` on every intermediate value.
     @ObservationIgnored private var colorTasks: [String: Task<Void, Never>] = [:]
 
@@ -203,7 +204,10 @@ final class AppModel {
         static let colorTagsByValue = "colorTagsByValue"
         static let valueColors = "valueColors"
         static let menuTagSetLimit = "menuTagSetLimit"
+        // Read only by the one-time #226 migration in `activateStore` —
+        // the preference itself became per-card (`TagSet.gradient`).
         static let gradientLauncherCards = "gradientLauncherCards"
+        static let showQuickLabelKeys = "showQuickLabelKeys"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         /// Keychain accounts: the sync server's device token, and the legacy
         /// traggo token the importer still reuses.
@@ -228,8 +232,7 @@ final class AppModel {
             ? true : defaults.bool(forKey: Keys.colorTagsByValue)  // default on
         menuTagSetLimit = defaults.object(forKey: Keys.menuTagSetLimit) == nil
             ? 5 : defaults.integer(forKey: Keys.menuTagSetLimit)  // 0 = all
-        gradientLauncherCards = defaults.object(forKey: Keys.gradientLauncherCards) == nil
-            ? true : defaults.bool(forKey: Keys.gradientLauncherCards)  // default on
+        showQuickLabelKeys = defaults.bool(forKey: Keys.showQuickLabelKeys)  // default off
         // Into a local first: `token` is observation-tracked, and a tracked
         // property can't be *read* before the whole object is initialised.
         // A demo never reads the real token — nothing in a demo may reach a
@@ -274,6 +277,25 @@ final class AppModel {
             valueColors = (try? store.loadValueColors()) ?? [:]
             quickLabels = (try? store.loadQuickLabels()) ?? [:]
             user = LocalBackend.localUser   // no login; ready immediately
+            // One-time #226 migration: the global launcher-gradient
+            // preference became per-card. An explicitly stored false stamps
+            // every existing set flat before the key is deleted; true (or
+            // nothing) just falls into the per-card default — gradient on
+            // (`TagSet.showsGradient`). The explicit store write mirrors the
+            // demo seeding below: the load-time observer suppression is in
+            // effect, so `tagSets`' didSet won't persist. Gradient-only
+            // changes don't dirty rows, so this pushes no sync noise.
+            if defaults.object(forKey: Keys.gradientLauncherCards) != nil {
+                if !defaults.bool(forKey: Keys.gradientLauncherCards) {
+                    tagSets = tagSets.map { set in
+                        var set = set
+                        set.gradient = false
+                        return set
+                    }
+                    try? store.saveTagSets(tagSets)
+                }
+                defaults.removeObject(forKey: Keys.gradientLauncherCards)
+            }
             // Demo quick labels are keyed by the set ids minted during this
             // launch's reseed, so they can only be attached here, after the
             // sets load. The store write is explicit because the load-time
@@ -414,7 +436,7 @@ final class AppModel {
     }
 
     /// Re-read the state a sync pull may have rewritten (tag sets, quick
-    /// labels, value colours) without echoing the loads back as writes.
+    /// labels, value colors) without echoing the loads back as writes.
     private func reloadFromStore() {
         guard let store = localStore else { return }
         isRestoringState = true
@@ -522,7 +544,7 @@ final class AppModel {
             }
             importSummary = summary
             // Imported data is live state: running traggo timers now tick in
-            // the popover, and key colours reach every tag chip — and it has
+            // the popover, and key colors reach every tag chip — and it has
             // to reach a connected sync server like any other local write.
             await refresh()
             await history.reloadIfLoaded()
@@ -661,7 +683,7 @@ final class AppModel {
     }
 
     /// Ensure every tag key exists as a definition, or the server rejects the
-    /// timespan. Creates missing ones with a default colour. Delegates to the
+    /// timespan. Creates missing ones with a default color. Delegates to the
     /// backend's idempotent ensure (which checks the store, not our cache) and
     /// refreshes the cache from its result — an edit path that creates a key
     /// mid-session must not leave `tagDefinitions` behind, or the next commit
@@ -806,10 +828,10 @@ final class AppModel {
         return set
     }
 
-    // MARK: Tag colours (stored per key by the backend)
+    // MARK: Tag colors (stored per key by the backend)
 
-    /// The colour to render a tag with. With "colour by value" on, a
-    /// per-value override wins; otherwise the colour the backend has on
+    /// The color to render a tag with. With "color by value" on, a
+    /// per-value override wins; otherwise the color the backend has on
     /// record for the tag key, or a sensible default.
     func tagColor(for rawKey: String, value: String? = nil) -> Color {
         if colorTagsByValue, let value,
@@ -824,7 +846,7 @@ final class AppModel {
         return Color(hex: "#2196f3") ?? .blue
     }
 
-    /// The colour a set's launcher card carries: the first mark's colour,
+    /// The color a set's launcher card carries: the first mark's color,
     /// then the set's own fallback (the quick-marks-only case), then accent.
     /// Shared by the Launcher cards and the popover rows' mini tiles, so the
     /// two surfaces always agree.
@@ -835,7 +857,7 @@ final class AppModel {
         return set.colorHex.flatMap(Color.init(hex:)) ?? .accentColor
     }
 
-    // MARK: Per-value colour overrides
+    // MARK: Per-value color overrides
 
     /// The override picked for a `key: value` pair, if any.
     func valueColor(key rawKey: String, value: String) -> Color? {
@@ -853,9 +875,9 @@ final class AppModel {
         valueColors.removeValue(forKey: ValueColorKey.join(normalizeKey(rawKey), value))
     }
 
-    /// A Label Review rewrite respelled labels: their per-value colour
+    /// A Label Review rewrite respelled labels: their per-value color
     /// overrides move with them (#69 — without this, renaming a value
-    /// silently dropped its colour).
+    /// silently dropped its color).
     func migrateValueColors(fromKey: String, fromValue: String?,
                             toKey: String, toValue: String?) {
         valueColors = ValueColorKey.migrating(valueColors,
@@ -863,7 +885,7 @@ final class AppModel {
                                               toKey: toKey, toValue: toValue)
     }
 
-    /// Persist a new colour for a tag key, debounced so a colour-wheel drag
+    /// Persist a new color for a tag key, debounced so a color-wheel drag
     /// collapses into a single write once it settles.
     func scheduleTagColor(for rawKey: String, color: Color) {
         let key = normalizeKey(rawKey)
@@ -942,7 +964,7 @@ final class AppModel {
         }
     }
 
-    // MARK: Tag-set + value-colour persistence
+    // MARK: Tag-set + value-color persistence
 
     private func persistTagSets() {
         guard !isRestoringState else { return }

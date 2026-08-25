@@ -6,7 +6,7 @@ import Testing
 
 /// The local store, exercised end to end over real (in-memory or temp-file)
 /// databases: every `Backend` operation, the date-range and paging behaviour,
-/// tag set / value colour persistence, and the one-time UserDefaults import.
+/// tag set / value color persistence, and the one-time UserDefaults import.
 @Suite struct LocalBackendTests {
 
     /// A fresh in-memory store. No legacy defaults unless a test passes some,
@@ -163,7 +163,7 @@ import Testing
         let second = try await backend.ensureLabelDefinitions(for: tags,
                                                               defaultColor: "#445566")
 
-        // One definition per key; the pre-existing colour is untouched.
+        // One definition per key; the pre-existing color is untouched.
         let expected = [LabelDefinition(key: "repo", color: "#112233"),
                         LabelDefinition(key: "work-type", color: "#445566")]
         #expect(first == expected)
@@ -266,7 +266,7 @@ import Testing
         #expect(page.timeSpans.map(\.id) == [span.id])
     }
 
-    // MARK: Tag sets + value colours
+    // MARK: Tag sets + value colors
 
     @Test func tagSetsSaveIsReplaceAll() async throws {
         let backend = try makeBackend()
@@ -297,8 +297,8 @@ import Testing
         try backend.saveTagSets([set])
         #expect(try backend.loadTagSets().first?.colorHex == "#aabbcc")
 
-        // Mark the row clean (as a sync would), then recolour: the colour
-        // persists, but the row must stay clean — the card colour is
+        // Mark the row clean (as a sync would), then recolor: the color
+        // persists, but the row must stay clean — the card color is
         // local-only and never part of the sync payload.
         try await backend.dbQueue.write { db in
             try db.execute(sql: "UPDATE label_set SET dirty = 0")
@@ -318,6 +318,32 @@ import Testing
             try Bool.fetchOne(db, sql: "SELECT dirty FROM label_set")!
         }
         #expect(redirty)
+    }
+
+    @Test func cardGradientRoundTripsWithoutDirtyingSync() async throws {
+        // The per-card gradient (#226) is local-only like the card color:
+        // it persists through save/load — including the unset (nil = on)
+        // state — and flipping it alone must not dirty the row.
+        let backend = try makeBackend()
+        var flat = TagSet(name: "Flat", gradient: false)
+        let unset = TagSet(name: "Unset")
+        try backend.saveTagSets([flat, unset])
+        let loaded = try backend.loadTagSets()
+        #expect(loaded.first(where: { $0.name == "Flat" })?.gradient == false)
+        #expect(loaded.first(where: { $0.name == "Unset" })?.gradient == nil)
+        #expect(loaded.allSatisfy { $0.showsGradient == ($0.name == "Unset") })
+
+        try await backend.dbQueue.write { db in
+            try db.execute(sql: "UPDATE label_set SET dirty = 0")
+        }
+        flat.gradient = true
+        try backend.saveTagSets([flat, unset])
+        #expect(try backend.loadTagSets()
+            .first(where: { $0.name == "Flat" })?.gradient == true)
+        let dirtyCount = try await backend.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT count(*) FROM label_set WHERE dirty = 1")!
+        }
+        #expect(dirtyCount == 0)
     }
 
     @Test func valueColorsRoundTripThroughRealColumns() throws {

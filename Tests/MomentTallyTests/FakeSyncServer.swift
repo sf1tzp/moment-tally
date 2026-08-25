@@ -157,7 +157,7 @@ final class FakeSyncServer: SyncServerAPI {
         }
     }
 
-    // MARK: SyncServerAPI — definitions and value colours
+    // MARK: SyncServerAPI — definitions and value colors
 
     func createLabelDefinition(key: String, color: String) async throws {
         try checkOnline()

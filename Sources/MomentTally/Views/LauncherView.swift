@@ -165,7 +165,7 @@ private struct NewTagSetCard: View {
 }
 
 /// One launcher card: the set's icon and name on a tile tinted with the first
-/// tag's colour (the set's own fallback colour when it has no tags — the
+/// tag's color (the set's own fallback color when it has no tags — the
 /// quick-labels-only case — and accent when that isn't picked either).
 /// Clicking starts the set —
 /// alongside any running timers (overlapping timespans are supported). A set
@@ -215,11 +215,11 @@ struct TagSetCard: View {
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, minHeight: 96)
-            .foregroundStyle(model.gradientLauncherCards
+            .foregroundStyle(set.showsGradient
                              ? Brand.tileGlyph(for: tint)
                              : tint.contrastingTextColor)
             .background(RoundedRectangle(cornerRadius: 10).fill(
-                model.gradientLauncherCards
+                set.showsGradient
                 ? AnyShapeStyle(Brand.tileGradient(for: tint))
                 : AnyShapeStyle(tint)))
             .overlay {
@@ -303,7 +303,7 @@ struct TagSetCard: View {
 }
 
 /// A launcher card in miniature — the same icon on the same tile treatment
-/// (gradient or flat, per the preference) at row scale, so the popover's
+/// (gradient or flat, per the card, #226) at row scale, so the popover's
 /// quick-start rows read as the same objects as the Launcher grid's cards
 /// (#201).
 struct LauncherTileIcon: View {
@@ -314,12 +314,12 @@ struct LauncherTileIcon: View {
     var body: some View {
         let tint = model.cardTint(for: set)
         TagSetIcon(set: set, size: size * 0.5, weight: .medium)
-            .foregroundStyle(model.gradientLauncherCards
+            .foregroundStyle(set.showsGradient
                              ? Brand.tileGlyph(for: tint)
                              : tint.contrastingTextColor)
             .frame(width: size, height: size)
             .background(RoundedRectangle(cornerRadius: size * 0.27).fill(
-                model.gradientLauncherCards
+                set.showsGradient
                 ? AnyShapeStyle(Brand.tileGradient(for: tint))
                 : AnyShapeStyle(tint)))
     }

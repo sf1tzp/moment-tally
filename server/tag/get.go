@@ -10,7 +10,7 @@ import (
 )
 
 // LabelDefinitions returns all label definitions of the current user,
-// including their per-value colour overrides.
+// including their per-value color overrides.
 func (r *ResolverForTag) LabelDefinitions(ctx context.Context) ([]*gqlmodel.LabelDefinition, error) {
 	var tags []model.TagDefinition
 	userID := auth.GetUser(ctx).ID

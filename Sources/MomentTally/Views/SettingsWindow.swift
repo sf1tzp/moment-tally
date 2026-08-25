@@ -75,7 +75,7 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
     }
 
     /// The panel follows the window that opened it (#142): swatches in the
-    /// settings tabs front the shared colour panel, and letting it outlive
+    /// settings tabs front the shared color panel, and letting it outlive
     /// the window strands it hidden once the app deactivates.
     func windowWillClose(_ notification: Notification) {
         NSColorPanel.closeShared()

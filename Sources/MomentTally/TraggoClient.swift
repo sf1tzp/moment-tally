@@ -116,7 +116,7 @@ struct TraggoClient: Backend {
             .timers.map { $0.map(\.domain) } ?? []
     }
 
-    /// Existing tag definitions (the reusable keys, with colours).
+    /// Existing tag definitions (the reusable keys, with colors).
     func labelDefinitions() async throws -> [LabelDefinition] {
         struct Payload: Decodable { let tags: [TagDefinition]? }
         let query = "query { tags { key color } }"
@@ -139,7 +139,7 @@ struct TraggoClient: Backend {
         _ = try await run(query, variables: Variables(key: key, color: color), as: Payload.self)
     }
 
-    /// Change the colour of an existing tag key. Traggo stores colour per key,
+    /// Change the color of an existing tag key. Traggo stores color per key,
     /// so this affects that key everywhere it's used.
     func updateLabelDefinition(key: String, color: String) async throws {
         struct Variables: Encodable { let key: String; let color: String }

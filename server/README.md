@@ -6,7 +6,7 @@ web UI in this tree.
 
 The API is **Moment Tally v1** — see [docs/api-v1.md](docs/api-v1.md). It
 speaks the label vocabulary (labels, label definitions with key *and*
-per-value colours, per-user label sets with a seeded default collection)
+per-value colors, per-user label sets with a seeded default collection)
 and is not traggo-compatible.
 
 ## Provenance
@@ -21,7 +21,7 @@ This tree is a derivative of [traggo/server](https://github.com/traggo/server)
 - an admin CLI is added under `cmd/admin` for the user administration the
   web UI used to provide;
 - the GraphQL contract is evolved into Moment Tally v1: label vocabulary on
-  the wire, per-value label colours, and server-side label sets. Derived Go
+  the wire, per-value label colors, and server-side label sets. Derived Go
   internals deliberately keep traggo's naming (`model.TagDefinition`, the
   `tag`/`timespan` packages, table names) to keep upstream fixes
   cherry-pickable; the schema and all new code say *label*.

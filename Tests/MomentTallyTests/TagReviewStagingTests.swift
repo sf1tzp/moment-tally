@@ -166,8 +166,8 @@ import Testing
     }
 }
 
-/// Per-value colour overrides following Label Review rewrites (#69) — before
-/// this, a staged rename silently dropped the value's colour.
+/// Per-value color overrides following Label Review rewrites (#69) — before
+/// this, a staged rename silently dropped the value's color.
 @Suite struct ValueColorMigrationTests {
 
     private func colors(_ pairs: [(String, String, String)]) -> [String: String] {
@@ -203,7 +203,7 @@ import Testing
     }
 
     @Test func existingDestinationOverrideWins() {
-        // The destination's colour was chosen for that spelling; the source
+        // The destination's color was chosen for that spelling; the source
         // override is dropped, not merged over it.
         let migrated = ValueColorKey.migrating(
             colors([("focus", "bar", "#112233"), ("music", "bar", "#445566")]),

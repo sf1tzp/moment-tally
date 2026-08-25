@@ -56,7 +56,7 @@ struct MenuContentView: View {
         // view-local drafts this teardown was where edits silently died (#70).
         .onDisappear {
             Task { await model.commitEditSession() }
-            // A colour panel opened from the timer editor would otherwise
+            // A color panel opened from the timer editor would otherwise
             // linger with nothing to sweep it up (#142).
             NSColorPanel.closeShared()
         }
@@ -233,7 +233,7 @@ struct MenuContentView: View {
     /// *outline* drawn here, around the whole expanded area, so it covers the
     /// chips too and survives the mouse moving from the button onto a chip;
     /// the button style's own accent fill is off (it would end at the
-    /// button's edge), and the row keeps its normal text colours.
+    /// button's edge), and the row keeps its normal text colors.
     private func quickStartRow(_ set: TagSet) -> some View {
         let expanded = hoveredQuickStartID == set.id
         return VStack(alignment: .leading, spacing: 2) {
@@ -404,7 +404,7 @@ struct MenuContentView: View {
         }
     }
 
-    /// In-place editor for a running row — one line per tag (colour swatch,
+    /// In-place editor for a running row — one line per tag (color swatch,
     /// key, value, remove), the add-label button, then the note, with
     /// Cancel / Done. The drafts are the shared session's; commits go through
     /// the model's one funnel (`commitEditSession`), which skips the

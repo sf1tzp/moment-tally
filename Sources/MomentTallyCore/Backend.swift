@@ -32,8 +32,8 @@ package struct SpanLabel: Hashable {
     }
 }
 
-/// A label key's definition: the key itself plus its display colour (a hex
-/// string like "#2196f3"). Colours are stored per *key*; per-value colours are
+/// A label key's definition: the key itself plus its display color (a hex
+/// string like "#2196f3"). Colors are stored per *key*; per-value colors are
 /// a client-side overlay (see `AppModel.valueColors`). Codable so the local
 /// store can persist it directly as a GRDB record — the type is its own row.
 package struct LabelDefinition: Hashable, Codable {
@@ -108,14 +108,14 @@ package protocol Backend {
     /// All currently-running timespans (end == nil).
     func timers() async throws -> [TimeSpan]
 
-    /// Every known label definition (keys with colours).
+    /// Every known label definition (keys with colors).
     func labelDefinitions() async throws -> [LabelDefinition]
 
-    /// Register a new label key with a colour. Backends may require this
+    /// Register a new label key with a color. Backends may require this
     /// before the key can appear on a timespan (traggo rejects unknown keys).
     func createLabelDefinition(key: String, color: String) async throws
 
-    /// Change the colour of an existing label key, everywhere it's used.
+    /// Change the color of an existing label key, everywhere it's used.
     func updateLabelDefinition(key: String, color: String) async throws
 
     /// Start a running timespan (no end time).
@@ -140,7 +140,7 @@ package protocol Backend {
 
 package extension Backend {
     /// Make sure every tag's key exists as a definition, creating missing ones
-    /// with the default colour. Idempotent where `createLabelDefinition` is
+    /// with the default color. Idempotent where `createLabelDefinition` is
     /// deliberately not: the existing keys are read fresh from the backend (a
     /// caller's stale cache must not turn "already exists" into a duplicate-
     /// insert error), and a key appearing on several tags is created once.

@@ -27,20 +27,32 @@ package struct TagSet: Identifiable, Codable, Hashable {
     /// `markSymbol` for the brand mark. Optional so sets saved before icons
     /// existed keep decoding; `symbol` supplies the default.
     package var symbolName: String?
-    /// "#rrggbb" fallback colour for the set's launcher card, used only when
-    /// the set has no labels to borrow a colour from (a quick-labels-only
+    /// "#rrggbb" fallback color for the set's launcher card, used only when
+    /// the set has no labels to borrow a color from (a quick-labels-only
     /// set). Local-only — not part of the sync payload. Optional so older
-    /// saves keep decoding; nil means the accent colour.
+    /// saves keep decoding; nil means the accent color.
     package var colorHex: String?
+    /// Whether the launcher card (and the popover's mini tile) draws the
+    /// Studio tile gradient (#201) rather than a flat fill. Per-card (#226):
+    /// some colors don't benefit, and neighbouring hues clash as gradients
+    /// side by side. Local-only like `colorHex`. Optional so older saves keep
+    /// decoding; nil means on — the default of the global preference this
+    /// replaced (see `showsGradient`).
+    package var gradient: Bool?
 
     package init(id: UUID = UUID(), name: String = "", tags: [TagRow] = [],
-                 symbolName: String? = nil, colorHex: String? = nil) {
+                 symbolName: String? = nil, colorHex: String? = nil,
+                 gradient: Bool? = nil) {
         self.id = id
         self.name = name
         self.tags = tags
         self.symbolName = symbolName
         self.colorHex = colorHex
+        self.gradient = gradient
     }
+
+    /// The gradient choice to render — unset means gradient on.
+    package var showsGradient: Bool { gradient ?? true }
 
     /// Reserved `symbolName` standing for the Moment Tally mark rather than
     /// an SF Symbol. It has to be a string, not the absence of one: sync
@@ -96,7 +108,7 @@ package func normalizeKey(_ key: String) -> String {
         .lowercased().replacingOccurrences(of: " ", with: "-")
 }
 
-/// The composite dictionary key for per-`key: value` colour overrides — a unit
+/// The composite dictionary key for per-`key: value` color overrides — a unit
 /// separator rather than ":" because tag values may themselves contain ":".
 /// Shared between `AppModel` (which keys its in-memory dictionary this way,
 /// and the legacy UserDefaults store with it) and `LocalBackend` (which splits
@@ -113,7 +125,7 @@ package enum ValueColorKey {
         return (String(raw[..<index]), String(raw[raw.index(after: index)...]))
     }
 
-    /// Overrides after a label rewrite: colours follow the labels they
+    /// Overrides after a label rewrite: colors follow the labels they
     /// described. `fromValue` nil moves every override under the key (a key
     /// rename); otherwise one `key: value` pair moves, landing on
     /// `toValue ?? fromValue` (mirroring how the rewrite keeps a span's value

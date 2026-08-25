@@ -122,8 +122,8 @@ enum Brand {
 
     /// The Studio launcher-tile recipe, ported verbatim from the website's
     /// `src/lib/launcher.ts` (design doc section 05): stop A is the card's
-    /// colour, stop B rotates hue +28° with a small saturation push and a
-    /// lightness step down; low-chroma colours ramp lightness instead, so a
+    /// color, stop B rotates hue +28° with a small saturation push and a
+    /// lightness step down; low-chroma colors ramp lightness instead, so a
     /// grey tile doesn't pick up a phantom hue. CSS's 135deg is topLeading →
     /// bottomTrailing here. Keep the two files in sync.
     static func tileGradient(for color: Color) -> LinearGradient {
@@ -136,7 +136,7 @@ enum Brand {
                               startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    /// The recipe's glyph colour: ink on light tiles, white otherwise. Only
+    /// The recipe's glyph color: ink on light tiles, white otherwise. Only
     /// for tiles drawn with `tileGradient` — flat fills keep
     /// `contrastingTextColor`, whose threshold matches a solid background.
     static func tileGlyph(for color: Color) -> Color {
@@ -190,7 +190,7 @@ enum Brand {
     /// The wordmark as the website actually sets it — real Morganite, ink
     /// "Moment", gradient "Tally" — for display-size spots where `wordmark`'s
     /// system stand-in is most visibly not the brand face. Appearance-keyed
-    /// because the renders bake their ink colour in (the masters are
+    /// because the renders bake their ink color in (the masters are
     /// dark-background exports); both variants regenerate from the repo-root
     /// Resources/ masters via scripts/make-lockups.swift.
     static func wordmarkLockup(for scheme: ColorScheme) -> NSImage? {
@@ -205,7 +205,7 @@ enum Brand {
 
     /// The bare gradient tally motif (no icon tile) at display size, for the
     /// About masthead. Unlike the text lockups both variants are exported
-    /// masters — fully gradient ink, nothing to recolour — downscaled by the
+    /// masters — fully gradient ink, nothing to recolor — downscaled by the
     /// same make-lockups.swift run.
     static func motif(for scheme: ColorScheme) -> NSImage? {
         lockup("Motif", scheme)
@@ -277,7 +277,7 @@ enum Brand {
     /// every spot that mixes the mark in with symbols stays consistent.
     static let symbolInset: CGFloat = 0.15
 
-    /// A colour that follows the appearance the view actually renders in.
+    /// A color that follows the appearance the view actually renders in.
     private static func dynamic(light: String, dark: String) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua

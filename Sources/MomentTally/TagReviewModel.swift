@@ -309,7 +309,7 @@ final class TagReviewModel {
         let toKey = normalizeKey(change.toKey)
         guard !toKey.isEmpty else { return false }
         // The server rejects unknown keys: make sure the target definition
-        // exists, carrying the source key's colour. The old definition stays
+        // exists, carrying the source key's color. The old definition stays
         // on the server (traggo keeps it; harmless and still reusable).
         if !app.tagDefinitions.contains(where: { $0.key == toKey }) {
             let color = app.tagDefinitions.first(where: { $0.key == change.fromKey })?.color
@@ -331,10 +331,10 @@ final class TagReviewModel {
             }
         }
         // Whole-value (and whole-key) changes update local tag sets, quick
-        // labels, and per-value colour overrides too, or quick-starting a
+        // labels, and per-value color overrides too, or quick-starting a
         // set (or clicking a quick chip) would recreate the old spelling and
-        // the renamed value would lose its colour (#177). Subset moves leave
-        // all three alone — the value (and its colour) still legitimately
+        // the renamed value would lose its color (#177). Subset moves leave
+        // all three alone — the value (and its color) still legitimately
         // means the rest.
         if change.spanIDs == nil {
             updateTagSets(for: change, toKey: toKey)

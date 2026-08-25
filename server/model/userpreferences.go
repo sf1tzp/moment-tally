@@ -6,13 +6,13 @@ package model
 import "time"
 
 // UserPreferences is the per-user client state a second device should
-// inherit. Colouring *data* (key and value colours) already syncs via label
+// inherit. Coloring *data* (key and value colors) already syncs via label
 // definitions; these are the remaining bits. Absence of a row means the
 // defaults apply (see DefaultUserPreferences).
 type UserPreferences struct {
 	UserID int `gorm:"primary_key;unique_index"`
-	// ColorByValue colours timespans by label value (Moment Tally's default
-	// behaviour); key colours remain for navigating Label Review.
+	// ColorByValue colors timespans by label value (Moment Tally's default
+	// behaviour); key colors remain for navigating Label Review.
 	ColorByValue bool
 	// MenuLabelSetLimit is how many label sets the menu shows (0 = all).
 	MenuLabelSetLimit int

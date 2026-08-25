@@ -12,7 +12,7 @@ import Testing
 
     @Test func decodesSavesThatPredateCardColor() throws {
         // Sets persisted before `colorHex` existed (the legacy UserDefaults
-        // JSON the v1 import reads) must keep decoding, colourless.
+        // JSON the v1 import reads) must keep decoding, colorless.
         let json = """
         {"id":"6F1D2C3B-0000-0000-0000-000000000000","name":"Gaming",
          "tags":[{"id":"6F1D2C3B-0000-0000-0000-000000000001","key":"","value":""}]}

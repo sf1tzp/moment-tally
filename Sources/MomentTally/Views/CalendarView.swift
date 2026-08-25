@@ -2,7 +2,7 @@ import SwiftUI
 import MomentTallyCore
 
 /// The Calendar tab: a 7-day week grid with a vertical time axis, moments as
-/// coloured blocks (like the web UI's calendar). Overlapping spans share the
+/// colored blocks (like the web UI's calendar). Overlapping spans share the
 /// column width via lane packing; clicking a block jumps to the Log tab with
 /// that span open for editing (#130 — the grid is too dense for a popover).
 /// Spans crossing midnight render one segment per day they touch.
@@ -171,8 +171,8 @@ struct CalendarView: View {
             .joined(separator: " ")
     }
 
-    /// Blocks take the colour of their first tag (the web UI similarly
-    /// derives block colour from tags).
+    /// Blocks take the color of their first tag (the web UI similarly
+    /// derives block color from tags).
     private func blockColor(_ span: TimeSpan) -> Color {
         if let first = span.labels.first {
             return model.tagColor(for: first.key, value: first.value)

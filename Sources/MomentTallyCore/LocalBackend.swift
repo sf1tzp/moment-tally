@@ -63,8 +63,8 @@ struct SpanOriginRow: Codable, FetchableRecord, PersistableRecord {
     }
 }
 
-/// A per-`key: value` colour override (`value_color`) — first-class here,
-/// unlike traggo where it's a client-side overlay on top of per-key colours.
+/// A per-`key: value` color override (`value_color`) — first-class here,
+/// unlike traggo where it's a client-side overlay on top of per-key colors.
 /// `dirty`/`modifiedAt` as on `TimeSpanRow`.
 struct ValueColorRow: Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = "value_color"
@@ -87,15 +87,18 @@ struct LabelSetRow: Codable, FetchableRecord, PersistableRecord {
     var id: String
     var name: String
     var symbol: String?
-    /// Fallback launcher-card colour ("#rrggbb"). Local-only: excluded from
+    /// Fallback launcher-card color ("#rrggbb"). Local-only: excluded from
     /// the dirty computation and the sync payload, and merges leave it alone.
     var color: String?
+    /// Per-card gradient toggle (#226), nil = on. Local-only like `color`.
+    var gradient: Bool? = nil
     var position: Int
     var dirty = true
     var modifiedAt: Date?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, symbol, color, position, dirty, modifiedAt = "modified_at"
+        case id, name, symbol, color, gradient, position, dirty,
+             modifiedAt = "modified_at"
     }
 }
 
@@ -136,7 +139,7 @@ struct LabelSetQuickMemberRow: Codable, FetchableRecord, PersistableRecord {
 
 /// The serverless `Backend`: a single SQLite file under Application Support,
 /// via GRDB. Everything the traggo backend stores remotely lives here instead —
-/// plus the things that were only ever local (tag sets, value colours), which
+/// plus the things that were only ever local (tag sets, value colors), which
 /// move out of UserDefaults and into the same file so local mode has one
 /// backup-able artifact.
 package final class LocalBackend: Backend {
@@ -363,14 +366,14 @@ package final class LocalBackend: Backend {
             try db.create(table: "sync_tombstone") { t in
                 t.column("entity", .text).notNull()
                 // The server-side identity to delete: a server id for spans
-                // and label sets, a key␟value composite for value colours.
+                // and label sets, a key␟value composite for value colors.
                 t.column("target", .text).notNull()
                 t.column("deleted_at", .datetime).notNull()
                 t.primaryKey(["entity", "target"])
             }
         }
 
-        // Fallback launcher-card colour for sets with no labels. Local-only —
+        // Fallback launcher-card color for sets with no labels. Local-only —
         // deliberately not part of the sync payload, so it neither
         // participates in the dirty flag nor rides `LabelSetPush`.
         migrator.registerMigration("v4-label-set-color") { db in
@@ -408,6 +411,16 @@ package final class LocalBackend: Backend {
                 try db.execute(
                     sql: "UPDATE label_set SET dirty = 1, modified_at = ? WHERE id = ?",
                     arguments: [now, setId])
+            }
+        }
+
+        // Per-card gradient toggle (#226), replacing the global launcher
+        // preference (AppModel migrates a stored false into the cards once).
+        // Local-only like `color`: not in the dirty computation or the sync
+        // payload, and merges leave it alone.
+        migrator.registerMigration("v6-label-set-gradient") { db in
+            try db.alter(table: "label_set") { t in
+                t.add(column: "gradient", .boolean)        // nil = gradient on
             }
         }
 
@@ -547,7 +560,7 @@ package final class LocalBackend: Backend {
         }
     }
 
-    // MARK: Tag sets + value colours (local-only surface, not part of Backend)
+    // MARK: Tag sets + value colors (local-only surface, not part of Backend)
     //
     // Synchronous by design: AppModel persists these from didSet observers on
     // the main actor, exactly like the UserDefaults writes they replace, and
@@ -563,7 +576,8 @@ package final class LocalBackend: Backend {
                        name: row.name,
                        tags: (bySet[row.id] ?? []).map { TagRow(key: $0.key, value: $0.value) },
                        symbolName: row.symbol,
-                       colorHex: row.color)
+                       colorHex: row.color,
+                       gradient: row.gradient)
             }
         }
     }
@@ -592,10 +606,10 @@ package final class LocalBackend: Backend {
                 }
                 if var row = byId[id] {
                     let oldMembers = membersBySet[id] ?? []
-                    // `color` is deliberately absent: it isn't synced, so a
-                    // recolour alone must not dirty the row (that would push
-                    // an otherwise-unchanged set). The update below still
-                    // persists it.
+                    // `color` and `gradient` are deliberately absent: they
+                    // aren't synced, so a cosmetic change alone must not
+                    // dirty the row (that would push an otherwise-unchanged
+                    // set). The update below still persists them.
                     let changed = row.name != set.name
                         || row.symbol != set.symbolName
                         || row.position != position
@@ -606,6 +620,7 @@ package final class LocalBackend: Backend {
                     row.name = set.name
                     row.symbol = set.symbolName
                     row.color = set.colorHex
+                    row.gradient = set.gradient
                     row.position = position
                     if changed {
                         row.dirty = true
@@ -614,7 +629,8 @@ package final class LocalBackend: Backend {
                     try row.update(db)
                 } else {
                     try LabelSetRow(id: id, name: set.name, symbol: set.symbolName,
-                                    color: set.colorHex, position: position,
+                                    color: set.colorHex, gradient: set.gradient,
+                                    position: position,
                                     dirty: true, modifiedAt: now).insert(db)
                 }
                 try LabelSetMemberRow.filter(Column("set_id") == id).deleteAll(db)
@@ -687,7 +703,7 @@ package final class LocalBackend: Backend {
 
     /// Snapshot save with per-row diffing, like `saveTagSets`: unchanged
     /// overrides keep their sync metadata, removed ones leave a tombstone
-    /// when a sync server is connected (value colours have no id mapping —
+    /// when a sync server is connected (value colors have no id mapping —
     /// their key␟value pair *is* the identity on both sides).
     package func saveValueColors(_ colors: [String: String]) throws {
         try dbQueue.write { db in
@@ -728,7 +744,7 @@ package final class LocalBackend: Backend {
 
     // MARK: Demo seeding (see DemoMode.swift)
     //
-    // Synchronous like the tag-set/value-colour surface, and for the same
+    // Synchronous like the tag-set/value-color surface, and for the same
     // reason: the seeder runs inside the (main-actor) backend activation.
     // These live here rather than with the seeder because they need the
     // file-private row types.
@@ -759,9 +775,9 @@ package final class LocalBackend: Backend {
 
     // MARK: Import (origin-mapped upserts, used by HistoryImporter)
 
-    /// Upsert label definitions by key. The imported colour wins over a local
+    /// Upsert label definitions by key. The imported color wins over a local
     /// one: the source has been the store of record for these keys, and the
-    /// colours already local are mostly the auto-created default blue — see
+    /// colors already local are mostly the auto-created default blue — see
     /// the importer's doc comment for the full policy rationale.
     package func importLabelDefinitions(_ definitions: [LabelDefinition]) async throws
         -> (created: Int, recolored: Int) {

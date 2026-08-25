@@ -39,8 +39,8 @@ final class SyncEngine {
 
     /// Defensive bound on the pull loop, same idea as the importer's.
     var maxPullPages = 10_000
-    /// The colour given to definitions the engine has to invent because a
-    /// pushed span or value colour references an undefined key.
+    /// The color given to definitions the engine has to invent because a
+    /// pushed span or value color references an undefined key.
     static let defaultKeyColor = "#2196f3"
 
     @ObservationIgnored private var syncTask: Task<Void, Never>?
@@ -120,7 +120,7 @@ final class SyncEngine {
     // MARK: The reconciliation pass
 
     /// One full pass; returns whether local data changed. Order matters:
-    /// definitions before value colours and spans (the server rejects labels
+    /// definitions before value colors and spans (the server rejects labels
     /// with undefined keys), pulls before pushes (conflicts resolve against
     /// fresh server state, and the losers of last-writer-wins never push).
     func performSync() async throws -> Bool {
@@ -146,7 +146,7 @@ final class SyncEngine {
                                                         modifiedAt: push.modifiedAt)
         }
 
-        // 2. Value colours: push queued clears, then merge and push winners.
+        // 2. Value colors: push queued clears, then merge and push winners.
         for tombstone in try await store.valueColorTombstones() {
             do {
                 try await server.clearLabelValueColor(key: tombstone.key,

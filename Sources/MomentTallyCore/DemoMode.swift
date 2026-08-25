@@ -11,7 +11,7 @@ import GRDB
 ///     .build/debug/MomentTally --demo
 ///
 /// Nothing a demo session does can touch real data: timespans, tag sets,
-/// definitions and value colours live in `demo.sqlite` beside the real
+/// definitions and value colors live in `demo.sqlite` beside the real
 /// database (rebuilt from scratch on every demo launch, dated relative to
 /// now so "the past month" always looks current), and settings reads/writes
 /// go to a scratch UserDefaults suite instead of the standard domain.
@@ -105,7 +105,7 @@ package enum DemoSeed {
         // value-less `deliverable:` to fill in per start. Their quick
         // labels below carry the `type:`/`meeting:` axes History's combined
         // view groups by. `project:` leads so each launcher card borrows its
-        // *project's* colour — client-first would paint each engagement in
+        // *project's* color — client-first would paint each engagement in
         // its client's hue instead of its own.
         TagSet(name: "Client Rebrand",
                tags: [TagRow(key: "project", value: "rebrand"),
@@ -117,8 +117,8 @@ package enum DemoSeed {
                       TagRow(key: "client", value: "hartleys"),
                       ],
                symbolName: "camera"),
-        // Quick-marks-only sets: no presets, so the card colour comes from
-        // `colorHex` (matched to the key's definition colour below).
+        // Quick-marks-only sets: no presets, so the card color comes from
+        // `colorHex` (matched to the key's definition color below).
         TagSet(name: "Cooking", symbolName: "frying.pan", colorHex: "#ee6b2a"),
         TagSet(name: "Workout", symbolName: "figure.run", colorHex: "#34c759"),
         TagSet(name: "Reading", symbolName: "book", colorHex: "#26a69a"),
@@ -131,7 +131,7 @@ package enum DemoSeed {
                tags: [TagRow(key: "project", value: "menu-shoot"),
                       TagRow(key: "client", value: "violet-cafe")],
                symbolName: "fork.knife"),
-        // Single-mark preset sets: the card borrows the mark's colour, and
+        // Single-mark preset sets: the card borrows the mark's color, and
         // the quick labels below hone each start. Two `repo:` sets on
         // purpose — the same key spread across sets, like `project:` above.
         TagSet(name: "Open Source",
@@ -230,7 +230,7 @@ package enum DemoSeed {
         }
     }
 
-    // MARK: Colours
+    // MARK: Colors
     //
     // The persona palette (#27/#201) — the website's launcher.ts hexes, one
     // per persona tile. With the full fourteen-persona cast each tile's hex
@@ -243,7 +243,7 @@ package enum DemoSeed {
     static let labelDefinitions: [LabelDefinition] = [
         LabelDefinition(key: "client", color: "#5856d6"),      // Freelance
         LabelDefinition(key: "project", color: "#f06292"),     // Creative Work
-        // Same colour as `project` on purpose: the drifted key should look
+        // Same color as `project` on purpose: the drifted key should look
         // like what it is — the same concept, misspelled — so the difference
         // shows up in Mark Review, not on every pill.
         LabelDefinition(key: "proj", color: "#f06292"),
@@ -260,14 +260,14 @@ package enum DemoSeed {
         LabelDefinition(key: "show", color: "#d84315"),        // Streaming
         LabelDefinition(key: "org", color: "#ec407a"),         // Volunteering
         // The modifier axes deliberately sit outside the persona ring —
-        // muted slate and taupe, so an identity key (whose colour carries
+        // muted slate and taupe, so an identity key (whose color carries
         // the persona) always outshines the axis honing it. Their *values*
         // stay vivid via the per-pair overrides below.
         LabelDefinition(key: "type", color: "#546e7a"),
         LabelDefinition(key: "meeting", color: "#8d6e63"),
     ]
 
-    /// Per-pair overrides, one hue per value so the colour-by-value story
+    /// Per-pair overrides, one hue per value so the color-by-value story
     /// reads at a glance — every `type:`/`meeting:` value its own slice in
     /// the History donuts, and the combined view's type × client and
     /// meeting × client pairings stay tellable-apart.
@@ -317,7 +317,7 @@ package enum DemoSeed {
         ValueColorKey.join("book", "crux"): "#007aff",
         ValueColorKey.join("book", "the-wayfinder"): "#26a69a",     // the Leisure chip
         // No `lang`/`course`/`company`/`org` overrides: their hero values
-        // (`spanish`, `linear-algebra`, …) ride the key's persona colour.
+        // (`spanish`, `linear-algebra`, …) ride the key's persona color.
         // `repo:` is the exception — two personas share the key, so the
         // Side Project value overrides while `primetime` keeps the key's
         // Programming hue.
@@ -469,7 +469,7 @@ package enum DemoSeed {
         [
             Draft(startMinute: 570, durationMinutes: 15, labels: weddingConsult),
             Draft(startMinute: 585, durationMinutes: 120, labels: driftEditing,
-                  note: "Colour pass on the menu set"),
+                  note: "Color pass on the menu set"),
             Draft(startMinute: 720, durationMinutes: 30, labels: jobApplication,
                   note: "Application out over lunch"),
             Draft(startMinute: 780, durationMinutes: 60, labels: driftDesign),

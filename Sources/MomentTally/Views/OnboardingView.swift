@@ -170,7 +170,7 @@ private struct SyncConnectCard: View {
 
     var body: some View {
         WelcomeActionCard(title: Text("Connecting to a Moment Tally Server?"),
-                          subtitle: "Sync moments, marks, and colours across your Macs.",
+                          subtitle: "Sync moments, marks, and colors across your Macs.",
                           expanded: $expanded) {
             if let icon = Brand.appIcon {
                 Image(nsImage: icon)
@@ -235,7 +235,7 @@ private struct TraggoImportCard: View {
     var body: some View {
         @Bindable var model = model
         WelcomeActionCard(title: Text("Coming from Traggo?"),
-                          subtitle: "Copy a Traggo history — time spans, tags, and colours — into the local database.",
+                          subtitle: "Copy a Traggo history — time spans, tags, and colors — into the local database.",
                           expanded: $expanded) {
             Image(systemName: "square.and.arrow.down")
                 .font(.title3)

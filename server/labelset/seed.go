@@ -8,7 +8,7 @@ import (
 	"momenttally.com/server/model"
 )
 
-// DefaultLabelColor is the colour given to label definitions created while
+// DefaultLabelColor is the color given to label definitions created while
 // seeding a user with the default collection.
 const DefaultLabelColor = "#2196f3"
 

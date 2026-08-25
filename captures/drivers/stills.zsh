@@ -38,7 +38,7 @@ assert_2x
 # --- one-time staging (dark pass) ------------------------------------------
 # Idle timers: the demo seed launches with a running wedding-shoot timer,
 # and a running tally dims its launcher card — stop everything so the
-# launcher stills show full-colour cards.
+# launcher stills show full-color cards.
 stop_all_timers; frontmost; sleep 0.5
 
 # Log/Calendar: most recent full week -> one step back from Today.

@@ -56,7 +56,7 @@ import Testing
     }
 
     /// A source with enough history to page: 5 finished spans (with labels and
-    /// notes), 2 running ones, and coloured definitions.
+    /// notes), 2 running ones, and colored definitions.
     private func makeSource() async throws -> LocalBackend {
         let source = try makeBackend(pageSize: 2)
         try await source.createLabelDefinition(key: "repo", color: "#112233")
@@ -94,7 +94,7 @@ import Testing
         let running = try await destination.timers()
         #expect(running.map(\.note).sorted() == ["running a", "running b"])
 
-        // Definitions came over with their key colours.
+        // Definitions came over with their key colors.
         #expect(try await destination.labelDefinitions() ==
                 [LabelDefinition(key: "repo", color: "#112233"),
                  LabelDefinition(key: "work-type", color: "#445566")])
@@ -210,9 +210,9 @@ import Testing
         #expect(try await fingerprints(reopened) == fingerprints(source))
     }
 
-    // MARK: Definition colour policy
+    // MARK: Definition color policy
 
-    @Test func importedDefinitionColourWinsOverLocal() async throws {
+    @Test func importedDefinitionColorWinsOverLocal() async throws {
         let source = try makeBackend()
         try await source.createLabelDefinition(key: "repo", color: "#server1")
         try await source.createLabelDefinition(key: "area", color: "#server2")

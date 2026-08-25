@@ -211,13 +211,13 @@ import Testing
         try await store.createLabelDefinition(key: "proj", color: "#111111")
         try await sync(engine)
 
-        // Older server recolour loses to a fresh local recolour.
+        // Older server recolor loses to a fresh local recolor.
         try await server.updateLabelDefinition(key: "proj", color: "#222222")
         try await store.updateLabelDefinition(key: "proj", color: "#333333")
         try await sync(engine)
         #expect(server.definitions["proj"]?.color == "#333333")
 
-        // A future-dated server recolour wins over a local one.
+        // A future-dated server recolor wins over a local one.
         server.now = Date().addingTimeInterval(3600)
         try await server.updateLabelDefinition(key: "proj", color: "#444444")
         try await store.updateLabelDefinition(key: "proj", color: "#555555")
@@ -322,7 +322,7 @@ import Testing
         try await sync(engine)
 
         // Renamed on the server (another device) later: the merge takes the
-        // synced fields but must leave the local-only card colour alone.
+        // synced fields but must leave the local-only card color alone.
         let serverId = server.sets.keys.first!
         server.now = Date().addingTimeInterval(3600)
         try await server.updateLabelSet(id: serverId, name: "Games",
