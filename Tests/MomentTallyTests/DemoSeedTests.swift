@@ -54,8 +54,16 @@ import Testing
         let backend = try LocalBackend(DatabaseQueue())
         try DemoSeed.write(to: backend, now: wednesday, calendar: Self.calendar)
 
-        let finished = try await backend.timeSpans(from: .distantPast,
-                                                   to: .distantFuture, page: nil).timeSpans
+        // The month overflows one 200-span page, so walk the pagination —
+        // which also exercises it against the seeded data.
+        var finished: [TimeSpan] = []
+        var page: PageToken?
+        repeat {
+            let result = try await backend.timeSpans(from: .distantPast,
+                                                     to: .distantFuture, page: page)
+            finished += result.timeSpans
+            page = result.nextPage
+        } while page != nil
         let running = try await backend.timers()
         let stored = Set((finished + running).map {
             DemoSeed.SeedSpan(start: $0.start, end: $0.end, labels: $0.labels, note: $0.note)
@@ -72,16 +80,17 @@ import Testing
     @Test func contentCountsForTheMidWeekLayout() {
         let spans = seed(now: wednesday)
         // The trailing month behind Wed 2026-07-29 runs Mon Jun 29 – Tue
-        // Jul 28: 22 weekdays cycling A,B,C,D (A×6 + B×6 + D×5 at 7 spans,
-        // C×5 at 6 spans = 149) + 8 weekend days alternating W1/W2
-        // (4×3 + 4×4 = 28) + today (6).
-        #expect(spans.count == 183)
-        // Five cards since #189 culled the cast for screenshot presentation
-        // (the shelved set survives as a comment in DemoSeed.tagSets).
-        #expect(DemoSeed.tagSets.count == 5)
-        #expect(Set(DemoSeed.tagSets.compactMap(\.symbolName)).count == 5)  // distinct symbols
-        #expect(DemoSeed.labelDefinitions.count == 11)
-        #expect(DemoSeed.valueColors.count == 33)
+        // Jul 28: 22 weekdays cycling A,B,C,D (A×6 at 9 spans, B×6 and
+        // C×5 and D×5 at 8 = 182) + 8 weekend days alternating W1/W2
+        // (4×5 + 4×7 = 48) + today (6).
+        #expect(spans.count == 236)
+        // The full persona cast (#27): all fourteen website persona tiles
+        // as one plausible life, plus the restored Menu Shoot engagement —
+        // #189's five-card cull is superseded.
+        #expect(DemoSeed.tagSets.count == 15)
+        #expect(Set(DemoSeed.tagSets.compactMap(\.symbolName)).count == 15)  // distinct symbols
+        #expect(DemoSeed.labelDefinitions.count == 17)
+        #expect(DemoSeed.valueColors.count == 48)
         // Notes on many spans, so Log and Calendar popovers have texture.
         #expect(spans.filter { !$0.note.isEmpty }.count >= 10)
     }
@@ -161,19 +170,43 @@ import Testing
         #expect(DemoSeed.quickLabels(forSetNamed: "Wedding Shoot")!.count == 6)
         // The leisure sets are quick-labels-only: chips with no presets, and
         // a colorHex so their launcher cards aren't accent-grey.
-        for name in ["Cooking", "Workout", "Reading"] {
+        for name in ["Cooking", "Workout", "Reading",
+                     "Gardening", "Streaming", "Volunteering"] {
             let set = DemoSeed.tagSets.first { $0.name == name }!
             #expect(set.tags.isEmpty)
             #expect(set.colorHex != nil)
         }
+        // Music Practice's guitar chip shares the preset's key — the
+        // same-key honing rule on a hover chip, so starting it swaps the
+        // instrument rather than double-labelling the span.
+        let music = DemoSeed.tagSets.first { $0.name == "Music Practice" }!
+        let guitar = DemoSeed.quickLabels(forSetNamed: music.name)!
+            .first { $0.value == "guitar" }!
+        #expect(music.labels(applying: guitar) ==
+                [SpanLabel(key: "instrument", value: "guitar")])
     }
 
     @Test func valuelessLabelsSeedTheFillInPerStartStory() {
-        // Since the #189 cull the fill-in-per-start story (#149/#162) rides
-        // on one card: Client Rebrand's value-less `deliverable:` —
-        // quick-starting it opens the editor with the empty value focused.
-        let rows = DemoSeed.tagSets.first { $0.name == "Client Rebrand" }!.tags
-        #expect(rows.contains { $0.key == "deliverable" && $0.value.isEmpty })
+        // The fill-in-per-start story (#149/#162) rides on two cards —
+        // Client Rebrand's value-less `deliverable:` and Job Hunt's bare
+        // `company:` — quick-starting either opens the editor with the
+        // empty value focused.
+        let rebrand = DemoSeed.tagSets.first { $0.name == "Client Rebrand" }!.tags
+        #expect(rebrand.contains { $0.key == "deliverable" && $0.value.isEmpty })
+        let jobHunt = DemoSeed.tagSets.first { $0.name == "Job Hunt" }!.tags
+        #expect(jobHunt.contains { $0.key == "company" && $0.value.isEmpty })
+    }
+
+    @Test func everyDefinedKeyAppearsInTheSeededMonth() {
+        // High variety is the point of the widened cast (#27): every key in
+        // the definitions — persona identity keys and modifier axes alike —
+        // occurs in the trailing month, so no launcher card hovers over an
+        // empty History and every Mark Review key row has spans behind it.
+        let keys = Set(seed(now: wednesday).flatMap(\.labels).map(\.key))
+        for definition in DemoSeed.labelDefinitions {
+            #expect(keys.contains(definition.key),
+                    "no seeded span carries \(definition.key):")
+        }
     }
 
     @Test func valueColorsDifferentiateTheProjects() {

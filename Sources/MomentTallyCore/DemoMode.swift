@@ -63,23 +63,29 @@ package extension LocalBackend {
 // MARK: - Seed content
 
 /// The demo dataset, renovated for the onboarding "Pro-Moves" examples
-/// (#172), culled to a five-card cast for screenshot presentation (#189 —
-/// the shelved set survives as a comment below), and recast for the
-/// Moment Tally brand's broader audience (#27): the persona is a freelance
-/// creative — photography and design work up front, a full life around it
-/// — whose scheme shows all three recommended patterns:
+/// (#172) and recast for the Moment Tally brand's broader audience (#27):
+/// the persona is a freelance creative — photography and design work up
+/// front, a full life around it. The launcher cast covers all fourteen of
+/// the website's persona tiles as one plausible life (#189's five-card cull
+/// is superseded: a full grid photographs better than an empty one, and the
+/// breadth *is* the marketing message — only two cards are work-adjacent).
+/// The scheme shows all three recommended patterns:
 ///
-/// - **Quick-marks-only sets** (Cooking, Workout, Reading): no preset
-///   marks, one chip per recipe/activity/book — easy to add or remove
-///   without touching history.
-/// - **Value-less marks** (Client Rebrand's `deliverable:`): quick-starting
-///   one opens the popover editor with the empty value focused, ready for
-///   a typed deliverable name (#149, #162).
-/// - **Multi-client, multi-project sets** (Client Rebrand, Wedding Shoot):
-///   `client:` + `project:` presets with `type:`/`meeting:` quick marks.
-///   The *spans* still carry a third engagement (Violet Café's menu
-///   shoot), so History's combined view keeps real type × project,
-///   type × client and meeting × client axes to group by.
+/// - **Quick-marks-only sets** (Cooking, Workout, Reading, Gardening,
+///   Streaming, Volunteering): no preset marks, one chip per
+///   recipe/activity/book/bed/show/org — easy to add or remove without
+///   touching history.
+/// - **Value-less marks** (Client Rebrand's `deliverable:`, Job Hunt's
+///   `company:`): quick-starting one opens the popover editor with the
+///   empty value focused, ready for a typed deliverable name (#149, #162).
+/// - **Multi-client, multi-project sets** (Client Rebrand, Wedding Shoot,
+///   Menu Shoot): `client:` + `project:` presets with `type:`/`meeting:`
+///   quick marks, so History's combined view keeps real type × project,
+///   type × client and meeting × client axes to group by. The single-mark
+///   preset sets (Open Source, Side Project, Studying, Music Practice,
+///   Language) hone the same way — a `type:` chip per start, and Music
+///   Practice's `instrument: guitar` chip *replaces* the preset piano,
+///   the same-key honing rule made visible.
 ///
 /// Spans cover a trailing month — enough for the History range selector's
 /// "Last 30 days" — with work-day clustering, overlaps, notes, evening and
@@ -111,17 +117,47 @@ package enum DemoSeed {
                       TagRow(key: "client", value: "hartleys"),
                       ],
                symbolName: "camera"),
-        // The third engagement, shelved from the Launcher for the five-card
-        // cast — its spans stay in history (and carry the `proj:` drift).
-        // TagSet(name: "Menu Shoot",
-        //        tags: [TagRow(key: "project", value: "menu-shoot"),
-        //               TagRow(key: "client", value: "violet-cafe")],
-        //        symbolName: "fork.knife"),
         // Quick-marks-only sets: no presets, so the card colour comes from
         // `colorHex` (matched to the key's definition colour below).
         TagSet(name: "Cooking", symbolName: "frying.pan", colorHex: "#ee6b2a"),
         TagSet(name: "Workout", symbolName: "figure.run", colorHex: "#34c759"),
         TagSet(name: "Reading", symbolName: "book", colorHex: "#26a69a"),
+        // — Everything below joins the cast after the first five, so the
+        // popover's default five-row Quick start cap keeps showing exactly
+        // the rows the existing captures frame. —
+        // The third engagement, back from #189's shelf (its spans never
+        // left history, and still carry the `proj:` drift).
+        TagSet(name: "Menu Shoot",
+               tags: [TagRow(key: "project", value: "menu-shoot"),
+                      TagRow(key: "client", value: "violet-cafe")],
+               symbolName: "fork.knife"),
+        // Single-mark preset sets: the card borrows the mark's colour, and
+        // the quick labels below hone each start. Two `repo:` sets on
+        // purpose — the same key spread across sets, like `project:` above.
+        TagSet(name: "Open Source",
+               tags: [TagRow(key: "repo", value: "primetime")],
+               symbolName: "chevron.left.forwardslash.chevron.right"),
+        TagSet(name: "Side Project",
+               tags: [TagRow(key: "repo", value: "side/app")],
+               symbolName: "hammer"),
+        TagSet(name: "Studying",
+               tags: [TagRow(key: "course", value: "linear-algebra")],
+               symbolName: "graduationcap"),
+        TagSet(name: "Music Practice",
+               tags: [TagRow(key: "instrument", value: "piano")],
+               symbolName: "pianokeys"),
+        TagSet(name: "Language",
+               tags: [TagRow(key: "lang", value: "spanish")],
+               symbolName: "character.bubble"),
+        // The second value-less card (with Client Rebrand's `deliverable:`):
+        // starting it asks which company this moment belongs to.
+        TagSet(name: "Job Hunt",
+               tags: [TagRow(key: "company", value: "")],
+               symbolName: "doc.text"),
+        // More quick-marks-only sets, same rule as Cooking/Workout/Reading.
+        TagSet(name: "Gardening", symbolName: "leaf", colorHex: "#66bb6a"),
+        TagSet(name: "Streaming", symbolName: "tv", colorHex: "#d84315"),
+        TagSet(name: "Volunteering", symbolName: "heart", colorHex: "#ec407a"),
     ]
 
     // MARK: Quick labels (popover / Launcher hover chips)
@@ -157,6 +193,38 @@ package enum DemoSeed {
             return [TagRow(key: "book", value: "the-director"),
                     TagRow(key: "book", value: "crux"),
                     TagRow(key: "book", value: "the-wayfinder")]
+        case "Open Source":
+            return [TagRow(key: "type", value: "coding"),
+                    TagRow(key: "type", value: "review")]
+        case "Side Project":
+            return [TagRow(key: "type", value: "coding"),
+                    TagRow(key: "type", value: "design")]
+        case "Studying":
+            return [TagRow(key: "type", value: "lecture"),
+                    TagRow(key: "type", value: "problem-sets")]
+        case "Music Practice":
+            // The guitar chip replaces the set's baked-in piano — the
+            // same-key honing rule (`labels(applying:)`) on a hover chip.
+            return [TagRow(key: "instrument", value: "guitar"),
+                    TagRow(key: "type", value: "scales"),
+                    TagRow(key: "type", value: "repertoire")]
+        case "Language":
+            return [TagRow(key: "type", value: "lesson"),
+                    TagRow(key: "type", value: "flashcards")]
+        case "Job Hunt":
+            return [TagRow(key: "type", value: "applications"),
+                    TagRow(key: "type", value: "interview-prep")]
+        case "Gardening":
+            return [TagRow(key: "bed", value: "tomatoes"),
+                    TagRow(key: "bed", value: "herbs"),
+                    TagRow(key: "bed", value: "dahlias")]
+        case "Streaming":
+            return [TagRow(key: "show", value: "ted-lasso"),
+                    TagRow(key: "show", value: "severance"),
+                    TagRow(key: "show", value: "bake-off")]
+        case "Volunteering":
+            return [TagRow(key: "org", value: "shelter"),
+                    TagRow(key: "org", value: "food-bank")]
         default:
             return nil
         }
@@ -165,12 +233,12 @@ package enum DemoSeed {
     // MARK: Colours
     //
     // The persona palette (#27/#201) — the website's launcher.ts hexes, one
-    // per persona tile, spread across the demo's keys and values so every
-    // surface photographs in the same spectrum the moment-tally.com persona
-    // ring uses. The hero label — `project: wedding-shoot` and its spans
-    // dominate the demo — carries a warm apricot anchor; the rest balance
-    // warm/cool as contrast anchors instead of the old orange/red
-    // PrimeTime lean.
+    // per persona tile. With the full fourteen-persona cast each tile's hex
+    // now lands on its own chip key (or value, where two personas share a
+    // key: `repo: primetime` vs `repo: side/app`), so the Launcher grid
+    // photographs as the same spectrum the moment-tally.com persona ring
+    // uses. The hero label — `project: wedding-shoot` and its spans
+    // dominate the demo — carries a warm apricot anchor.
 
     static let labelDefinitions: [LabelDefinition] = [
         LabelDefinition(key: "client", color: "#5856d6"),      // Freelance
@@ -179,14 +247,24 @@ package enum DemoSeed {
         // like what it is — the same concept, misspelled — so the difference
         // shows up in Mark Review, not on every pill.
         LabelDefinition(key: "proj", color: "#f06292"),
-        LabelDefinition(key: "deliverable", color: "#007aff"), // Side Project
-        LabelDefinition(key: "type", color: "#30b0c7"),        // Language
-        LabelDefinition(key: "meeting", color: "#af52de"),     // Music Practice
+        LabelDefinition(key: "deliverable", color: "#007aff"),
+        LabelDefinition(key: "repo", color: "#f7b060"),        // Programming
+        LabelDefinition(key: "course", color: "#42a5f5"),      // Studying
         LabelDefinition(key: "recipe", color: "#ff9500"),      // Cooking
         LabelDefinition(key: "activity", color: "#34c759"),    // Fitness
         LabelDefinition(key: "book", color: "#26a69a"),        // Leisure
-        LabelDefinition(key: "lang", color: "#42a5f5"),        // Studying
+        LabelDefinition(key: "instrument", color: "#af52de"),  // Music Practice
+        LabelDefinition(key: "lang", color: "#30b0c7"),        // Language
+        LabelDefinition(key: "company", color: "#ff2d55"),     // Job Hunt
+        LabelDefinition(key: "bed", color: "#66bb6a"),         // Gardening
         LabelDefinition(key: "show", color: "#d84315"),        // Streaming
+        LabelDefinition(key: "org", color: "#ec407a"),         // Volunteering
+        // The modifier axes deliberately sit outside the persona ring —
+        // muted slate and taupe, so an identity key (whose colour carries
+        // the persona) always outshines the axis honing it. Their *values*
+        // stay vivid via the per-pair overrides below.
+        LabelDefinition(key: "type", color: "#546e7a"),
+        LabelDefinition(key: "meeting", color: "#8d6e63"),
     ]
 
     /// Per-pair overrides, one hue per value so the colour-by-value story
@@ -213,6 +291,18 @@ package enum DemoSeed {
         ValueColorKey.join("type", "shoot"): "#ff2d55",
         ValueColorKey.join("type", "retouching"): "#af52de",
         ValueColorKey.join("type", "lesson"): "#34c759",
+        // The persona cast's `type:` values — sixteen slices in one donut
+        // is exactly the high-variety stress the widened cast is for, so
+        // every value stays tellable-apart within the key.
+        ValueColorKey.join("type", "coding"): "#64d2ff",
+        ValueColorKey.join("type", "review"): "#5e5ce6",
+        ValueColorKey.join("type", "lecture"): "#ffd60a",
+        ValueColorKey.join("type", "problem-sets"): "#bf5af2",
+        ValueColorKey.join("type", "flashcards"): "#ff6482",
+        ValueColorKey.join("type", "scales"): "#00c7be",
+        ValueColorKey.join("type", "repertoire"): "#ff9f0a",
+        ValueColorKey.join("type", "applications"): "#ec407a",
+        ValueColorKey.join("type", "interview-prep"): "#f7b060",
         ValueColorKey.join("meeting", "check-in"): "#ec407a",
         ValueColorKey.join("meeting", "consult"): "#30b0c7",
         ValueColorKey.join("meeting", "venue-visit"): "#66bb6a",
@@ -226,8 +316,19 @@ package enum DemoSeed {
         ValueColorKey.join("book", "the-director"): "#5856d6",
         ValueColorKey.join("book", "crux"): "#007aff",
         ValueColorKey.join("book", "the-wayfinder"): "#26a69a",     // the Leisure chip
-        ValueColorKey.join("lang", "spanish"): "#30b0c7",
+        // No `lang`/`course`/`company`/`org` overrides: their hero values
+        // (`spanish`, `linear-algebra`, …) ride the key's persona colour.
+        // `repo:` is the exception — two personas share the key, so the
+        // Side Project value overrides while `primetime` keeps the key's
+        // Programming hue.
+        ValueColorKey.join("repo", "side/app"): "#007aff",          // Side Project
+        ValueColorKey.join("instrument", "guitar"): "#f7b060",
+        ValueColorKey.join("bed", "tomatoes"): "#ff6347",           // tomato, naturally
+        ValueColorKey.join("bed", "dahlias"): "#f06292",
         ValueColorKey.join("show", "ted-lasso"): "#ff9500",
+        ValueColorKey.join("show", "severance"): "#5ac8fa",
+        ValueColorKey.join("show", "bake-off"): "#ffd60a",
+        ValueColorKey.join("org", "food-bank"): "#ff9f0a",
     ]
 
     // MARK: Spans
@@ -286,6 +387,32 @@ package enum DemoSeed {
     private static func book(_ value: String) -> [SpanLabel] {
         [SpanLabel(key: "book", value: value)]
     }
+    // The persona cast's history: enough spans that no new launcher card
+    // hovers over an empty month, without diluting the work-day clustering —
+    // they live in the gaps (mornings, lunch, evenings, weekends).
+    private static let ossReview = [SpanLabel(key: "repo", value: "primetime"),
+                                    SpanLabel(key: "type", value: "review")]
+    private static let sideCoding = [SpanLabel(key: "repo", value: "side/app"),
+                                     SpanLabel(key: "type", value: "coding")]
+    private static let problemSets = [SpanLabel(key: "course", value: "linear-algebra"),
+                                      SpanLabel(key: "type", value: "problem-sets")]
+    private static func piano(_ type: String) -> [SpanLabel] {
+        [SpanLabel(key: "instrument", value: "piano"),
+         SpanLabel(key: "type", value: type)]
+    }
+    private static let spanishLesson = [SpanLabel(key: "lang", value: "spanish"),
+                                        SpanLabel(key: "type", value: "lesson")]
+    private static let jobApplication = [SpanLabel(key: "company", value: "studio-north"),
+                                         SpanLabel(key: "type", value: "applications")]
+    private static func garden(_ value: String) -> [SpanLabel] {
+        [SpanLabel(key: "bed", value: value)]
+    }
+    private static func show(_ value: String) -> [SpanLabel] {
+        [SpanLabel(key: "show", value: value)]
+    }
+    private static func volunteer(_ value: String) -> [SpanLabel] {
+        [SpanLabel(key: "org", value: value)]
+    }
 
     /// Work-day templates, cycled chronologically across the trailing
     /// month's weekdays. Five-day weeks over a four-template cycle mean each
@@ -311,8 +438,12 @@ package enum DemoSeed {
                       + [SpanLabel(key: "type", value: "editing")],
                   note: "Teaser picks out to the couple"),
             Draft(startMinute: 960, durationMinutes: 60, labels: rebrandDesign),
+            Draft(startMinute: 1050, durationMinutes: 30, labels: piano("scales"),
+                  note: "Scales while the proofs exported"),
             Draft(startMinute: 1140, durationMinutes: 75, labels: recipe("pad-thai"),
                   note: "Weeknight pad thai"),
+            Draft(startMinute: 1230, durationMinutes: 45, labels: ossReview,
+                  note: "Community PRs after dinner"),
         ],
         // B — appointments day, with a genuine overlap: the Acme check-in
         // call landed while the album render was still being watched (the
@@ -330,6 +461,8 @@ package enum DemoSeed {
             Draft(startMinute: 990, durationMinutes: 30, labels: menuDelivery,
                   note: "Proof handoff"),
             Draft(startMinute: 1140, durationMinutes: 45, labels: activity("run")),
+            Draft(startMinute: 1200, durationMinutes: 60, labels: sideCoding,
+                  note: "Side app: onboarding screen"),
         ],
         // C — the drift day: `proj:` where every other span says `project:`,
         // Mark Review's move-to-another-key fixture.
@@ -337,6 +470,8 @@ package enum DemoSeed {
             Draft(startMinute: 570, durationMinutes: 15, labels: weddingConsult),
             Draft(startMinute: 585, durationMinutes: 120, labels: driftEditing,
                   note: "Colour pass on the menu set"),
+            Draft(startMinute: 720, durationMinutes: 30, labels: jobApplication,
+                  note: "Application out over lunch"),
             Draft(startMinute: 780, durationMinutes: 60, labels: driftDesign),
             Draft(startMinute: 870, durationMinutes: 120,
                   labels: engagement("acme", "rebrand", "deliverable", "style-guide")
@@ -344,6 +479,8 @@ package enum DemoSeed {
                   note: "Style-guide pass"),
             Draft(startMinute: 1000, durationMinutes: 20, labels: weddingCheckIn,
                   note: "Album direction notes"),
+            Draft(startMinute: 1080, durationMinutes: 45, labels: spanishLesson,
+                  note: "Conversation practice"),
             Draft(startMinute: 1170, durationMinutes: 90, labels: book("crux")),
         ],
         // D — a lighter day with an untagged phone call (the ad-hoc story:
@@ -358,6 +495,8 @@ package enum DemoSeed {
                   note: "Reshoots: two menu items"),
             Draft(startMinute: 945, durationMinutes: 45, labels: rebrandRevisions,
                   note: "Client notes, round three"),
+            Draft(startMinute: 990, durationMinutes: 45, labels: problemSets,
+                  note: "Problem set six"),
             Draft(startMinute: 1050, durationMinutes: 45, labels: activity("yoga")),
             Draft(startMinute: 1140, durationMinutes: 30,
                   labels: [SpanLabel(key: "lang", value: "spanish")],
@@ -366,24 +505,32 @@ package enum DemoSeed {
     ]
 
     /// Weekend templates — leisure-only on purpose, so the History day bars
-    /// show the work-day clustering and the quick-marks-only sets (Cooking,
-    /// Workout, Reading) own the weekends.
+    /// show the work-day clustering and the life-side cards (Cooking,
+    /// Workout, Reading, Gardening, Streaming, Volunteering, Music
+    /// Practice) own the weekends.
     private static let weekendTemplates: [[Draft]] = [
         [
             Draft(startMinute: 600, durationMinutes: 60, labels: activity("bike"),
                   note: "Morning loop"),
+            Draft(startMinute: 690, durationMinutes: 45, labels: garden("tomatoes"),
+                  note: "Tying up the tomatoes"),
             Draft(startMinute: 780, durationMinutes: 150, labels: recipe("sourdough"),
                   note: "Bake day — stretch and folds"),
             Draft(startMinute: 990, durationMinutes: 90, labels: book("the-director")),
+            Draft(startMinute: 1140, durationMinutes: 60, labels: show("severance")),
         ],
         [
+            Draft(startMinute: 585, durationMinutes: 30, labels: piano("repertoire"),
+                  note: "Sunday piano before the run"),
             Draft(startMinute: 630, durationMinutes: 45, labels: activity("run")),
+            Draft(startMinute: 720, durationMinutes: 90, labels: volunteer("shelter"),
+                  note: "Adoption-day shift"),
             Draft(startMinute: 840, durationMinutes: 90, labels: recipe("focaccia"),
                   note: "Rosemary from the balcony"),
+            Draft(startMinute: 945, durationMinutes: 30, labels: garden("herbs")),
             Draft(startMinute: 1020, durationMinutes: 60, labels: book("the-wayfinder"),
                   note: "One more chapter"),
-            Draft(startMinute: 1110, durationMinutes: 75,
-                  labels: [SpanLabel(key: "show", value: "ted-lasso")]),
+            Draft(startMinute: 1110, durationMinutes: 75, labels: show("ted-lasso")),
         ],
     ]
 
@@ -391,9 +538,10 @@ package enum DemoSeed {
     /// whatever the launch time is; a nil duration is a *running* span. The
     /// last powers the live menu-bar timer (#189 stopped the second runner —
     /// and the multi-timer popover story with it — for cleaner screenshots,
-    /// leaving it as the 0-duration entry); the lesson span matches no
-    /// saved set, so its Log row shows the save-as-set ＋; the empty entry
-    /// is today's ad-hoc unlabelled span.
+    /// leaving it as the 0-duration entry); the lesson span's extra
+    /// `type: lesson` keeps it from matching the Language set exactly, so
+    /// its Log row still shows the save-as-set ＋; the empty entry is
+    /// today's ad-hoc unlabelled span.
     private static let todayTemplate: [(minutesBeforeNow: Int, durationMinutes: Int?,
                                         labels: [SpanLabel], note: String)] = [
         (220, 75, engagement("acme", "rebrand", "deliverable", "logo-v2")

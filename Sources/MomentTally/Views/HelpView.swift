@@ -275,20 +275,22 @@ private struct HelpSection: Identifiable {
                     A tally with *no* preset marks, just one chip per thing: a \
                     **Cooking** tally whose chips are `recipe: sourdough`, \
                     `recipe: focaccia`, `recipe: pad-thai`; a **Workout** tally with \
-                    `activity: bike` / `run` / `yoga`; a **Reading** tally with a chip \
-                    per book. Great for the simple stuff you do regularly — adding \
-                    or retiring a chip never touches the time already tracked.
+                    `activity: bike` / `run` / `yoga`; a **Gardening** tally with a \
+                    chip per bed, a **Streaming** tally with a chip per show. Great \
+                    for the simple stuff you do regularly — adding or retiring a \
+                    chip never touches the time already tracked.
                     """),
                 Rule(
                     heading: "Leave a value blank on purpose",
                     detail: """
-                    A tally can carry a mark with an **empty value** — say an \
+                    A tally can carry a mark with an **empty value** — say a \
                     **Client Rebrand** tally pinning its `client:` and carrying a \
-                    value-less `deliverable:`. Starting it opens the editor with \
-                    that empty value focused: type the deliverable (or paste an \
-                    invoice number) and the timer is already running. Perfect \
-                    when the value changes too often for dedicated tallies, and \
-                    the shared key links time across everything else.
+                    value-less `deliverable:`, or a **Job Hunt** tally that is \
+                    just a bare `company:`. Starting one opens the editor with \
+                    that empty value focused: type the deliverable (or the \
+                    company) and the timer is already running. Perfect when the \
+                    value changes too often for dedicated tallies, and the \
+                    shared key links time across everything else.
                     """),
                 Rule(
                     heading: "Scale out to clients and projects",

@@ -40,10 +40,11 @@ shots:
     surface: menu-bar popover
     scene: |
       Popover open under the menu-bar status item, idle (no timer running).
-      Quick-start rows for the seeded tallies (Client Rebrand, Wedding
-      Shoot, Cooking, Workout, Reading — the first two with their baked-in
-      mark chips visible) plus the Tallies / Log / Calendar / History /
-      Settings… rows below.
+      Quick-start rows for the first five seeded tallies (Client Rebrand,
+      Wedding Shoot, Cooking, Workout, Reading — the default five-row cap
+      keeps the rest of the fifteen-card cast to the Launcher; the first
+      two rows show their baked-in mark chips) plus the Tallies / Log /
+      Calendar / History / Settings… rows below.
     outputs:
       - { to: appstore, path: captures/appstore/popover.png, format: png }
       - { to: appstore, path: captures/appstore/popover-light.png, format: png, theme: light }
@@ -78,12 +79,15 @@ shots:
     kind: still
     surface: window / Launcher tab
     scene: |
-      Launcher tab of the Moment Tally window: the quick-start grid of seeded
-      tallies — the work cards (Client Rebrand, Wedding Shoot) next to
-      the quick-marks-only hobby cards (Cooking, Workout, Reading), each
-      with its own icon and colour, plus the dashed New Tally card. No
-      timer running: a running tally dims its card, and the seed launches
-      with the wedding-shoot timer active — stop timers first.
+      Launcher tab of the Moment Tally window: the quick-start grid of all
+      fifteen seeded tallies — the full persona cast (#27), engagement
+      cards (Client Rebrand, Wedding Shoot, Menu Shoot) among the life
+      cards (Cooking, Workout, Reading, Open Source, Side Project,
+      Studying, Music Practice, Language, Job Hunt, Gardening, Streaming,
+      Volunteering), each with its own icon and persona colour, plus the
+      dashed New Tally card. No timer running: a running tally dims its
+      card, and the seed launches with the wedding-shoot timer active —
+      stop timers first.
     outputs:
       - { to: appstore, path: captures/appstore/launcher.png, format: png }
       - { to: appstore, path: captures/appstore/launcher-light.png, format: png, theme: light }
@@ -103,10 +107,10 @@ shots:
     kind: still
     surface: window / Tallies tab
     scene: |
-      Tallies tab: the seeded tallies in the sidebar (Client Rebrand, Wedding
-      Shoot, Cooking, Workout, Reading) with Client Rebrand selected — card
-      preview, marks editor, and its value-less `deliverable` mark shown with
-      an empty value field.
+      Tallies tab: the fifteen seeded tallies in the sidebar (Client
+      Rebrand first) with Client Rebrand selected — card preview, marks
+      editor, and its value-less `deliverable` mark shown with an empty
+      value field.
     outputs:
       - { to: website, path: static/screenshots/label-sets.webp, format: webp }
       - { to: website, path: static/screenshots/label-sets-light.webp, format: webp, theme: light }
