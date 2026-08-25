@@ -209,20 +209,58 @@ struct LogView: View {
                 .buttonStyle(.plain)
                 .help("Click to edit")
 
-                // Tags with no matching saved set can become one, right where
-                // the pattern is noticed — the Tag Sets pane opens on the new
-                // set with only the name left to fill in.
-                if !span.labels.isEmpty, !model.hasTagSet(matching: span.labels) {
-                    Button {
-                        model.newTagSet(from: span.labels)
-                        SettingsWindowManager.shared.show(model: model, tab: .tagSets)
-                    } label: {
-                        Image(systemName: "plus")
+                HStack(spacing: 2) {
+                    // Lifecycle actions on the collapsed row (#170) — the
+                    // common recoveries shouldn't require expanding the
+                    // editor first. Finished rows offer Re-Open and New
+                    // Timer, acting on the span's saved fields (there are no
+                    // drafts while collapsed); running rows offer Stop, the
+                    // same plain funnel as the popover's stop button.
+                    if span.isRunning {
+                        Button {
+                            Task { await model.stop(id: span.id) }
+                        } label: {
+                            Image(systemName: "stop.circle")
+                        }
+                        .buttonStyle(HoverIconButtonStyle())
+                        .disabled(model.isBusy)
+                        .help("Stop")
+                    } else {
+                        Button {
+                            Task { await model.reopen(id: span.id, start: span.start,
+                                                      tags: span.labels, note: span.note) }
+                        } label: {
+                            Image(systemName: "arrow.uturn.backward")
+                        }
+                        .buttonStyle(HoverIconButtonStyle())
+                        .disabled(model.isBusy)
+                        .help("Re-open — this becomes the running timer again, absorbing the gap since it stopped")
+
+                        Button {
+                            Task { await model.start(tags: span.labels) }
+                        } label: {
+                            Image(systemName: "play.circle")
+                        }
+                        .buttonStyle(HoverIconButtonStyle())
+                        .disabled(model.isBusy)
+                        .help("Start a new timer with these marks")
                     }
-                    .buttonStyle(HoverIconButtonStyle())
-                    .help("Save these marks as a tally")
-                    .padding(.trailing, 10)
+
+                    // Tags with no matching saved set can become one, right
+                    // where the pattern is noticed — the Tag Sets pane opens
+                    // on the new set with only the name left to fill in.
+                    if !span.labels.isEmpty, !model.hasTagSet(matching: span.labels) {
+                        Button {
+                            model.newTagSet(from: span.labels)
+                            SettingsWindowManager.shared.show(model: model, tab: .tagSets)
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .buttonStyle(HoverIconButtonStyle())
+                        .help("Save these marks as a tally")
+                    }
                 }
+                .padding(.trailing, 10)
             }
         }
     }

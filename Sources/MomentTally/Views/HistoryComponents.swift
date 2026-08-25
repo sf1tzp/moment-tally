@@ -88,6 +88,9 @@ struct TimeSpanEditorView: View {
     @State private var note: String
     @State private var isSaving = false
     @State private var confirmingDelete = false
+    /// Save, Cancel, and Delete closed the editor on purpose — the teardown
+    /// autosave below must not re-commit (or resurrect) their drafts.
+    @State private var closedExplicitly = false
 
     init(span: TimeSpan, onDone: @escaping () -> Void,
          onOpen: ((TimeSpan) -> Void)? = nil) {
@@ -134,6 +137,36 @@ struct TimeSpanEditorView: View {
                 note = new.note
             }
         }
+        // Autosave on teardown (#224): clicking another row, collapsing, or
+        // leaving the tab commits dirty drafts instead of dropping them —
+        // edits are immediate everywhere else in the app. Explicit Save /
+        // Cancel / Delete opted out above; half-typed mark rows follow the
+        // Save button's own rule (`labels` drops empty-key rows). Running
+        // spans commit the shared session's drafts the same way, but only
+        // while the session is still this span's — a New Timer hand-off or a
+        // cancel has already moved on.
+        .onDisappear {
+            guard !closedExplicitly else { return }
+            if span.isRunning {
+                if model.editSession?.spanID == span.id {
+                    Task { await model.commitEditSession() }
+                }
+            } else if span.end != nil, draftsDiffer {
+                Task {
+                    await model.history.update(id: span.id, start: start, end: end,
+                                               tags: tagRows.labels, note: note)
+                }
+            }
+        }
+    }
+
+    /// Whether committing the drafts would change the span — the autosave
+    /// gate, the finished-span sibling of `SpanEditSession.differs(from:)`.
+    private var draftsDiffer: Bool {
+        start != span.start
+            || span.end.map { end != $0 } ?? true
+            || tagRows.labels != span.labels
+            || note != span.note
     }
 
     // MARK: Running span — the shared session
@@ -177,8 +210,8 @@ struct TimeSpanEditorView: View {
                 // act on. Re-Open writes what the panel shows minus the end
                 // — drafts ride along — and the panel stays open, switched
                 // to the running regime. New Timer starts a fresh span with
-                // the drafted labels; this span (and any unsaved edits to
-                // it) stays put.
+                // the drafted labels; this span stays put, any dirty drafts
+                // on it landing via the teardown autosave (#224).
                 Button("Re-Open") { reopen() }
                     .help("Clear the end — this moment becomes the running timer again, absorbing the gap since it stopped")
                 Button("New Timer") {
@@ -220,12 +253,16 @@ struct TimeSpanEditorView: View {
                             isSaving = true
                             await model.history.delete(id: span.id)
                             isSaving = false
+                            closedExplicitly = true
                             onDone()
                         }
                     }
                 }
                 Spacer()
-                Button("Cancel") { onDone() }
+                Button("Cancel") {
+                    closedExplicitly = true
+                    onDone()
+                }
                 Button("Save") { save() }
                     .keyboardShortcut(.defaultAction)
             }
@@ -244,7 +281,10 @@ struct TimeSpanEditorView: View {
                 tags: tagRows.labels,
                 note: note)
             isSaving = false
-            if saved { onDone() }
+            if saved {
+                closedExplicitly = true
+                onDone()
+            }
         }
     }
 
