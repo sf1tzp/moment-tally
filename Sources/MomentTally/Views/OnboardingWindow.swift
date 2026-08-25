@@ -7,6 +7,10 @@ import AppKit
 /// and on every demo launch (the demo defaults suite is wiped per launch, so
 /// the flag is always unset there).
 ///
+/// The same window also replays on demand (issue #192, `replay: true`, from
+/// Help): straight into the walkthrough, with the tally-creation page made
+/// read-only so a configured account can't collect duplicates.
+///
 /// Set MOMENTTALLY_ONBOARDING=1 to force it regardless of the flag, for
 /// development and screenshots.
 @MainActor
@@ -23,10 +27,11 @@ final class OnboardingWindowManager: NSObject {
         show(model: model)
     }
 
-    func show(model: AppModel) {
+    func show(model: AppModel, replay: Bool = false) {
         self.model = model
+        // A window that's already up keeps its mode — show just fronts it.
         if windowController == nil {
-            let host = NSHostingController(rootView: OnboardingView().environment(model))
+            let host = NSHostingController(rootView: OnboardingView(replay: replay).environment(model))
             let window = NSWindow(contentViewController: host)
             // Titled-but-chromeless, like macOS app welcome windows: the
             // close button floats over the content, which draws edge to edge.

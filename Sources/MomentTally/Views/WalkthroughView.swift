@@ -10,12 +10,15 @@ import MomentTallyCore
 ///
 /// - `walkthrough` — the shared dataset: the demo week, the group-by key, the
 ///   schema-smell selection, aggregation, and colours.
-/// - `onBack` — return to the Welcome step.
+/// - `replay` — a revisit from Help (issue #192): the tally-creation page goes
+///   read-only and the footer wording drops the first-run framing.
+/// - `onBack` — return to the Welcome step; nil on replay (no Welcome).
 /// - `onContinue` — end onboarding (finished *or* skipped); the caller closes
-///   the window and opens the Tallies tab.
+///   the window and, first-run only, opens the Tallies tab.
 struct WalkthroughView: View {
     @Bindable var walkthrough: WalkthroughModel
-    var onBack: () -> Void
+    var replay = false
+    var onBack: (() -> Void)?
     var onContinue: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -35,7 +38,7 @@ struct WalkthroughView: View {
                     case 2: LabelingSchemesPage()
                     case 3: SmellsPage(walkthrough: walkthrough)
                     case 4: LabelSetsConceptPage()
-                    case 5: CreateLabelSetsPage(walkthrough: walkthrough)
+                    case 5: CreateLabelSetsPage(walkthrough: walkthrough, replay: replay)
                     default: SurfacesPage()
                     }
                 }
@@ -46,10 +49,13 @@ struct WalkthroughView: View {
 
             progressDots
             Divider()
-            OnboardingFooter(back: goBack,
-                             primaryTitle: page == Self.pageCount - 1 ? "Continue" : "Next",
+            // On replay the first page has nowhere to go back to, and
+            // "Skip Tour"/"Continue" read wrong for a revisit.
+            OnboardingFooter(back: page == 0 && onBack == nil ? nil : goBack,
+                             primaryTitle: page == Self.pageCount - 1
+                                 ? (replay ? "Done" : "Continue") : "Next",
                              primaryAction: goNext) {
-                Button("Skip Tour", action: onContinue)
+                Button(replay ? "Close" : "Skip Tour", action: onContinue)
             }
         }
         // Healing a smell can strand the page-2 picker on a key the dataset no
@@ -72,7 +78,7 @@ struct WalkthroughView: View {
     }
 
     private func goBack() {
-        if page == 0 { onBack() } else { go(to: page - 1) }
+        if page == 0 { onBack?() } else { go(to: page - 1) }
     }
 
     private func goNext() {
@@ -131,9 +137,10 @@ private struct WalkthroughPage<Content: View>: View {
 
 private extension View {
     /// Clickable-thing affordance for mock UI that lacks the system button
-    /// look.
-    func pointingHandCursor() -> some View {
+    /// look. Pass false to keep the arrow (a card that stopped being a button).
+    func pointingHandCursor(_ enabled: Bool = true) -> some View {
         onHover { inside in
+            guard enabled else { return }
             if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
         }
     }
@@ -1121,9 +1128,15 @@ private struct WalkthroughPersona: Identifiable {
 /// its whole point. It assumes everything the concept page just taught, so
 /// the copy stays action-dense: no re-explaining what a set or a quick
 /// label is.
+///
+/// On `replay` the page is a look-don't-touch catalogue: the editor never
+/// opens (re-adding a persona to a configured account would duplicate
+/// tallies and overwrite value colours — the dedupe is name-based only),
+/// and the footer points at Settings → Tallies instead.
 private struct CreateLabelSetsPage: View {
     @Environment(AppModel.self) private var model
     @Bindable var walkthrough: WalkthroughModel
+    var replay = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private typealias Persona = WalkthroughPersona
@@ -1196,8 +1209,10 @@ private struct CreateLabelSetsPage: View {
     }
 
     var body: some View {
-        WalkthroughPage(index: 5, title: "Create your first Tallies",
-                        subtitle: "Four ways people run Moment Tally. Open one, make it yours — it becomes a real one-click tally, quick marks and all.") {
+        WalkthroughPage(index: 5, title: replay ? "Starter Tallies" : "Create your first Tallies",
+                        subtitle: replay
+                            ? "Four ways people run Moment Tally. On a first run, this page turns them into real one-click tallies."
+                            : "Four ways people run Moment Tally. Open one, make it yours — it becomes a real one-click tally, quick marks and all.") {
             Group {
                 if let persona = editing {
                     // The editor (labels + quick labels) can outgrow the
@@ -1235,9 +1250,24 @@ private struct CreateLabelSetsPage: View {
                                 // centres, below).
                                 .fixedSize(horizontal: false, vertical: true)
                             }
-                            Text("You can add as many Tallies as you'd like in Settings after onboarding.")
+                            if replay {
+                                // The immutable-replay pointer: your tallies
+                                // already exist — edit them where they live.
+                                HStack(spacing: 4) {
+                                    Text("Your tallies stay as they are on a replay —")
+                                        .foregroundStyle(.tertiary)
+                                    Button("manage them in Settings → Tallies") {
+                                        SettingsWindowManager.shared.show(model: model,
+                                                                          tab: .tagSets)
+                                    }
+                                    .buttonStyle(.link)
+                                }
                                 .font(.caption)
-                                .foregroundStyle(.tertiary)
+                            } else {
+                                Text("You can add as many Tallies as you'd like in Settings after onboarding.")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
                     }
                 }
@@ -1253,6 +1283,7 @@ private struct CreateLabelSetsPage: View {
         let chipsAlwaysVisible = set?.tags.isEmpty ?? persona.rows.isEmpty
         let expanded = hoveredID == persona.id || chipsAlwaysVisible
         return Button {
+            guard !replay else { return }   // look, don't touch (see above)
             open(persona)
         } label: {
             HStack(alignment: .top, spacing: 10) {
@@ -1312,9 +1343,12 @@ private struct CreateLabelSetsPage: View {
                     }
                 }
                 Spacer(minLength: 0)
-                Image(systemName: set != nil ? "checkmark.circle.fill" : "plus.circle")
-                    .foregroundStyle(set != nil ? AnyShapeStyle(.green)
-                                                : AnyShapeStyle(.quaternary))
+                // No add affordance on replay — the cards are exhibits.
+                if !replay {
+                    Image(systemName: set != nil ? "checkmark.circle.fill" : "plus.circle")
+                        .foregroundStyle(set != nil ? AnyShapeStyle(.green)
+                                                    : AnyShapeStyle(.quaternary))
+                }
             }
             .padding(10)
             // Fill whatever height the row settled on — and at least the
@@ -1325,7 +1359,7 @@ private struct CreateLabelSetsPage: View {
             .background(.quinary, in: RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
-        .pointingHandCursor()
+        .pointingHandCursor(!replay)   // hover-expand stays; the click cue goes
         .onHover { cardHovered(persona, inside: $0) }
         .overlay {
             GeometryReader { proxy in
@@ -1670,7 +1704,7 @@ private struct SurfacesPage: View {
                 blurb: "Start and stop timers, add notes or change marks on the fly."),
         Surface(symbol: "square.grid.2x2", name: "Launcher",
                 blurb: "Saved tallies as one-click cards — icons and colors for the way you actually organize work. Tallies that are already running light up."),
-        Surface(symbol: "tag", name: "Tallies",
+        Surface(symbol: TagSet.markSymbol, name: "Tallies",
                 blurb: "Name and edit the tallies behind one-click timers. Set up quick marks to fit your workflow."),
         Surface(symbol: "list.bullet.rectangle", name: "Log",
                 blurb: "Review and freely edit moments after-the-fact: because real work overlaps, gets interrupted, and needs correcting."),
@@ -1690,9 +1724,17 @@ private struct SurfacesPage: View {
             VStack(alignment: .leading, spacing: 9) {
                 ForEach(Self.surfaces) { surface in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Image(systemName: surface.symbol)
-                            .foregroundStyle(.tint)
-                            .frame(width: 22)
+                        Group {
+                            // The brand mark under its reserved name, an SF
+                            // Symbol otherwise — TagSetIcon's convention.
+                            if surface.symbol == TagSet.markSymbol {
+                                TallyMarkIcon(size: 24, inset: Brand.symbolInset).padding(.bottom, -8)
+                            } else {
+                                Image(systemName: surface.symbol)
+                            }
+                        }
+                        .foregroundStyle(.tint)
+                        .frame(width: 22)
                         Text(surface.name)
                             .font(.callout.weight(.semibold))
                             .frame(width: 130, alignment: .leading)
@@ -1701,7 +1743,7 @@ private struct SurfacesPage: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                Link(destination: URL(string: "https://momenttally.com/docs/marks")!) {
+                Link(destination: URL(string: "https://moment-tally.com/docs/marks")!) {
                     Label("Read the full marking guide", systemImage: "book")
                 }
                 .font(.callout)

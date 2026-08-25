@@ -6,7 +6,7 @@ import MomentTallyCore
 /// the brand gradient — plus the tally-mark brand mark (#201: four gradient
 /// bars and a strike, see Resources/AppIcon.svg and the motif exports in
 /// Resources/), the accent gradient and partner accents. Gradient stops are
-/// the momenttally.com values, kept verbatim so the app and the website
+/// the moment-tally.com values, kept verbatim so the app and the website
 /// masthead read as one thing.
 ///
 /// Typography: Palm Springs (the website's headline script) is licensed for

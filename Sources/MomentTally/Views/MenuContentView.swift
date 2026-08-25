@@ -191,6 +191,15 @@ struct MenuContentView: View {
             }
             .buttonStyle(MenuRowButtonStyle())
 
+            // Help used to be reachable only by finding its tab inside the
+            // settings window — give it a row of its own (#192).
+            Button {
+                openSettings(tab: .help)
+            } label: {
+                Label("Help", systemImage: "questionmark.circle")
+            }
+            .buttonStyle(MenuRowButtonStyle())
+
             // Only in installed builds — dev builds and demos have no updater.
             if model.updater.isAvailable {
                 Button {

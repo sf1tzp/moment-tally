@@ -1,17 +1,23 @@
 import SwiftUI
 
-/// The Help tab: static copy explaining the data model and each surface of
+/// The Help tab: a "Replay the tour" launcher up top (issue #192 — the
+/// interactive walkthrough explains the app better than any of the prose
+/// below it), then static copy explaining the data model and each surface of
 /// the app, one collapsible card per section (first card open by default).
 /// The subtleties documented here (key/value split, server-vs-local colours,
 /// tag sets as launch presets, review rewrites bounded by the scan) otherwise
 /// live only in code comments — keep the sections short and cheap to amend as
 /// features change.
 struct HelpView: View {
-    @State private var expanded: Set<String> = [HelpSection.all[0].id]
+    @Environment(AppModel.self) private var model
+    @State private var expanded: Set<String> = []
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
+                ReplayTourCard {
+                    OnboardingWindowManager.shared.show(model: model, replay: true)
+                }
                 ForEach(HelpSection.all) { section in
                     HelpSectionCard(section: section, isExpanded: binding(for: section.id))
                 }
@@ -39,6 +45,39 @@ struct HelpView: View {
         else { return "dev" }
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
         return build.map { "\(version) (\($0))" } ?? version
+    }
+}
+
+/// The tour launcher, dressed as the section cards below it so the tab stays
+/// one visual list — but a one-click action, not a disclosure: the whole card
+/// reopens the onboarding walkthrough in replay mode.
+private struct ReplayTourCard: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "play.circle")
+                    .frame(width: 20)
+                    .foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Learn Moment Tally")
+                        .font(Brand.script(16) ?? .headline)
+                    Text("Get familiar with Moment Tally by re-playing the interactive Tour.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Image(systemName: "arrow.up.forward")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+            .padding(12)
+            .background(.quinary, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -220,7 +259,7 @@ private struct HelpSection: Identifiable {
             schema after the fact).
 
             The full guide, with worked examples of schemas going wrong, is at \
-            [momenttally.com/docs/marks](https://momenttally.com/docs/marks).
+            [moment-tally.com/docs/marks](https://moment-tally.com/docs).
             """),
         HelpSection(
             title: "Pro-Moves: tally patterns that work",
@@ -263,60 +302,34 @@ private struct HelpSection: Identifiable {
                     """),
             ]),
         HelpSection(
-            title: "Menu bar popover",
+            title: "Start timers from the Launcher or Menu Bar",
             symbol: "menubar.arrow.up.rectangle",
             body: """
-            The top section lists every **running moment**: elapsed time, marks, a \
-            pencil that edits its marks and note in place, and a square stop button. \
-            **Start blank timer** begins an unmarked moment — alongside anything \
-            already running — and opens its editor so you can describe the time while \
-            it runs.
+            Start counting time for any of your **Tallies** with one click.
 
-            **Quick start** shows your tallies, capped to the first N (set the cap in \
-            Settings; “N more…” opens the Launcher). A tally whose exact marks are \
-            currently running is hidden until that moment stops. While a timer runs \
-            the other rows grey out, but each keeps an enabled **＋** that starts the \
-            tally *alongside* the running timer.
+            Hovering a tally expands its **quick marks** - useful for adding extra \
+            dimensionality to your moments without extra effort.
 
-            Hovering a tally expands its **quick marks** — chips that ride along on \
-            start, replacing the tally's value for the same key. Starting a tally (or \
-            chip) that leaves a mark's value **blank** still starts the timer, and \
-            opens its editor with that empty value focused — paste an issue number \
-            or type the feature, no extra clicking.
+            A _valueless_ Mark can be filled in by editing in the **Menu Bar** or \
+            **Log** view.
+
+            Re-order your tallies in the **Tallies** menu to change their display order.
+
+            You can also limit the amount of menu bar tallies in **Settings**.
             """),
         HelpSection(
-            title: "Launcher",
-            symbol: "square.grid.2x2",
-            body: """
-            Every tally as a clickable card — tinted with its first mark's colour and \
-            showing the icon picked in Tallies. A tally with no marks of its own (say, \
-            quick marks do all the work) is tinted with the fallback colour picked \
-            there instead. Click to start the tally; a card whose \
-            tally is currently running is dimmed until it stops (other cards keep \
-            working, since moments may overlap). The dashed **＋** card creates a new \
-            tally.
-            """),
-        HelpSection(
-            title: "Log",
+            title: "View and edit Moments in the Log view",
             symbol: "list.bullet.rectangle",
             body: """
-            The week's moments, day by day. Click a row to edit in place — start and \
-            end (the arrows step by the minute), marks, note — or delete it.
+            Click a row to edit in place — start and end (the arrows step by the minute)\
+            marks, note — or delete it.
 
             A row whose mark combination matches no saved tally shows a **＋**: it \
             saves those marks as a new tally, so an ad-hoc moment you keep repeating is \
             one click from becoming a tally.
             """),
         HelpSection(
-            title: "Calendar",
-            symbol: "calendar",
-            body: """
-            The same week as a time grid, moments as coloured blocks (overlapping \
-            moments share the column; moments crossing midnight draw one block per day). \
-            Click a block to open it in the Log, where it expands for editing.
-            """),
-        HelpSection(
-            title: "History",
+            title: "Graph your statistics in the History view",
             symbol: "chart.pie",
             body: """
             Two donut charts, each with its own **Group by**: a mark key (one slice per \
@@ -333,22 +346,25 @@ private struct HelpSection: Identifiable {
             the pairings that actually occurred. Group one side by `type` and the other \
             by `client` and the slices read type × client — swap either side to cut the \
             same time by type × project or meeting × client.
-
-            Chart colours come from a fixed palette; with *Colour marks by value* on, \
-            your per-value colours win so the charts match the pills elsewhere.
             """),
         HelpSection(
-            title: "Mark Review",
-            symbol: "stethoscope",
+            title: "Review and Correct your Marks",
+            symbol: "pencil.line",
             body: """
-            Scans your moments (pick how far back) and lists every mark key with its \
-            values and usage counts — the keys with the most distinct values first, \
-            which is where typos, near-duplicates, and casing drift show up.
+            The log view is great for fixing a single time span. However, sometimes you \
+            might want to make sweeping changes.
 
-            Cleanups are **staged, not immediate**. Rename a key or value from its \
-            pencil; drag a value onto another key to move it there; expand a value and \
-            shift-click instances to drag just a subset. Staged changes collect at the \
-            bottom as red→green sentences where the target spelling stays editable. \
+            The 'Marks' section scans your recent moments (pick how far back) and lists \
+            every tally key with its mark values and usage counts. Here you can quickly \
+            spot typos, near-duplicates, and other inconsistencies and clean them up.
+
+            You can rename a key or value, move values to another key, or shift-click \
+            instances to drag just a subset.
+
+            Cleanups are **staged, not immediate**.
+
+            Staged changes collect at the bottom as red→green sentences where the \
+            target spelling stays editable. \
             **Approve Changes** then rewrites the affected moments one by one, with \
             progress and cancel.
 
@@ -356,25 +372,6 @@ private struct HelpSection: Identifiable {
             outside it keep their old marks (scan wider to catch them; approving again \
             after a failure or cancel safely picks up where it left off) — and \
             **running moments are never rewritten**; stop them first, then rescan.
-            """),
-        HelpSection(
-            title: "Settings",
-            symbol: "gear",
-            body: """
-            **Storage** is a local database on this Mac — the default needs no server \
-            and no account. **Sync** optionally connects a sync server: sign in once \
-            and this Mac gets a device token (revocable server-side; your password is \
-            never stored). From then on every change — starting and stopping \
-            moments, edits, colours, tallies, the settings below — lands locally \
-            first and syncs in the background, so nothing waits on the network and \
-            offline edits catch up on reconnect. If the same thing was edited on two \
-            Macs, the most recent edit wins. **Import from Traggo** copies an existing \
-            Traggo server's history into the local database (safe to re-run).
-
-            **Quick-start tallies** caps how many tallies the popover lists (0 shows \
-            all). **Colour marks by value** (on by default) enables the per-pair colour \
-            overrides described above; turn it off to colour strictly by key. With a \
-            sync server connected, both follow your account across Macs.
             """),
     ]
 }

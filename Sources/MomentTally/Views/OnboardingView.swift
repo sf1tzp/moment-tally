@@ -7,6 +7,10 @@ import MomentTallyCore
 /// in the Tallies tab. Hosted by `OnboardingWindowManager`; the walkthrough
 /// step itself lives in `WalkthroughView` with `WalkthroughModel` as its
 /// shared dataset.
+///
+/// A replay (issue #192) is the same sequence minus the first-run parts:
+/// no Welcome step (concepts and surfaces are the point, not connect/import),
+/// a read-only tally page, and no Tallies tab on the way out.
 struct OnboardingView: View {
     /// One shared fixed size — the window never resizes between steps.
     static let size = CGSize(width: 700, height: 560)
@@ -16,8 +20,14 @@ struct OnboardingView: View {
     }
 
     @Environment(AppModel.self) private var model
-    @State private var step: Step = .welcome
+    @State private var step: Step
     @State private var walkthrough = WalkthroughModel()
+    private let replay: Bool
+
+    init(replay: Bool = false) {
+        self.replay = replay
+        _step = State(initialValue: replay ? .walkthrough : .welcome)
+    }
 
     var body: some View {
         Group {
@@ -27,11 +37,13 @@ struct OnboardingView: View {
             case .walkthrough:
                 WalkthroughView(
                     walkthrough: walkthrough,
-                    onBack: { step = .welcome },
+                    replay: replay,
+                    // A replay has no Welcome to go back to.
+                    onBack: replay ? nil : { step = .welcome },
                     // The walkthrough is the whole remaining sequence — its
                     // Continue (and Skip Tour) ends onboarding.
                     onContinue: {
-                        OnboardingWindowManager.shared.finish(openingTagSets: true)
+                        OnboardingWindowManager.shared.finish(openingTagSets: !replay)
                     })
             }
         }

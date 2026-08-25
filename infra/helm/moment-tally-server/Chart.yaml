@@ -10,7 +10,7 @@ type: application
 # never depend on remembering to bump this file.
 version: 0.2.0
 appVersion: "0.2.0"
-home: https://momenttally.com
+home: https://moment-tally.com
 sources:
   - https://github.com/sf1tzp/Moment Tally
 keywords:

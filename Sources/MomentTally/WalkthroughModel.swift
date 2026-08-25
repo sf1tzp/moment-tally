@@ -86,7 +86,7 @@ final class WalkthroughModel {
 
     // MARK: Schema smells
 
-    /// The four failure modes from the marks guide (momenttally.com/docs/
+    /// The four failure modes from the marks guide (moment-tally.com/docs/
     /// marks), each a reversible corruption of the demo week. The copy lives
     /// here so every walkthrough presentation tells the identical story.
     enum SchemaSmell: String, CaseIterable, Identifiable {
@@ -149,7 +149,7 @@ final class WalkthroughModel {
             switch self {
             case .unboundedValues:
                 // Invoice numbers are the *books-mirroring* pattern, not the
-                // smell (momenttally.com/case-study/joined-to-what-shipped).
+                // smell (moment-tally.com/case-study/joined-to-what-shipped).
                 [("deliverable: album", true),
                  ("deliverable: invoice-1041", true),
                  ("deliverable: asdklfjasdf", false)]

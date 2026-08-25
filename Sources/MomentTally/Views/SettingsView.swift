@@ -187,7 +187,7 @@ struct GeneralSettingsView: View {
         }
         Section("Launcher") {
             Toggle("Gradient launcher cards", isOn: $model.gradientLauncherCards)
-            Text("Cards (and the menu's quick-start tiles) take a colour gradient derived from their colour — the momenttally.com tile look. Off keeps flat colour fills.")
+            Text("Cards (and the menu's quick-start tiles) take a colour gradient derived from their colour — the moment-tally.com tile look. Off keeps flat colour fills.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
