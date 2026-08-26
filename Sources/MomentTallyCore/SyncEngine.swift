@@ -1,9 +1,8 @@
 import Foundation
-import MomentTallyCore
 import Observation
 
 /// What a sync run is doing, for the Settings surface.
-enum SyncStatus: Equatable {
+package enum SyncStatus: Equatable {
     case idle
     case syncing
     case error(String)
@@ -22,33 +21,33 @@ enum SyncStatus: Equatable {
 /// and URLSession, so nothing heavy runs on the main thread.
 @MainActor
 @Observable
-final class SyncEngine {
-    let store: LocalBackend
-    let server: any SyncServerAPI
+package final class SyncEngine {
+    package let store: LocalBackend
+    package let server: any SyncServerAPI
 
-    var status: SyncStatus = .idle
-    var lastSyncedAt: Date?
+    package var status: SyncStatus = .idle
+    package var lastSyncedAt: Date?
 
     /// Bridges to the two preference values, which live in UserDefaults via
     /// AppModel rather than in the store. `applyPreferences` must not
     /// re-mark the preferences dirty (AppModel suppresses its observers).
-    var readPreferences: () -> (colorByValue: Bool, menuLabelSetLimit: Int) = { (true, 5) }
-    var applyPreferences: (_ colorByValue: Bool, _ menuLabelSetLimit: Int) -> Void = { _, _ in }
+    package var readPreferences: () -> (colorByValue: Bool, menuLabelSetLimit: Int) = { (true, 5) }
+    package var applyPreferences: (_ colorByValue: Bool, _ menuLabelSetLimit: Int) -> Void = { _, _ in }
     /// Called after a run that changed local data, so the UI reloads.
-    var onLocalChange: () -> Void = {}
+    package var onLocalChange: () -> Void = {}
 
     /// Defensive bound on the pull loop, same idea as the importer's.
-    var maxPullPages = 10_000
+    package var maxPullPages = 10_000
     /// The color given to definitions the engine has to invent because a
     /// pushed span or value color references an undefined key.
-    static let defaultKeyColor = "#2196f3"
+    package static let defaultKeyColor = "#2196f3"
 
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var kickTask: Task<Void, Never>?
     @ObservationIgnored private var periodicTask: Task<Void, Never>?
     @ObservationIgnored private var rerunRequested = false
 
-    init(store: LocalBackend, server: any SyncServerAPI) {
+    package init(store: LocalBackend, server: any SyncServerAPI) {
         self.store = store
         self.server = server
         lastSyncedAt = (try? store.syncServer())?.lastSyncedAt
@@ -58,7 +57,7 @@ final class SyncEngine {
 
     /// The steady background cadence — mainly for *pulling* what other
     /// devices pushed; local writes trigger their own runs via `kick`.
-    func startPeriodicSync(every seconds: Double = 60) {
+    package func startPeriodicSync(every seconds: Double = 60) {
         periodicTask?.cancel()
         periodicTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -70,14 +69,14 @@ final class SyncEngine {
     }
 
     /// Cancel all scheduled work (disconnect).
-    func stop() {
+    package func stop() {
         periodicTask?.cancel()
         kickTask?.cancel()
     }
 
     /// Debounced trigger for "something changed locally": batches a burst of
     /// edits into one run shortly after they settle.
-    func kick(after seconds: Double = 3) {
+    package func kick(after seconds: Double = 3) {
         kickTask?.cancel()
         kickTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
@@ -88,7 +87,7 @@ final class SyncEngine {
 
     /// Run a sync immediately; if one is in flight, run another after it
     /// (the in-flight run may already have pushed past its snapshot).
-    func syncNow() async {
+    package func syncNow() async {
         if syncTask != nil {
             rerunRequested = true
             return
@@ -123,7 +122,7 @@ final class SyncEngine {
     /// definitions before value colors and spans (the server rejects labels
     /// with undefined keys), pulls before pushes (conflicts resolve against
     /// fresh server state, and the losers of last-writer-wins never push).
-    func performSync() async throws -> Bool {
+    package func performSync() async throws -> Bool {
         var changed = false
 
         // 1. Label definitions: snapshot merge, then push local winners.
