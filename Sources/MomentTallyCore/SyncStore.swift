@@ -3,13 +3,17 @@ import GRDB
 
 // MARK: - Sync metadata rows (v3-sync)
 
-/// Which sync-tracked entity a `sync_map` / `sync_tombstone` row concerns.
-/// Label definitions need neither: their key is their identity on both
-/// sides, and the app never deletes one locally.
+/// Which sync-tracked entity a `sync_map` / `sync_tombstone` /
+/// `ck_record_map` row concerns. For the self-hosted transport, label
+/// definitions need none of these: their key is their identity on both
+/// sides, and the app never deletes one locally. The CloudKit transport
+/// (v7/v8) does need to name them — their record names are minted UUIDs
+/// mapped in ck_record_map — hence the case the v1 tables never used.
 package enum SyncEntity: String {
     case span
     case labelSet = "label_set"
     case valueColor = "value_color"
+    case labelDefinition = "label_definition"
 }
 
 /// Pairs a local identity (span rowid as text, set UUID) with the record's
@@ -179,6 +183,11 @@ package extension LocalBackend {
             }
             try SyncMapRow.deleteAll(db)
             try SyncTombstoneRow.deleteAll(db)
+            // Transport exclusivity (#121): the CloudKit bookkeeping belongs
+            // to the connection this replaces, exactly like the mappings
+            // above belong to the old server.
+            try CloudRecordMapRow.deleteAll(db)
+            try CloudRecordCacheRow.deleteAll(db)
             try SyncServerRow.deleteAll(db)
             for table in ["time_span", "label_definition", "value_color", "label_set"] {
                 try db.execute(sql: "UPDATE \(table) SET dirty = 1")
@@ -759,7 +768,7 @@ package extension LocalBackend {
         try insert(quickMembers: remote.quickLabels, setId: localId, db)
     }
 
-    private static func members(of setId: String, _ db: Database) throws -> [SpanLabel] {
+    static func members(of setId: String, _ db: Database) throws -> [SpanLabel] {
         try LabelSetMemberRow
             .filter(Column("set_id") == setId)
             .order(Column("position"))
@@ -767,7 +776,7 @@ package extension LocalBackend {
             .map { SpanLabel(key: $0.key, value: $0.value) }
     }
 
-    private static func quickMembers(of setId: String, _ db: Database) throws -> [SpanLabel] {
+    static func quickMembers(of setId: String, _ db: Database) throws -> [SpanLabel] {
         try LabelSetQuickMemberRow
             .filter(Column("set_id") == setId)
             .order(Column("position"))
@@ -775,14 +784,14 @@ package extension LocalBackend {
             .map { SpanLabel(key: $0.key, value: $0.value) }
     }
 
-    private static func insert(members: [SpanLabel], setId: String, _ db: Database) throws {
+    static func insert(members: [SpanLabel], setId: String, _ db: Database) throws {
         for (position, member) in members.enumerated() {
             try LabelSetMemberRow(setId: setId, position: position,
                                   key: member.key, value: member.value).insert(db)
         }
     }
 
-    private static func insert(quickMembers: [SpanLabel], setId: String, _ db: Database) throws {
+    static func insert(quickMembers: [SpanLabel], setId: String, _ db: Database) throws {
         for (position, member) in quickMembers.enumerated() {
             try LabelSetQuickMemberRow(setId: setId, position: position,
                                        key: member.key, value: member.value).insert(db)

@@ -463,6 +463,26 @@ package final class LocalBackend: Backend {
             }
         }
 
+        // The CloudKit record cache (#121): the last server copy seen per
+        // record, as a full NSKeyedArchiver archive. The server change tag
+        // rides inside, and a save must be based on the server's current
+        // tag or it's a conflict — this is what lets a relaunched app
+        // update records without a fetch-before-every-save. (A full archive
+        // rather than `encodeSystemFields`: system-fields-only archiving
+        // strips everything the CI fake models its change tag with, and the
+        // payload duplication is a few hundred bytes per record.) Presence
+        // in this table is also the transport's "the server knows this
+        // record" marker (the CK sibling of a sync_map row), which is what
+        // decides whether a local deletion leaves a tombstone. Losing a row
+        // here is safe: the next save goes out as a fresh instance,
+        // conflicts once, and heals from the server copy in the failure.
+        migrator.registerMigration("v8-cloudkit-record-cache") { db in
+            try db.create(table: "ck_record_cache") { t in
+                t.column("record_name", .text).primaryKey()
+                t.column("archived_record", .blob).notNull()
+            }
+        }
+
         return migrator
     }
 
@@ -556,12 +576,15 @@ package final class LocalBackend: Backend {
 
     package func removeTimeSpan(id: Int) async throws {
         try await dbQueue.write { db in
-            guard try TimeSpanRow.exists(db, key: Int64(id)) else {
+            guard let row = try TimeSpanRow.fetchOne(db, key: Int64(id)) else {
                 throw Error(message: "No such timespan: \(id)")
             }
             // If the span is known to the sync server, remember the deletion
             // until it's pushed; the mapping row itself is retired with it.
+            // Each transport has its own "known to the server" marker: a
+            // sync_map row (self-hosted) or a ck_record_cache row (CloudKit).
             try Self.tombstoneIfMapped(entity: .span, localId: String(id), db)
+            try Self.tombstoneIfCloudKnown(entity: .span, recordName: row.uuid, db)
             _ = try TimeSpanRow.deleteOne(db, key: Int64(id))
             // time_span_label rows follow via ON DELETE CASCADE.
         }
@@ -680,6 +703,7 @@ package final class LocalBackend: Backend {
 
             for row in existing where !kept.contains(row.id) {
                 try Self.tombstoneIfMapped(entity: .labelSet, localId: row.id, db)
+                try Self.tombstoneIfCloudKnown(entity: .labelSet, recordName: row.id, db)
                 _ = try row.delete(db)   // members cascade
             }
         }
