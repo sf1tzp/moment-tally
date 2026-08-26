@@ -22,7 +22,9 @@ package struct User: Decodable, Equatable {
 }
 
 /// A key/value pair attached to a timespan — e.g. `recipe: sourdough`.
-package struct SpanLabel: Hashable {
+/// Codable so ordered label lists can travel as a single payload on
+/// transports without child rows (the CloudKit record codec, #121/#159).
+package struct SpanLabel: Hashable, Codable {
     package let key: String
     package let value: String
 

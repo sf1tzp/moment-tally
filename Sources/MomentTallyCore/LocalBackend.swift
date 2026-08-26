@@ -26,9 +26,13 @@ struct TimeSpanRow: Codable, FetchableRecord, MutablePersistableRecord {
     var note: String
     var dirty = true
     var modifiedAt: Date?
+    /// Client-minted identity (v7): the span's CloudKit record name. The
+    /// rowid stays the local key; this is the identity that exists *before*
+    /// any server roundtrip, unlike sync_map's server-assigned ids (#121).
+    var uuid = UUID().uuidString
 
     enum CodingKeys: String, CodingKey {
-        case id, start, end, note, dirty, modifiedAt = "modified_at"
+        case id, start, end, note, dirty, modifiedAt = "modified_at", uuid
     }
 
     mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
@@ -219,7 +223,9 @@ package final class LocalBackend: Backend {
     /// The schema is applied through DatabaseMigrator from day one so phase 6
     /// can add sync metadata (server id, dirty flag, tombstone) as a plain
     /// later migration instead of a rebuild.
-    private static func migrator(legacyDefaults: UserDefaults?) -> DatabaseMigrator {
+    // Internal (not private) so tests can stop at an intermediate migration
+    // and prove the next one's backfill against realistic old-schema rows.
+    static func migrator(legacyDefaults: UserDefaults?) -> DatabaseMigrator {
         // Read the legacy values up front: migration closures are @Sendable
         // and UserDefaults isn't, but the plain values it yields are.
         let legacyPresets = legacyDefaults?.data(forKey: "presets")
@@ -421,6 +427,39 @@ package final class LocalBackend: Backend {
         migrator.registerMigration("v6-label-set-gradient") { db in
             try db.alter(table: "label_set") { t in
                 t.add(column: "gradient", .boolean)        // nil = gradient on
+            }
+        }
+
+        // CloudKit identity groundwork (#121, #159). Spans get client-minted
+        // UUIDs: CloudKit record names need an identity that exists before
+        // any server roundtrip, unlike sync_map's server-assigned ids. The
+        // column stays nullable in SQL (SQLite can't retro-fit NOT NULL);
+        // the backfill plus the record type's insert-time default keep it
+        // populated, and the unique index enforces what matters. sync_server
+        // learns which transport it describes plus a slot for CKSyncEngine's
+        // opaque state serialization, and ck_record_map holds minted record
+        // names for natural-key entities — record names travel unencrypted,
+        // so a definition's user-typed key can never be one.
+        migrator.registerMigration("v7-cloudkit-identity") { db in
+            try db.alter(table: "time_span") { t in
+                t.add(column: "uuid", .text)
+            }
+            for id in try Int64.fetchAll(db, sql: "SELECT id FROM time_span") {
+                try db.execute(sql: "UPDATE time_span SET uuid = ? WHERE id = ?",
+                               arguments: [UUID().uuidString, id])
+            }
+            try db.create(indexOn: "time_span", columns: ["uuid"], options: .unique)
+            try db.alter(table: "sync_server") { t in
+                t.add(column: "transport", .text).notNull()
+                    .defaults(to: SyncTransport.server.rawValue)
+                t.add(column: "ck_state", .blob)
+            }
+            try db.create(table: "ck_record_map") { t in
+                t.column("entity", .text).notNull()
+                t.column("local_id", .text).notNull()
+                t.column("record_name", .text).notNull()
+                t.primaryKey(["entity", "local_id"])
+                t.uniqueKey(["entity", "record_name"])
             }
         }
 

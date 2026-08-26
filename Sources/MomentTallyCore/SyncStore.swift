@@ -39,9 +39,21 @@ struct SyncTombstoneRow: Codable, FetchableRecord, PersistableRecord {
     }
 }
 
+/// Which transport a `sync_server` row describes (v7). Transports are
+/// mutually exclusive per device in v1 (#121): connecting one wipes the
+/// other's bookkeeping exactly like connecting to a different server URL.
+package enum SyncTransport: String {
+    case server          // self-hosted Moment Tally server (SyncServerAPI)
+    case cloudKit = "cloudkit"
+}
+
 /// The single row that *is* the sync connection: server, account, timespan
 /// pull checkpoint, and the preference sync metadata (the preference values
 /// themselves live in UserDefaults). The device token lives in the Keychain.
+/// For the CloudKit transport (v7) `url`/`userId`/`userName` describe the
+/// iCloud side ("icloud", 0, account label) and `ckState` holds CKSyncEngine's
+/// opaque state serialization — change tokens ride inside it, so the
+/// self-hosted checkpoint columns stay untouched.
 package struct SyncServerRow: Codable, FetchableRecord, PersistableRecord {
     package static let databaseTableName = "sync_server"
     package var id: Int64 = 1
@@ -54,6 +66,8 @@ package struct SyncServerRow: Codable, FetchableRecord, PersistableRecord {
     package var prefsDirty = true
     package var prefsModifiedAt: Date?
     package var lastSyncedAt: Date?
+    package var transport = SyncTransport.server.rawValue
+    package var ckState: Data?
 
     enum CodingKeys: String, CodingKey {
         case id, url, active
@@ -61,6 +75,24 @@ package struct SyncServerRow: Codable, FetchableRecord, PersistableRecord {
         case checkpoint, checkpointAfterId = "checkpoint_after_id"
         case prefsDirty = "prefs_dirty", prefsModifiedAt = "prefs_modified_at"
         case lastSyncedAt = "last_synced_at"
+        case transport, ckState = "ck_state"
+    }
+}
+
+/// Pairs a local identity with its minted CloudKit record name (v7) — the
+/// CK-transport sibling of `sync_map`. Only natural-key entities need rows
+/// here: a definition's key and a value color's key␟value are user text,
+/// and record names travel unencrypted, so their record names are minted
+/// UUIDs instead. Spans and label sets carry their own UUIDs and need no
+/// mapping.
+struct CloudRecordMapRow: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "ck_record_map"
+    var entity: String
+    var localId: String
+    var recordName: String
+
+    enum CodingKeys: String, CodingKey {
+        case entity, localId = "local_id", recordName = "record_name"
     }
 }
 
