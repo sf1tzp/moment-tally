@@ -19,6 +19,20 @@
 	     the chosen path. Grants access only to files the user selects. -->
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
+	<!-- iCloud sync (#121). Restricted entitlements: they only launch when
+	     the signature embeds a provisioning profile granting them, so
+	     sign-app.sh STRIPS these two keys unless MT_PROVISIONING_PROFILE is
+	     supplied — dev builds and profile-less releases stay launchable, and
+	     the app's runtime gate (BuildEntitlements) hides iCloud sync in
+	     builds that shipped without them. The container id is forever. -->
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.com.streetfortress.MomentTally</string>
+	</array>
 	<!-- Sparkle 2 under sandbox: the app talks to its out-of-sandbox
 	     installer through these two mach services (status: -spks,
 	     installer: -spki); Sparkle's Info.plist key

@@ -70,34 +70,45 @@ struct GeneralSettingsView: View {
         .formStyle(.grouped)
     }
 
-    // MARK: Sync server (#33)
+    // MARK: Sync (#33 self-hosted, #121 iCloud)
 
-    /// Connect-to-sync-server flow, and the connection's status once made.
-    /// Wording stays product-neutral ("sync server") — the app's own rename
+    /// The two mutually exclusive sync transports: status once one is
+    /// connected, the chooser when none is. Wording stays product-neutral
+    /// ("sync server") for the self-hosted side — the app's own rename
     /// is #34.
     @ViewBuilder
     private var syncSection: some View {
         @Bindable var model = model
         Section("Sync") {
-            if let engine = model.syncEngine, let server = model.syncServer {
+            if let cloud = model.cloudSync {
+                LabeledContent("Service", value: "iCloud")
+                LabeledContent("Status") {
+                    syncStatusLabel(cloud.status, lastSyncedAt: cloud.lastSyncedAt,
+                                    offlineText: "Offline — changes will sync when iCloud is reachable")
+                }
+                if case .error(let message) = cloud.status {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+                HStack {
+                    Button("Sync now") { Task { await cloud.syncNow() } }
+                        .disabled(cloud.status == .syncing)
+                    Spacer()
+                    Button("Turn Off iCloud Sync", role: .destructive) {
+                        model.disconnectCloudKit()
+                    }
+                }
+                Text("Everything syncs through your iCloud account: moments, mark keys and colors, tallies, and the settings below. End-to-end encrypted — neither Apple nor Street Fortress can read your data.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if let engine = model.syncEngine, let server = model.syncServer {
                 LabeledContent("Server", value: server.url)
                 LabeledContent("Account", value: server.userName)
                 LabeledContent("Status") {
-                    switch engine.status {
-                    case .syncing:
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.small)
-                            Text("Syncing…")
-                        }
-                    case .idle:
-                        Label(lastSyncedText(engine.lastSyncedAt),
-                              systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    case .error:
-                        Label("Offline — changes will sync when the server is reachable",
-                              systemImage: "exclamationmark.arrow.circlepath")
-                            .foregroundStyle(.orange)
-                    }
+                    syncStatusLabel(engine.status, lastSyncedAt: engine.lastSyncedAt,
+                                    offlineText: "Offline — changes will sync when the server is reachable")
                 }
                 if case .error(let message) = engine.status {
                     Text(message)
@@ -117,7 +128,18 @@ struct GeneralSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Text("Optional: connect a sync server to share moments, tallies, and colors across your Macs. Everything keeps working offline; changes sync in the background.")
+                if BuildEntitlements.cloudKitAvailable {
+                    HStack {
+                        Text("Sync across your devices with iCloud — no account setup, end-to-end encrypted.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Use iCloud") { Task { await model.connectCloudKit() } }
+                            .disabled(model.isConnectingSync)
+                    }
+                    Divider()
+                }
+                Text("Optional: connect a self-hosted sync server to share moments, tallies, and colors across your Macs. Everything keeps working offline; changes sync in the background.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 TextField("Server URL", text: $syncURL)
@@ -144,6 +166,24 @@ struct GeneralSettingsView: View {
                         .lineLimit(3)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func syncStatusLabel(_ status: SyncStatus, lastSyncedAt: Date?,
+                                 offlineText: String) -> some View {
+        switch status {
+        case .syncing:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Syncing…")
+            }
+        case .idle:
+            Label(lastSyncedText(lastSyncedAt), systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .error:
+            Label(offlineText, systemImage: "exclamationmark.arrow.circlepath")
+                .foregroundStyle(.orange)
         }
     }
 

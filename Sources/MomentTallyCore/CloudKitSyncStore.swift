@@ -62,13 +62,16 @@ package extension LocalBackend {
     /// and clean/dirty state intact; switching from a self-hosted server
     /// starts over — its bookkeeping is wiped and every row goes dirty so
     /// the full local dataset uploads.
-    func connectCloudKit(accountLabel: String) throws {
+    func connectCloudKit(accountLabel: String, environment: String? = nil) throws {
         try dbQueue.write { db in
             if var existing = try SyncServerRow.fetchOne(db),
                existing.transport == SyncTransport.cloudKit.rawValue {
                 existing.active = true
                 existing.userName = accountLabel
                 try existing.update(db)
+                if let environment {
+                    _ = try Self.ensureEnvironment(environment, db)
+                }
                 return
             }
             try SyncMapRow.deleteAll(db)
@@ -81,8 +84,40 @@ package extension LocalBackend {
             }
             var row = SyncServerRow(url: "icloud", userId: 0, userName: accountLabel)
             row.transport = SyncTransport.cloudKit.rawValue
+            row.ckEnvironment = environment
             try row.insert(db)
         }
+    }
+
+    /// The environment guard (#121): CK bookkeeping records *that* records
+    /// pushed, never *where* — a Production build reusing a dev build's
+    /// Development state syncs trivially against an empty environment while
+    /// believing everything is pushed. On a stamp mismatch, reset with the
+    /// zone-vanished semantics; a NULL stamp (pre-guard store) adopts the
+    /// current environment without resetting, since shipped builds only
+    /// ever see Production. Returns true when a reset happened — the
+    /// persisted engine state is gone, so re-read the row before attaching
+    /// an engine.
+    func ensureCloudKitEnvironment(_ environment: String) throws -> Bool {
+        try dbQueue.write { db in try Self.ensureEnvironment(environment, db) }
+    }
+
+    internal static func ensureEnvironment(_ environment: String, _ db: Database) throws -> Bool {
+        guard var row = try SyncServerRow.fetchOne(db),
+              row.transport == SyncTransport.cloudKit.rawValue else { return false }
+        guard let stamped = row.ckEnvironment else {
+            row.ckEnvironment = environment
+            try row.update(db)
+            return false
+        }
+        guard stamped != environment else { return false }
+        try wipeCloudBookkeepingTables(db)
+        row.ckEnvironment = environment
+        row.ckState = nil
+        row.prefsDirty = true
+        row.lastSyncedAt = nil
+        try row.update(db)
+        return true
     }
 
     /// Persist CKSyncEngine's opaque state serialization. Change tokens ride
@@ -101,15 +136,22 @@ package extension LocalBackend {
     /// semantics — so the next run re-uploads the full local dataset.
     func resetCloudKitBookkeeping() async throws {
         try await dbQueue.write { db in
-            try CloudRecordMapRow.deleteAll(db)
-            try CloudRecordCacheRow.deleteAll(db)
-            try SyncTombstoneRow.deleteAll(db)
-            for table in ["time_span", "label_definition", "value_color", "label_set"] {
-                try db.execute(sql: "UPDATE \(table) SET dirty = 1")
-            }
+            try Self.wipeCloudBookkeepingTables(db)
             try db.execute(sql: """
                 UPDATE sync_server SET ck_state = NULL, prefs_dirty = 1, last_synced_at = NULL
                 """)
+        }
+    }
+
+    /// The table-level half of a bookkeeping reset: every CK mapping and
+    /// cache row gone, every row dirty. Callers settle the sync_server
+    /// columns themselves.
+    internal static func wipeCloudBookkeepingTables(_ db: Database) throws {
+        try CloudRecordMapRow.deleteAll(db)
+        try CloudRecordCacheRow.deleteAll(db)
+        try SyncTombstoneRow.deleteAll(db)
+        for table in ["time_span", "label_definition", "value_color", "label_set"] {
+            try db.execute(sql: "UPDATE \(table) SET dirty = 1")
         }
     }
 
@@ -197,6 +239,16 @@ package extension LocalBackend {
     /// reuses the same name instead of scattering duplicates.
     func cloudPushWork() async throws -> CloudPushWork {
         try await dbQueue.write { db in
+            // Heal span identity first: the uuid column is nullable in SQL
+            // (v7 couldn't retro-fit NOT NULL), and a pre-v7 build sharing
+            // the store after the migration inserts spans without one. Mint
+            // here rather than trusting the one-shot backfill — the queue
+            // derivation is the first place a missing uuid would throw.
+            for id in try Int64.fetchAll(
+                db, sql: "SELECT id FROM time_span WHERE uuid IS NULL") {
+                try db.execute(sql: "UPDATE time_span SET uuid = ? WHERE id = ?",
+                               arguments: [UUID().uuidString, id])
+            }
             var work = CloudPushWork()
             work.saves += try String.fetchAll(
                 db, sql: "SELECT uuid FROM time_span WHERE dirty = 1 ORDER BY id")

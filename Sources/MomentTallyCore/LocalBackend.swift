@@ -483,6 +483,20 @@ package final class LocalBackend: Backend {
             }
         }
 
+        // The container-environment stamp (#121): CK bookkeeping records
+        // *that* records pushed, never *where* — and on a dev machine the
+        // same store serves dev-profile builds (Development environment)
+        // and Developer ID builds (Production). Stamp the environment at
+        // connect; the app resets the bookkeeping when its entitlement
+        // disagrees. Nullable: a NULL stamp is adopted without a reset —
+        // shipped builds only ever see Production, so their pre-guard
+        // state is already right.
+        migrator.registerMigration("v9-ck-environment") { db in
+            try db.alter(table: "sync_server") { t in
+                t.add(column: "ck_environment", .text)
+            }
+        }
+
         return migrator
     }
 

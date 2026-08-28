@@ -16,6 +16,7 @@ import Foundation
 // about what is owed, and the next run picks it all up. The engine's own
 // pending queue is transient machinery in between.
 
+@MainActor
 package final class CloudKitTransport: CloudSyncEngineDelegate {
     package let store: LocalBackend
     /// Set after init — the engine needs its delegate first, and this class

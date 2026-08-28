@@ -1,0 +1,99 @@
+DEFINE SCHEMA
+
+    RECORD TYPE LabelDefinition (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        color           ENCRYPTED STRING,
+        key             ENCRYPTED STRING,
+        modifiedAt      ENCRYPTED TIMESTAMP,
+        v               INT64 QUERYABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE LabelSet (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        labels          ENCRYPTED BYTES,
+        modifiedAt      ENCRYPTED TIMESTAMP,
+        name            ENCRYPTED STRING,
+        position        ENCRYPTED INT64,
+        quickLabels     ENCRYPTED BYTES,
+        symbolName      ENCRYPTED STRING,
+        v               INT64 QUERYABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE Preferences (
+        "___createTime"   TIMESTAMP,
+        "___createdBy"    REFERENCE,
+        "___etag"         STRING,
+        "___modTime"      TIMESTAMP,
+        "___modifiedBy"   REFERENCE,
+        "___recordID"     REFERENCE QUERYABLE,
+        colorByValue      ENCRYPTED INT64,
+        menuLabelSetLimit ENCRYPTED INT64,
+        modifiedAt        ENCRYPTED TIMESTAMP,
+        v                 INT64 QUERYABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE Span (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        end             ENCRYPTED TIMESTAMP,
+        labels          ENCRYPTED BYTES,
+        modifiedAt      ENCRYPTED TIMESTAMP,
+        note            ENCRYPTED STRING,
+        start           ENCRYPTED TIMESTAMP,
+        v               INT64 QUERYABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE Users (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        roles           LIST<INT64>,
+        GRANT WRITE TO "_creator",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE ValueColor (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        color           ENCRYPTED STRING,
+        key             ENCRYPTED STRING,
+        modifiedAt      ENCRYPTED TIMESTAMP,
+        v               INT64 QUERYABLE SORTABLE,
+        value           ENCRYPTED STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );

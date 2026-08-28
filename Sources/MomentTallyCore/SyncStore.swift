@@ -72,6 +72,9 @@ package struct SyncServerRow: Codable, FetchableRecord, PersistableRecord {
     package var lastSyncedAt: Date?
     package var transport = SyncTransport.server.rawValue
     package var ckState: Data?
+    /// Which CloudKit container environment the bookkeeping describes
+    /// ("Development"/"Production", v9) — nil before the guard first runs.
+    package var ckEnvironment: String?
 
     enum CodingKeys: String, CodingKey {
         case id, url, active
@@ -79,7 +82,7 @@ package struct SyncServerRow: Codable, FetchableRecord, PersistableRecord {
         case checkpoint, checkpointAfterId = "checkpoint_after_id"
         case prefsDirty = "prefs_dirty", prefsModifiedAt = "prefs_modified_at"
         case lastSyncedAt = "last_synced_at"
-        case transport, ckState = "ck_state"
+        case transport, ckState = "ck_state", ckEnvironment = "ck_environment"
     }
 }
 

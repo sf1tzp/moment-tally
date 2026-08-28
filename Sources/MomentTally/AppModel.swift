@@ -1,3 +1,4 @@
+import CloudKit
 import Foundation
 import MomentTallyCore
 import Observation
@@ -319,19 +320,39 @@ final class AppModel {
     /// The engine reconciling the store with a connected sync server; nil
     /// when no server is connected (or in demo mode — a demo never syncs).
     var syncEngine: SyncEngine?
+    /// Its CloudKit sibling (#121); at most one of the two is non-nil —
+    /// transports are mutually exclusive per device in v1.
+    var cloudSync: CloudSyncController?
     /// The connection row, mirrored from the store for Settings to display.
     var syncServer: SyncServerRow?
     var isConnectingSync = false
     var syncConnectError: String?
 
     /// Re-attach the engine for a connection that survives a relaunch: an
-    /// active sync_server row in the store plus the device token in the
-    /// Keychain.
+    /// active sync_server row in the store, plus its credential — the
+    /// device token in the Keychain (self-hosted) or the iCloud session the
+    /// OS maintains (CloudKit).
     private func startSyncIfConfigured() {
         guard !isDemo, let store = localStore else { return }
         syncServer = try? store.syncServer()
-        guard let row = syncServer, row.active,
-              let token = Keychain.get(account: Keys.syncToken),
+        guard let row = syncServer, row.active else { return }
+        if row.transport == SyncTransport.cloudKit.rawValue {
+            // A build without the entitlement (dev cert) must not touch
+            // CloudKit; the connection row stays for an entitled relaunch.
+            guard BuildEntitlements.cloudKitAvailable else { return }
+            // The environment guard: a build signed for the other container
+            // environment resets the bookkeeping (and its engine state), so
+            // the full dataset uploads there instead of trivially "syncing"
+            // against records that only exist in the old environment.
+            if let environment = BuildEntitlements.cloudKitEnvironment,
+               (try? store.ensureCloudKitEnvironment(environment)) == true {
+                syncServer = try? store.syncServer()
+            }
+            startCloudSync(state: syncServer?.ckState)
+            cloudSync?.kick(after: 1)
+            return
+        }
+        guard let token = Keychain.get(account: Keys.syncToken),
               let url = URL(string: row.url) else { return }
         startSyncEngine(client: MomentTallyClient(baseURL: url, token: token))
         syncEngine?.kick(after: 1)
@@ -378,20 +399,86 @@ final class AppModel {
         syncServer = try? localStore?.syncServer()
     }
 
+    /// Turn on iCloud sync (#121). No credentials of ours — the OS session
+    /// is the account; the only precondition is being signed into iCloud.
+    /// Connecting wipes any self-hosted bookkeeping and re-dirties every
+    /// row, so the full local dataset uploads (and merges with whatever the
+    /// account's other devices already put there).
+    func connectCloudKit() async {
+        guard !isDemo, let store = localStore, !isConnectingSync,
+              BuildEntitlements.cloudKitAvailable else { return }
+        isConnectingSync = true
+        defer { isConnectingSync = false }
+        do {
+            let account = try await CKContainer(identifier: CloudKitSchema.containerId)
+                .accountStatus()
+            guard account == .available else {
+                syncConnectError = "Sign in to iCloud in System Settings to use iCloud sync."
+                return
+            }
+            try store.connectCloudKit(accountLabel: "iCloud",
+                                      environment: BuildEntitlements.cloudKitEnvironment)
+            syncServer = try? store.syncServer()
+            syncConnectError = nil
+            startCloudSync(state: nil)
+            await cloudSync?.syncNow()
+        } catch {
+            syncConnectError = error.localizedDescription
+        }
+    }
+
+    /// Stop iCloud sync. Mirrors `disconnectSyncServer`: data, record
+    /// mappings, and clean/dirty state stay, so turning it back on resumes
+    /// instead of re-uploading the world.
+    func disconnectCloudKit() {
+        cloudSync?.stop()
+        cloudSync = nil
+        try? localStore?.disconnectSyncServer()
+        syncServer = try? localStore?.syncServer()
+    }
+
     private func startSyncEngine(client: MomentTallyClient) {
         guard let store = localStore else { return }
         let engine = SyncEngine(store: store, server: client)
-        engine.readPreferences = { [weak self] in
-            (self?.colorTagsByValue ?? true, self?.menuTagSetLimit ?? 5)
-        }
-        engine.applyPreferences = { [weak self] colorByValue, limit in
+        engine.readPreferences = syncReadPreferences
+        engine.applyPreferences = syncApplyPreferences
+        engine.onLocalChange = syncDidChangeLocalData
+        engine.startPeriodicSync()
+        syncEngine = engine
+    }
+
+    private func startCloudSync(state: Data?) {
+        guard let store = localStore else { return }
+        let controller = CloudSyncController(store: store)
+        controller.transport.readPreferences = syncReadPreferences
+        controller.transport.applyPreferences = syncApplyPreferences
+        controller.transport.onProblem = { NSLog("CloudKit sync: %@", $0) }
+        controller.onLocalChange = syncDidChangeLocalData
+        let adapter = CloudKitSyncAdapter(state: state)
+        adapter.delegate = controller.transport
+        controller.attach(engine: adapter)
+        controller.startPeriodicSync()
+        cloudSync = controller
+    }
+
+    // The store-reconciliation bridges, shared verbatim by both transports.
+
+    private var syncReadPreferences: () -> (colorByValue: Bool, menuLabelSetLimit: Int) {
+        { [weak self] in (self?.colorTagsByValue ?? true, self?.menuTagSetLimit ?? 5) }
+    }
+
+    private var syncApplyPreferences: (Bool, Int) -> Void {
+        { [weak self] colorByValue, limit in
             guard let self else { return }
             self.isRestoringState = true
             defer { self.isRestoringState = false }
             self.colorTagsByValue = colorByValue
             self.menuTagSetLimit = limit
         }
-        engine.onLocalChange = { [weak self] in
+    }
+
+    private var syncDidChangeLocalData: () -> Void {
+        { [weak self] in
             guard let self else { return }
             self.reloadFromStore()
             self.noteSpanDataChanged()
@@ -400,8 +487,6 @@ final class AppModel {
                 await self.history.reloadIfLoaded()
             }
         }
-        engine.startPeriodicSync()
-        syncEngine = engine
     }
 
     /// Monotonic version of the span data, bumped by every mutation funnel —
@@ -422,9 +507,10 @@ final class AppModel {
 
     /// A local mutation happened — reconcile soon. Called by every write
     /// path here and in the sibling models; harmlessly does nothing when no
-    /// server is connected.
+    /// transport is connected (at most one of the two ever is).
     func syncSoon() {
         syncEngine?.kick()
+        cloudSync?.kick()
     }
 
     /// One of the two synced preferences changed by hand: stamp it dirty in

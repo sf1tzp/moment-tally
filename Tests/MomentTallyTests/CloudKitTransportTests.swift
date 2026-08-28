@@ -8,6 +8,7 @@ import Testing
 /// One device: an in-memory store connected to CloudKit, a fake engine on
 /// the shared container, and the real transport wired between them — the
 /// CK sibling of SyncEngineTests' store+FakeSyncServer pairing.
+@MainActor
 private final class CloudDevice {
     let store: LocalBackend
     let engine: FakeCloudEngine
@@ -74,7 +75,7 @@ private final class CloudDevice {
     }
 }
 
-@Suite struct CloudKitTransportTests {
+@Suite @MainActor struct CloudKitTransportTests {
 
     private func date(_ epochSeconds: Int) -> Date {
         Date(timeIntervalSince1970: TimeInterval(epochSeconds))
