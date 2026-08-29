@@ -167,11 +167,17 @@ if [[ "$VARIANT" == mas ]]; then
   "info" : { "author" : "xcode", "version" : 1 }
 }
 EOF
+    # Compile into scratch and copy only the .car: actool also emits its own
+    # AppIcon.icns next to the catalog — a four-rendition stub (the large
+    # sizes live in the car) that would clobber the canonical full icns
+    # already copied above.
+    mkdir -p "$ICON_SCRATCH/out"
     xcrun actool "$ICON_SCRATCH/Assets.xcassets" \
-        --compile "$APP/Contents/Resources" \
+        --compile "$ICON_SCRATCH/out" \
         --platform macosx --minimum-deployment-target 14.0 \
         --app-icon AppIcon \
         --output-partial-info-plist "$ICON_SCRATCH/partial.plist" > /dev/null
+    cp "$ICON_SCRATCH/out/Assets.car" "$APP/Contents/Resources/Assets.car"
     /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" \
         "$APP/Contents/Info.plist"
     rm -rf "$ICON_SCRATCH"
