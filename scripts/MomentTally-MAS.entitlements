@@ -18,5 +18,21 @@
 	<!-- Powerbox: the JSON export writes to the NSSavePanel's chosen path. -->
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
+	<!-- iCloud sync (#121, #244). Unlike the direct variant there is no
+	     strip-when-unprovisioned path: a store build is always signed
+	     against a Mac App Store profile (package-mas.sh requires one), so
+	     the keys are unconditional. The environment is claimed explicitly —
+	     the #238 lesson: an unclaimed environment leaves the choice to
+	     cloudd's inference — and store builds are Production, always. -->
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.com.streetfortress.MomentTally</string>
+	</array>
+	<key>com.apple.developer.icloud-container-environment</key>
+	<string>Production</string>
 </dict>
 </plist>
