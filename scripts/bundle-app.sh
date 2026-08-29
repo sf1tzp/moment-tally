@@ -116,6 +116,11 @@ if [[ -d "$FONTS_DIR" ]]; then
     mkdir -p "$APP/Contents/Resources/Fonts"
     find "$FONTS_DIR" -maxdepth 1 \( -name '*.otf' -o -name '*.ttf' \) \
         -exec cp {} "$APP/Contents/Resources/Fonts/" \;
+    # Browser-downloaded fonts carry com.apple.quarantine (plus provenance
+    # and friends), and App Store Connect rejects any quarantined file in a
+    # submission (error 91109 — the same trap package-mas.sh strips off the
+    # profile). Clear xattrs on the injected copies; nothing reads them.
+    xattr -cr "$APP/Contents/Resources/Fonts"
     echo "Injected brand fonts from $FONTS_DIR"
 fi
 sed -e "s/@VERSION@/$VERSION/" -e "s/@BUILD@/$BUILD/" \
@@ -131,6 +136,45 @@ if [[ "$VARIANT" == mas ]]; then
     # the binary so App Store Connect skips the per-build questionnaire.
     /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" \
         "$APP/Contents/Info.plist"
+    # The store icon: App Store Connect extracts icons only from a compiled
+    # asset catalog (CFBundleIconName + Assets.car) — the bare .icns that
+    # serves the direct channel uploads fine but renders as the generic
+    # placeholder in Transporter/ASC. Rebuild the catalog from the canonical
+    # .icns at bundle time. actool ships with full Xcode, which only this
+    # variant requires — the direct channel stays CLT-only buildable.
+    ICON_SCRATCH="$(mktemp -d)"
+    iconutil --convert iconset "$ROOT/Resources/AppIcon.icns" \
+        --output "$ICON_SCRATCH/AppIcon.iconset"
+    APPICONSET="$ICON_SCRATCH/Assets.xcassets/AppIcon.appiconset"
+    mkdir -p "$APPICONSET"
+    cp "$ICON_SCRATCH/AppIcon.iconset/"*.png "$APPICONSET/"
+    printf '{"info":{"author":"xcode","version":1}}' \
+        > "$ICON_SCRATCH/Assets.xcassets/Contents.json"
+    cat > "$APPICONSET/Contents.json" <<'EOF'
+{
+  "images" : [
+    { "filename" : "icon_16x16.png",     "idiom" : "mac", "scale" : "1x", "size" : "16x16" },
+    { "filename" : "icon_16x16@2x.png",  "idiom" : "mac", "scale" : "2x", "size" : "16x16" },
+    { "filename" : "icon_32x32.png",     "idiom" : "mac", "scale" : "1x", "size" : "32x32" },
+    { "filename" : "icon_32x32@2x.png",  "idiom" : "mac", "scale" : "2x", "size" : "32x32" },
+    { "filename" : "icon_128x128.png",   "idiom" : "mac", "scale" : "1x", "size" : "128x128" },
+    { "filename" : "icon_128x128@2x.png","idiom" : "mac", "scale" : "2x", "size" : "128x128" },
+    { "filename" : "icon_256x256.png",   "idiom" : "mac", "scale" : "1x", "size" : "256x256" },
+    { "filename" : "icon_256x256@2x.png","idiom" : "mac", "scale" : "2x", "size" : "256x256" },
+    { "filename" : "icon_512x512.png",   "idiom" : "mac", "scale" : "1x", "size" : "512x512" },
+    { "filename" : "icon_512x512@2x.png","idiom" : "mac", "scale" : "2x", "size" : "512x512" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}
+EOF
+    xcrun actool "$ICON_SCRATCH/Assets.xcassets" \
+        --compile "$APP/Contents/Resources" \
+        --platform macosx --minimum-deployment-target 14.0 \
+        --app-icon AppIcon \
+        --output-partial-info-plist "$ICON_SCRATCH/partial.plist" > /dev/null
+    /usr/libexec/PlistBuddy -c "Add :CFBundleIconName string AppIcon" \
+        "$APP/Contents/Info.plist"
+    rm -rf "$ICON_SCRATCH"
 fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
