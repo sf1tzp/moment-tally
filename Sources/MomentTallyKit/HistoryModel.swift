@@ -5,7 +5,7 @@ import Observation
 /// What the History (charts) tab groups time by: either every value of one tag
 /// key (like the web UI's "Projects" pie for `proj`), or the member tags of a
 /// saved tag set (one series per key:value pair in the set).
-enum ChartGrouping: Hashable {
+package enum ChartGrouping: Hashable {
     case key(String)
     case tagSet(TagSet.ID)
 }
@@ -13,26 +13,37 @@ enum ChartGrouping: Hashable {
 /// A chart grouping resolved to plain data — the tag key, or a tag set's
 /// member labels in stored order — so the aggregation decisions below can be
 /// pure functions, unit-testable without a model or backend.
-enum GroupingDefinition: Hashable {
+package enum GroupingDefinition: Hashable {
     case key(String)
     case tagSetMembers([SpanLabel])
 }
 
 /// One aggregated series slice: a label ("infra", "proj: infra") and a duration.
-struct SeriesTotal: Identifiable {
-    var id: String { label }
-    let label: String
-    let seconds: TimeInterval
+package struct SeriesTotal: Identifiable {
+    package var id: String { label }
+    package let label: String
+    package let seconds: TimeInterval
+
+    package init(label: String, seconds: TimeInterval) {
+        self.label = label
+        self.seconds = seconds
+    }
 }
 
 /// One point of the daily chart: seconds spent on `label` during the bucket
 /// starting at `day` — a calendar day for week/30-day windows, a week or a
 /// month for longer ones (#163).
-struct DailyTotal: Identifiable {
-    var id: String { "\(day.timeIntervalSince1970)-\(label)" }
-    let day: Date
-    let label: String
-    let seconds: TimeInterval
+package struct DailyTotal: Identifiable {
+    package var id: String { "\(day.timeIntervalSince1970)-\(label)" }
+    package let day: Date
+    package let label: String
+    package let seconds: TimeInterval
+
+    package init(day: Date, label: String, seconds: TimeInterval) {
+        self.day = day
+        self.label = label
+        self.seconds = seconds
+    }
 }
 
 /// State and behaviour for the history views (Log, Calendar, History/charts).
@@ -41,46 +52,46 @@ struct DailyTotal: Identifiable {
 /// which owns auth and the live timer.
 @MainActor
 @Observable
-final class HistoryModel {
-    @ObservationIgnored unowned let app: AppModel
+package final class HistoryModel {
+    @ObservationIgnored package unowned let app: AppModel
 
     /// Midnight at the start of the displayed week (respects the system's
     /// first-day-of-week setting).
-    private(set) var weekStart: Date
+    package private(set) var weekStart: Date
     /// All timespans overlapping the displayed week — finished ones from the
     /// paged query plus any running timer — newest first.
-    private(set) var spans: [TimeSpan] = []
-    var isLoading = false
-    var errorMessage: String?
+    package private(set) var spans: [TimeSpan] = []
+    package var isLoading = false
+    package var errorMessage: String?
     /// The grouping the charts tab renders. Nil until first shown, then
     /// defaulted from the data (see `defaultGrouping`).
-    var chartGrouping: ChartGrouping?
+    package var chartGrouping: ChartGrouping?
     /// Optional second grouping, rendered as a second donut beside the first
     /// for comparing two breakdowns of the same week. Nil = off.
-    var chartGrouping2: ChartGrouping?
+    package var chartGrouping2: ChartGrouping?
     /// When true (and a second grouping is set) the charts render one combined
     /// breakdown — the first grouping split by the second — instead of two
     /// side-by-side donuts. Session-only, like the groupings.
-    var chartsCombined: Bool = false
+    package var chartsCombined: Bool = false
     /// The window the charts tab aggregates (#163): nil charts the displayed
     /// week (shared with Log and Calendar), a trailing range charts a wider
     /// window fetched separately below. Session-only, like the groupings.
-    var chartRange: TrailingRange?
+    package var chartRange: TrailingRange?
     /// Spans fetched for the charts' trailing range — kept apart from `spans`
     /// so the Log and Calendar stay on their week whatever the charts show.
-    private(set) var rangeSpans: [TimeSpan] = []
-    var isLoadingRange = false
+    package private(set) var rangeSpans: [TimeSpan] = []
+    package var isLoadingRange = false
     /// A one-shot hand-off from the Calendar tab (#130): the id of a span the
     /// Log tab should scroll to and open for editing when it next appears.
     /// The Log view clears it once consumed.
-    var pendingLogEditID: Int?
+    package var pendingLogEditID: Int?
 
     /// Ask the Log tab to open this span's editor (#130). For a running span
     /// this also claims the shared edit session — synchronously, before the
     /// caller triggers the tab switch: the Log can render its expanded row in
     /// the same pass, and an unclaimed running editor collapses itself (see
     /// `TimeSpanEditorView.runningBody`).
-    func requestLogEdit(of span: TimeSpan) {
+    package func requestLogEdit(of span: TimeSpan) {
         pendingLogEditID = span.id
         if span.isRunning {
             app.claimEditingNow(span)
@@ -109,7 +120,7 @@ final class HistoryModel {
     /// Invalidates in-flight range fetches when the range changes mid-fetch.
     @ObservationIgnored private var rangeGeneration = 0
 
-    init(app: AppModel) {
+    package init(app: AppModel) {
         self.app = app
         weekStart = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start
             ?? Calendar.current.startOfDay(for: Date())
@@ -117,14 +128,14 @@ final class HistoryModel {
 
     // MARK: Week navigation
 
-    var weekInterval: DateInterval {
+    package var weekInterval: DateInterval {
         let end = Calendar.current.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
         return DateInterval(start: weekStart, end: end)
     }
 
     /// The seven day-intervals of the displayed week (handles DST-shortened
     /// and -lengthened days by walking real calendar days).
-    var days: [DateInterval] {
+    package var days: [DateInterval] {
         var result: [DateInterval] = []
         var cursor = weekStart
         for _ in 0..<7 {
@@ -135,21 +146,21 @@ final class HistoryModel {
         return result
     }
 
-    var weekLabel: String {
+    package var weekLabel: String {
         let last = weekInterval.end.addingTimeInterval(-1)
         let start = weekStart.formatted(.dateTime.month(.abbreviated).day())
         let end = last.formatted(.dateTime.month(.abbreviated).day().year())
         return "\(start) – \(end)"
     }
 
-    var isCurrentWeek: Bool {
+    package var isCurrentWeek: Bool {
         weekInterval.contains(Date())
     }
 
-    func goToPreviousWeek() { shiftWeek(by: -1) }
-    func goToNextWeek() { shiftWeek(by: 1) }
+    package func goToPreviousWeek() { shiftWeek(by: -1) }
+    package func goToNextWeek() { shiftWeek(by: 1) }
 
-    func goToToday() {
+    package func goToToday() {
         if let start = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start {
             weekStart = start
             Task { await reload() }
@@ -168,7 +179,7 @@ final class HistoryModel {
     /// Forget everything loaded — called when the active backend switches,
     /// since spans (and their ids) from one store mean nothing in the other.
     /// The next look at a history tab reloads from the new backend.
-    func reset() {
+    package func reset() {
         loadGeneration += 1     // invalidates any in-flight load
         rangeGeneration += 1
         spans = []
@@ -185,7 +196,7 @@ final class HistoryModel {
         pendingLogEditID = nil  // span ids mean nothing in the new store
     }
 
-    func reload() async {
+    package func reload() async {
         guard let backend = app.api, app.isReady else { return }
         loadGeneration += 1
         let generation = loadGeneration
@@ -223,14 +234,14 @@ final class HistoryModel {
 
     /// Reload only if a history view has already fetched data — called after
     /// timer mutations elsewhere in the app so open views stay fresh.
-    func reloadIfLoaded() async {
+    package func reloadIfLoaded() async {
         if hasLoaded { await reload() }
         await reloadRangeIfLoaded()
     }
 
     /// First-load hook for the tab views: fetch once, then leave navigation
     /// and mutations to trigger further loads (so switching tabs is instant).
-    func loadIfNeeded() async {
+    package func loadIfNeeded() async {
         if !hasLoaded { await reload() }
     }
 
@@ -239,7 +250,7 @@ final class HistoryModel {
     /// Fetch the charts' trailing range unless `rangeSpans` already holds it —
     /// run from the charts tab on appearance and on every range change, so a
     /// mere tab switch doesn't re-page a year of history.
-    func loadRangeIfNeeded() async {
+    package func loadRangeIfNeeded() async {
         guard let range = chartRange, loadedRange != range else { return }
         await reloadRange()
     }
@@ -247,7 +258,7 @@ final class HistoryModel {
     /// Page through the trailing range, like the Label Review's scan: the
     /// window can cover far more than a week, so progress shows via
     /// `isLoadingRange` and a generation counter drops superseded fetches.
-    func reloadRange() async {
+    package func reloadRange() async {
         guard let range = chartRange, let backend = app.api, app.isReady else { return }
         rangeGeneration += 1
         let generation = rangeGeneration
@@ -282,7 +293,7 @@ final class HistoryModel {
 
     /// Refresh whichever window the charts are showing — the charts header's
     /// refresh button, in either mode.
-    func reloadChartWindow() async {
+    package func reloadChartWindow() async {
         if chartRange == nil {
             await reload()
         } else {
@@ -305,7 +316,7 @@ final class HistoryModel {
     // MARK: Editing
 
     /// Update a timespan in place. Returns true on success (the editor closes).
-    func update(id: Int, start: Date, end: Date?, tags: [SpanLabel], note: String) async -> Bool {
+    package func update(id: Int, start: Date, end: Date?, tags: [SpanLabel], note: String) async -> Bool {
         guard let backend = app.api else { return false }
         do {
             try await app.ensureTagDefinitions(for: tags)
@@ -324,7 +335,7 @@ final class HistoryModel {
         }
     }
 
-    func delete(id: Int) async {
+    package func delete(id: Int) async {
         guard let backend = app.api else { return }
         do {
             try await backend.removeTimeSpan(id: id)
@@ -345,7 +356,7 @@ final class HistoryModel {
     /// range back from now. "All history" starts at the earliest fetched span
     /// — its nominal 1970 lower bound would make an unusable axis domain —
     /// and degenerates to today while nothing is fetched.
-    var chartInterval: DateInterval {
+    package var chartInterval: DateInterval {
         guard let range = chartRange else { return weekInterval }
         let now = Date()
         let start = range == .all
@@ -355,14 +366,14 @@ final class HistoryModel {
     }
 
     /// The spans the charts aggregate over — the week's, or the range fetch.
-    var chartSpans: [TimeSpan] {
+    package var chartSpans: [TimeSpan] {
         chartRange == nil ? spans : rangeSpans
     }
 
     /// One bar of the "per day" chart covers this much: days up to a month of
     /// them, then weeks, then months — bar counts stay in the teens rather
     /// than growing with the window.
-    var chartBucketUnit: Calendar.Component {
+    package var chartBucketUnit: Calendar.Component {
         switch chartRange {
         case nil, .days30: .day
         case .days90: .weekOfYear
@@ -373,13 +384,13 @@ final class HistoryModel {
     /// The bar intervals of the chart window. The week keeps its exact seven
     /// `days`; trailing ranges use calendar-aligned buckets clipped to the
     /// window.
-    var chartBuckets: [DateInterval] {
+    package var chartBuckets: [DateInterval] {
         chartRange == nil ? days : Self.buckets(of: chartBucketUnit, spanning: chartInterval)
     }
 
     /// "May 6 – Aug 4, 2026" — the header label while a trailing range is
     /// active (the week keeps `weekLabel`).
-    var chartRangeLabel: String {
+    package var chartRangeLabel: String {
         let interval = chartInterval
         let style = Date.FormatStyle.dateTime.month(.abbreviated).day().year()
         return "\(interval.start.formatted(style)) – \(interval.end.formatted(style))"
@@ -388,9 +399,9 @@ final class HistoryModel {
     /// The calendar-aligned `unit` buckets covering `interval`, the edge ones
     /// clipped to it: fetched spans can overlap the window's edges, and an
     /// unclipped first bucket would count time from before the range began.
-    nonisolated static func buckets(of unit: Calendar.Component,
-                                    spanning interval: DateInterval,
-                                    calendar: Calendar = .current) -> [DateInterval] {
+    package nonisolated static func buckets(of unit: Calendar.Component,
+                                            spanning interval: DateInterval,
+                                            calendar: Calendar = .current) -> [DateInterval] {
         guard interval.duration > 0 else { return [] }
         var result: [DateInterval] = []
         var cursor = calendar.dateInterval(of: unit, for: interval.start)?.start
@@ -413,7 +424,7 @@ final class HistoryModel {
     /// Seconds of `span` that fall inside `interval`. Running spans count up
     /// to now; spans are clipped at the interval edges so overnight entries
     /// contribute to each day they touch.
-    func clippedSeconds(of span: TimeSpan, in interval: DateInterval) -> TimeInterval {
+    package func clippedSeconds(of span: TimeSpan, in interval: DateInterval) -> TimeInterval {
         let end = span.end ?? Date()
         let start = max(span.start, interval.start)
         let clippedEnd = min(end, interval.end)
@@ -444,8 +455,8 @@ final class HistoryModel {
     /// Pure core of `seriesLabels(for:grouping:)`, shared with the combined
     /// pair mapping below. Tag-set matches come back in the set's stored
     /// label order.
-    nonisolated static func seriesLabels(tags: [SpanLabel],
-                                         definition: GroupingDefinition) -> [String] {
+    package nonisolated static func seriesLabels(tags: [SpanLabel],
+                                                 definition: GroupingDefinition) -> [String] {
         switch definition {
         case .key(let key):
             return tags.first(where: { $0.key == key }).map { [$0.value.isEmpty ? "(no value)" : $0.value] } ?? []
@@ -457,7 +468,7 @@ final class HistoryModel {
     }
 
     /// Chart-window totals per series, largest first.
-    func totals(for grouping: ChartGrouping) -> [SeriesTotal] {
+    package func totals(for grouping: ChartGrouping) -> [SeriesTotal] {
         var sums: [String: TimeInterval] = [:]
         let interval = chartInterval
         for span in chartSpans {
@@ -473,7 +484,7 @@ final class HistoryModel {
 
     /// Per-bucket, per-series totals across the chart window, for the daily
     /// chart (buckets are days for a week, wider for trailing ranges).
-    func dailyTotals(for grouping: ChartGrouping) -> [DailyTotal] {
+    package func dailyTotals(for grouping: ChartGrouping) -> [DailyTotal] {
         var result: [DailyTotal] = []
         for day in chartBuckets {
             var sums: [String: TimeInterval] = [:]
@@ -495,7 +506,7 @@ final class HistoryModel {
 
     /// Separator inside a combined pair label. `HistoryChartsView` splits on
     /// its first occurrence to regroup pairs by outer value.
-    nonisolated static let pairSeparator = " · "
+    package nonisolated static let pairSeparator = " · "
 
     /// The single "outer · inner" pair series a span contributes to in the
     /// combined view, or nil to exclude it. Strict semantics — every span
@@ -506,9 +517,9 @@ final class HistoryModel {
     /// - A span matching several members of a tag-set dimension counts only
     ///   toward the FIRST matched member in the set's stored label order —
     ///   no cross-product, sums never exceed tracked time.
-    nonisolated static func pairLabel(tags: [SpanLabel],
-                                      outer: GroupingDefinition,
-                                      inner: GroupingDefinition) -> String? {
+    package nonisolated static func pairLabel(tags: [SpanLabel],
+                                              outer: GroupingDefinition,
+                                              inner: GroupingDefinition) -> String? {
         guard let outerLabel = seriesLabels(tags: tags, definition: outer).first,
               let innerLabel = seriesLabels(tags: tags, definition: inner).first
         else { return nil }
@@ -530,7 +541,7 @@ final class HistoryModel {
 
     /// Chart-window totals of the outer grouping broken down by the inner one
     /// — one series per "outer · inner" pair, largest first.
-    func combinedTotals(outer: ChartGrouping, inner: ChartGrouping) -> [SeriesTotal] {
+    package func combinedTotals(outer: ChartGrouping, inner: ChartGrouping) -> [SeriesTotal] {
         var sums: [String: TimeInterval] = [:]
         let interval = chartInterval
         for span in chartSpans {
@@ -546,7 +557,7 @@ final class HistoryModel {
 
     /// Per-bucket, per-pair totals across the chart window —
     /// `dailyTotals(for:)` for the combined view.
-    func combinedDailyTotals(outer: ChartGrouping, inner: ChartGrouping) -> [DailyTotal] {
+    package func combinedDailyTotals(outer: ChartGrouping, inner: ChartGrouping) -> [DailyTotal] {
         var result: [DailyTotal] = []
         for day in chartBuckets {
             var sums: [String: TimeInterval] = [:]
@@ -566,19 +577,19 @@ final class HistoryModel {
 
     /// Total tracked seconds in the chart window (each span counted once, no
     /// grouping).
-    var chartTotalSeconds: TimeInterval {
+    package var chartTotalSeconds: TimeInterval {
         let interval = chartInterval
         return chartSpans.reduce(0) { $0 + clippedSeconds(of: $1, in: interval) }
     }
 
     /// Seconds tracked during one day of the week (spans clipped to the day).
-    func totalSeconds(in day: DateInterval) -> TimeInterval {
+    package func totalSeconds(in day: DateInterval) -> TimeInterval {
         spans.reduce(0) { $0 + clippedSeconds(of: $1, in: day) }
     }
 
     /// The most sensible default chart grouping: the tag key used most in the
     /// chart window, falling back to the first known tag definition.
-    func defaultGrouping() -> ChartGrouping? {
+    package func defaultGrouping() -> ChartGrouping? {
         var counts: [String: Int] = [:]
         for span in chartSpans {
             for tag in span.labels { counts[tag.key, default: 0] += 1 }
@@ -594,7 +605,7 @@ final class HistoryModel {
 
     /// Tag keys offered by the grouping picker: every key seen in the chart
     /// window plus every defined key, deduplicated, alphabetical.
-    var groupableKeys: [String] {
+    package var groupableKeys: [String] {
         var keys = Set(app.tagDefinitions.map(\.key))
         for span in chartSpans {
             for tag in span.labels { keys.insert(tag.key) }
@@ -604,7 +615,7 @@ final class HistoryModel {
 }
 
 /// "5h 12m", "42m", "38s" — compact duration for totals and log rows.
-func formatDuration(_ seconds: TimeInterval) -> String {
+package func formatDuration(_ seconds: TimeInterval) -> String {
     let total = Int(seconds.rounded())
     let hours = total / 3600
     let minutes = (total % 3600) / 60

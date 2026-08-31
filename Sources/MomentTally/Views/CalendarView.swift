@@ -1,5 +1,6 @@
 import SwiftUI
 import MomentTallyCore
+import MomentTallyKit
 
 /// The Calendar tab: a 7-day week grid with a vertical time axis, moments as
 /// colored blocks (like the web UI's calendar). Overlapping spans share the

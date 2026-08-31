@@ -1,4 +1,5 @@
 import SwiftUI
+import MomentTallyKit
 
 /// The Help tab: a "Replay the tour" launcher up top (issue #192 — the
 /// interactive walkthrough explains the app better than any of the prose

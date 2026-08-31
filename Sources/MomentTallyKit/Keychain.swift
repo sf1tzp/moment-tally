@@ -7,7 +7,7 @@ import Security
 ///
 /// Note: when running an unsigned dev build from the terminal, macOS may prompt
 /// once to allow keychain access. A signed, bundled build won't.
-enum Keychain {
+package enum Keychain {
     private static let service = "com.streetfortress.MomentTally"
     /// Pre-rename service identifiers, newest first: the PrimeTime era
     /// (#195), then the original traggo-menu-app era (#64). Items stored
@@ -17,7 +17,7 @@ enum Keychain {
     private static let legacyServices = ["tools.primetime.PrimeTime",
                                          "lol.stev.traggo-menu-app"]
 
-    static func set(_ value: String, account: String) {
+    package static func set(_ value: String, account: String) {
         let base = baseQuery(service: service, account: account)
         // Upsert: delete any existing item, then add fresh.
         SecItemDelete(base as CFDictionary)
@@ -31,7 +31,7 @@ enum Keychain {
         }
     }
 
-    static func get(account: String) -> String? {
+    package static func get(account: String) -> String? {
         if let value = copy(service: service, account: account) {
             return value
         }
@@ -46,7 +46,7 @@ enum Keychain {
         return nil
     }
 
-    static func delete(account: String) {
+    package static func delete(account: String) {
         SecItemDelete(baseQuery(service: service, account: account) as CFDictionary)
         for legacy in legacyServices {
             SecItemDelete(baseQuery(service: legacy, account: account) as CFDictionary)

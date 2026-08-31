@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import Charts
 import MomentTallyCore
+import MomentTallyKit
 
 /// The interactive walkthrough of the mark model (issue #93), presented as
 /// seven Next/Back pages. Every page reads and mutates the one shared

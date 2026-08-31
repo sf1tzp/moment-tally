@@ -14,7 +14,7 @@ struct MomentTallyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ScaffoldRootView()
+            MomentTallyRootView()
         }
     }
 }

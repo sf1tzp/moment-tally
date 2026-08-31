@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MomentTally
+@testable import MomentTallyKit
 @testable import MomentTallyCore
 
 /// The History charts' trailing-range windowing (#163): calendar-aligned

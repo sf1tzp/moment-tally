@@ -9,13 +9,22 @@ import MomentTallyCore
 /// Auth: Traggo expects `Authorization: traggo <token>` (literally the word
 /// "traggo", not "Bearer"). The token is a "device" token minted by `login` —
 /// a traggo concern, which is why `login` is not part of `Backend`.
-struct TraggoClient: Backend {
-    var baseURL: URL
-    var token: String?
+package struct TraggoClient: Backend {
+    package var baseURL: URL
+    package var token: String?
 
-    struct APIError: LocalizedError {
-        let message: String
-        var errorDescription: String? { message }
+    package init(baseURL: URL, token: String?) {
+        self.baseURL = baseURL
+        self.token = token
+    }
+
+    package struct APIError: LocalizedError {
+        package let message: String
+        package var errorDescription: String? { message }
+
+        package init(message: String) {
+            self.message = message
+        }
     }
 
     // MARK: GraphQL envelopes
@@ -33,7 +42,7 @@ struct TraggoClient: Backend {
     private struct GraphQLError: Decodable { let message: String }
 
     /// Placeholder for operations that take no variables.
-    struct NoVariables: Encodable {}
+    package struct NoVariables: Encodable {}
 
     // MARK: Core request
 
@@ -72,7 +81,7 @@ struct TraggoClient: Backend {
 
     // MARK: Session (traggo-specific, not part of Backend)
 
-    func login(username: String, password: String, deviceName: String) async throws -> Login {
+    package func login(username: String, password: String, deviceName: String) async throws -> Login {
         struct Variables: Encodable {
             let username: String
             let pass: String
@@ -100,14 +109,14 @@ struct TraggoClient: Backend {
 
     /// Validates the stored token and returns the logged-in user (nil if the
     /// token is no longer valid).
-    func currentUser() async throws -> User? {
+    package func currentUser() async throws -> User? {
         struct Payload: Decodable { let currentUser: User? }
         let query = "query { currentUser { id name admin } }"
         return try await run(query, variables: NoVariables(), as: Payload.self).currentUser
     }
 
     /// All currently-running timespans (end == null), newest first.
-    func timers() async throws -> [TimeSpan] {
+    package func timers() async throws -> [TimeSpan] {
         struct Payload: Decodable { let timers: [TraggoTimeSpan]? }
         let query = """
         query { timers { id start end note tags { key value } } }
@@ -117,7 +126,7 @@ struct TraggoClient: Backend {
     }
 
     /// Existing tag definitions (the reusable keys, with colors).
-    func labelDefinitions() async throws -> [LabelDefinition] {
+    package func labelDefinitions() async throws -> [LabelDefinition] {
         struct Payload: Decodable { let tags: [TagDefinition]? }
         let query = "query { tags { key color } }"
         return try await run(query, variables: NoVariables(), as: Payload.self)
@@ -126,7 +135,7 @@ struct TraggoClient: Backend {
 
     /// Create a tag definition. Required before a key can be attached to a
     /// timespan (the server rejects unknown keys).
-    func createLabelDefinition(key: String, color: String) async throws {
+    package func createLabelDefinition(key: String, color: String) async throws {
         struct Variables: Encodable { let key: String; let color: String }
         struct Payload: Decodable { let createTag: TagDefinition? }
         // Select key AND color: the payload decodes as TagDefinition, which
@@ -141,7 +150,7 @@ struct TraggoClient: Backend {
 
     /// Change the color of an existing tag key. Traggo stores color per key,
     /// so this affects that key everywhere it's used.
-    func updateLabelDefinition(key: String, color: String) async throws {
+    package func updateLabelDefinition(key: String, color: String) async throws {
         struct Variables: Encodable { let key: String; let color: String }
         struct Payload: Decodable { let updateTag: TagDefinition? }
         let query = """
@@ -153,7 +162,7 @@ struct TraggoClient: Backend {
     }
 
     /// Start a running timespan (no end time).
-    func startTimeSpan(start: Date, labels: [SpanLabel], note: String) async throws -> TimeSpan {
+    package func startTimeSpan(start: Date, labels: [SpanLabel], note: String) async throws -> TimeSpan {
         struct Variables: Encodable {
             let start: TraggoTime
             let tags: [TimeSpanTag]
@@ -175,7 +184,7 @@ struct TraggoClient: Backend {
     /// Update a timespan in place. `start` and `note` are required by the schema,
     /// so callers pass the current values for anything they're not changing.
     /// A nil `end` leaves the timespan running.
-    func updateTimeSpan(id: Int, start: Date, end: Date?, labels: [SpanLabel], note: String) async throws -> TimeSpan {
+    package func updateTimeSpan(id: Int, start: Date, end: Date?, labels: [SpanLabel], note: String) async throws -> TimeSpan {
         struct Variables: Encodable {
             let id: Int
             let start: TraggoTime
@@ -200,7 +209,7 @@ struct TraggoClient: Backend {
     /// One page of finished timespans overlapping [from, to], newest first.
     /// Running timespans (end == null) are excluded server-side; merge in
     /// `timers()` for a complete picture.
-    func timeSpans(from: Date, to: Date, page: PageToken?) async throws -> TimeSpanPage {
+    package func timeSpans(from: Date, to: Date, page: PageToken?) async throws -> TimeSpanPage {
         // On the first page startId must be *absent* so the server pins the walk
         // to the current newest id (an explicit 0 would filter to nothing).
         // The server caps pageSize at 100.
@@ -229,7 +238,7 @@ struct TraggoClient: Backend {
     }
 
     /// Delete a timespan by id.
-    func removeTimeSpan(id: Int) async throws {
+    package func removeTimeSpan(id: Int) async throws {
         struct Variables: Encodable { let id: Int }
         // Decode only what the mutation selects — decoding a full TimeSpan here
         // throws keyNotFound and masks a successful delete as an error.
@@ -244,7 +253,7 @@ struct TraggoClient: Backend {
     }
 
     /// Stop a running timespan by id.
-    func stopTimeSpan(id: Int, end: Date) async throws -> TimeSpan {
+    package func stopTimeSpan(id: Int, end: Date) async throws -> TimeSpan {
         struct Variables: Encodable { let id: Int; let end: TraggoTime }
         struct Payload: Decodable { let stopTimeSpan: TraggoTimeSpan }
         let query = """

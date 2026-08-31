@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 import Testing
-@testable import MomentTally
+@testable import MomentTallyKit
 @testable import MomentTallyCore
 
 /// The traggo importer's engine, exercised with a `LocalBackend` on both ends

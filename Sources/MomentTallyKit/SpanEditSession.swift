@@ -13,20 +13,20 @@ import Observation
 /// session holds drafts and answers "did they change", nothing more.
 @MainActor
 @Observable
-final class SpanEditSession {
+package final class SpanEditSession {
     /// The running timespan the drafts belong to. The span itself stays in
     /// `AppModel.activeTimers` — a session never caches it, so commits always
     /// compare against and write over the freshest known state.
-    let spanID: TimeSpan.ID
+    package let spanID: TimeSpan.ID
 
     /// The popover's editor doesn't surface the start time, only the Log
     /// view's does — but the draft lives here regardless, so a commit writes
     /// start, tags, and note in one update instead of two racing ones.
-    var startDraft: Date
-    var tagDrafts: [TagRow]
-    var noteDraft: String
+    package var startDraft: Date
+    package var tagDrafts: [TagRow]
+    package var noteDraft: String
 
-    init(span: TimeSpan) {
+    package init(span: TimeSpan) {
         spanID = span.id
         startDraft = span.start
         let rows = span.labels.map { TagRow(key: $0.key, value: $0.value) }
@@ -36,7 +36,7 @@ final class SpanEditSession {
 
     /// Whether the drafts differ from the span as currently known — the guard
     /// that keeps focus hops and redundant saves from firing writes.
-    func differs(from span: TimeSpan) -> Bool {
+    package func differs(from span: TimeSpan) -> Bool {
         tagDrafts.labels != span.labels
             || noteDraft != span.note
             || startDraft != span.start

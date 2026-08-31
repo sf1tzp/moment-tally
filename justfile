@@ -36,6 +36,29 @@ ios-test sim="iPhone 17 Pro": ios-project
     -destination 'platform=iOS Simulator,name={{sim}}' \
     -derivedDataPath .build/ios-dd
 
+# Build for, install on, and launch a plugged-in iPhone/iPad (first match
+# from `xcrun devicectl list devices`, or pass its identifier). One-time
+# device prep: unlock + Trust This Computer, then enable Settings › Privacy
+# & Security › Developer Mode. Automatic signing registers the device and
+# re-mints the profile on first build (needs the Xcode Apple ID session —
+# i.e. the mini, per the machine-roles split).
+ios-device device="": ios-project
+  #!/usr/bin/env bash
+  set -euo pipefail
+  id="{{device}}"
+  if [[ -z "$id" ]]; then
+    id=$(xcrun devicectl list devices 2>/dev/null | grep physical \
+         | grep -oE '[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}' | head -1)
+    [[ -n "$id" ]] || { echo "error: no physical device attached" >&2; exit 1; }
+  fi
+  xcodebuild -project ios/MomentTally.xcodeproj -scheme MomentTallyIOS \
+    -destination "platform=iOS,id=$id" -derivedDataPath .build/ios-dd \
+    -allowProvisioningUpdates -allowProvisioningDeviceRegistration build
+  xcrun devicectl device install app --device "$id" \
+    ".build/ios-dd/Build/Products/Debug-iphoneos/Moment Tally.app"
+  xcrun devicectl device process launch --device "$id" \
+    com.streetfortress.MomentTally
+
 # --- Release assets (capture pipeline) ---
 
 # Process raw demo-mode captures (captures/raw/) into distributable

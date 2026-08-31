@@ -1,5 +1,6 @@
 import SwiftUI
 import MomentTallyCore
+import MomentTallyKit
 
 /// The Log tab: a day-sectioned, scrollable list of the week's moments.
 /// Clicking a row expands it into an inline `TimeSpanEditorView`.

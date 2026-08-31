@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 import Testing
-@testable import MomentTally
+@testable import MomentTallyKit
 @testable import MomentTallyCore
 
 /// End-to-end against a *live* Moment Tally server: two in-memory local stores

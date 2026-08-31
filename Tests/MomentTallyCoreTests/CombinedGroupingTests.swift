@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MomentTally
+@testable import MomentTallyKit
 @testable import MomentTallyCore
 
 /// The combined History view's span→pair mapping (#109), strict semantics:

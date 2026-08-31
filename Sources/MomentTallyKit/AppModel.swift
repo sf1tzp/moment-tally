@@ -3,7 +3,9 @@ import Foundation
 import MomentTallyCore
 import Observation
 import SwiftUI
-import AppKit
+#if os(iOS)
+import UIKit
+#endif
 
 /// The whole app's state and behaviour. `@MainActor` because everything here
 /// drives the UI; `@Observable` so SwiftUI views re-render when it changes.
@@ -17,41 +19,38 @@ import AppKit
 /// importer's source.
 @MainActor
 @Observable
-final class AppModel {
+package final class AppModel {
     /// True when launched in demo mode (#39). The whole session is then
     /// sandboxed: the local store is a regenerated `demo.sqlite`, `defaults`
     /// is a wiped scratch suite, the keychain token is ignored, and Settings
     /// hides the storage picker — so nothing done in a demo can touch real
     /// data or preferences.
-    let isDemo: Bool
+    package let isDemo: Bool
 
     /// Where every settings read/write goes: the standard domain normally, a
     /// scratch suite in demo mode. One indirection instead of guards at each
     /// call site.
     @ObservationIgnored private let defaults: UserDefaults
 
-    /// Sparkle auto-update (#46). Inert (nil controller) in dev builds, tests
-    /// and demo mode — see UpdaterModel.
-    let updater: UpdaterModel
-
-    /// Start at Login (#169). Inert in dev builds, tests and demo mode for
-    /// the same reasons — see LoginItemModel.
-    let loginItem: LoginItemModel
+    // (Sparkle auto-update and Start at Login used to live here; they are
+    // Mac app-shell concerns — Sparkle and SMAppService have no iOS
+    // analogue — so the Mac shell owns them now and injects them into the
+    // environment beside this model. See App.swift.)
 
     // MARK: Persisted configuration
 
     /// The traggo server URL — import-only now: the one-shot importer's
     /// source. (The sync server's URL lives in the store's sync_server row.)
-    var serverURL: String {
+    package var serverURL: String {
         didSet { defaults.set(serverURL, forKey: Keys.serverURL) }
     }
 
-    var deviceName: String {
+    package var deviceName: String {
         didSet { defaults.set(deviceName, forKey: Keys.deviceName) }
     }
 
     /// The saved tag sets, persisted in the local store.
-    var tagSets: [TagSet] {
+    package var tagSets: [TagSet] {
         didSet { persistTagSets() }
     }
 
@@ -64,17 +63,17 @@ final class AppModel {
     /// store next to the set members, so they ride label-set sync and follow
     /// the user across Macs (#92). Entries for deleted sets linger
     /// harmlessly (in memory only — the store drops them with the set).
-    var quickLabels: [String: [TagRow]] {
+    package var quickLabels: [String: [TagRow]] {
         didSet { persistQuickLabels() }
     }
 
     /// The copy/paste clipboard for quick labels in the Label Set editor.
     /// Session-only by design: it's a hand-off between two edits, not state
     /// worth keeping.
-    var quickLabelsClipboard: [TagRow]?
+    package var quickLabelsClipboard: [TagRow]?
 
     /// The quick labels to offer for a set (empty when none are defined).
-    func quickLabels(for set: TagSet) -> [TagRow] {
+    package func quickLabels(for set: TagSet) -> [TagRow] {
         quickLabels[set.id.uuidString] ?? []
     }
 
@@ -85,7 +84,7 @@ final class AppModel {
     /// remaining useful for navigating Tag Review; an explicitly stored false
     /// (a user who turned it off) is respected. Syncs as a user preference
     /// when a server is connected.
-    var colorTagsByValue: Bool {
+    package var colorTagsByValue: Bool {
         didSet {
             defaults.set(colorTagsByValue, forKey: Keys.colorTagsByValue)
             preferenceChanged()
@@ -95,14 +94,14 @@ final class AppModel {
     /// Per-`key: value` color overrides (hex strings), keyed by
     /// `ValueColorKey.join` — first-class rows in the local store, and
     /// per-user (not per-Mac) once a sync server is connected.
-    var valueColors: [String: String] {
+    package var valueColors: [String: String] {
         didSet { persistValueColors() }
     }
 
     /// How many tag sets the popover's Quick start list shows, in tag-set
     /// order; 0 means all. Keeps the popover a quick-glance surface when many
     /// sets are saved. Syncs as a user preference when a server is connected.
-    var menuTagSetLimit: Int {
+    package var menuTagSetLimit: Int {
         didSet {
             defaults.set(menuTagSetLimit, forKey: Keys.menuTagSetLimit)
             preferenceChanged()
@@ -114,46 +113,46 @@ final class AppModel {
     /// whose context makes the key obvious, and the short form keeps the
     /// Launcher card overlay tight. Purely cosmetic, so local-only — no
     /// `preferenceChanged()`, no sync schema change.
-    var showQuickLabelKeys: Bool {
+    package var showQuickLabelKeys: Bool {
         didSet { defaults.set(showQuickLabelKeys, forKey: Keys.showQuickLabelKeys) }
     }
 
     // MARK: Runtime state (observed by the UI)
 
-    var user: User?
+    package var user: User?
     /// Every running timespan, oldest first — the first-started timer stays at
     /// the top of the popover and new ones join below. Traggo allows
     /// overlapping timespans, and the menu can start one alongside another
     /// (the ＋ on a quick-start row, the blank-timer row), so this is a list
     /// rather than a single timer.
-    var activeTimers: [TimeSpan] = []
-    var tagDefinitions: [LabelDefinition] = []
+    package var activeTimers: [TimeSpan] = []
+    package var tagDefinitions: [LabelDefinition] = []
 
     /// The first-started running timespan — the popover's top row and the one
     /// the menu-bar label counts up for.
-    var activeTimer: TimeSpan? { activeTimers.first }
+    package var activeTimer: TimeSpan? { activeTimers.first }
 
     /// The in-flight edit of a running timespan, or nil when nothing is being
     /// edited. One at a time, shared by every editing surface — see
     /// `SpanEditSession`. Surviving here (not in view `@State`) is what lets
     /// drafts outlive the popover closing (#70).
-    var editSession: SpanEditSession?
-    var errorMessage: String?
-    var isBusy = false
+    package var editSession: SpanEditSession?
+    package var errorMessage: String?
+    package var isBusy = false
     /// Updated once per second while a timer runs so elapsed labels tick.
-    var currentDate = Date()
+    package var currentDate = Date()
 
     /// Whether the store is ready to serve data — as soon as it opens (its
     /// `user` is set synchronously); false only if opening the database
     /// failed.
-    var isReady: Bool { user != nil }
+    package var isReady: Bool { user != nil }
 
     /// History (log / calendar / charts) state, split out so this class stays
     /// focused on live-timer concerns.
-    @ObservationIgnored private(set) lazy var history = HistoryModel(app: self)
+    @ObservationIgnored package private(set) lazy var history = HistoryModel(app: self)
 
     /// Tag review (cardinality + cleanup) state, split out for the same reason.
-    @ObservationIgnored private(set) lazy var review = TagReviewModel(app: self)
+    @ObservationIgnored package private(set) lazy var review = TagReviewModel(app: self)
 
     // MARK: Private, non-observed
 
@@ -176,7 +175,7 @@ final class AppModel {
     /// launch — always start with it unset and show the onboarding again.
     /// Read once at launch and written once at the end, so a plain computed
     /// property (not observation-tracked) is enough.
-    var hasCompletedOnboarding: Bool {
+    package var hasCompletedOnboarding: Bool {
         get { defaults.bool(forKey: Keys.hasCompletedOnboarding) }
         set { defaults.set(newValue, forKey: Keys.hasCompletedOnboarding) }
     }
@@ -184,10 +183,10 @@ final class AppModel {
     /// The storage seam, for this model and its siblings (see
     /// `HistoryModel`). Always the local store; the protocol survives
     /// because the importer still consumes arbitrary backends.
-    var api: (any Backend)? { localStore }
+    package var api: (any Backend)? { localStore }
 
     /// Where the local database lives, for display in Settings.
-    var localDatabasePath: String? {
+    package var localDatabasePath: String? {
         localStore?.databaseURL?.path
     }
     @ObservationIgnored private var tickTimer: Timer?
@@ -218,17 +217,22 @@ final class AppModel {
 
     // MARK: Lifecycle
 
-    init(demo: Bool = DemoMode.isActive) {
+    package init(demo: Bool = DemoMode.isActive) {
         isDemo = demo
-        updater = UpdaterModel(demo: demo)
-        loginItem = LoginItemModel(demo: demo)
         let defaults = Self.makeDefaults(demo: demo)
         self.defaults = defaults
         // The fallback doubles as the URL hint in the Traggo import forms —
         // point at the public traggo.net, not an internal host.
         serverURL = defaults.string(forKey: Keys.serverURL) ?? "https://traggo.net"
+        #if os(macOS)
         deviceName = defaults.string(forKey: Keys.deviceName)
             ?? "Menu Bar (\(Host.current().localizedName ?? "Mac"))"
+        #else
+        // No NSHost on iOS, and UIDevice.name is the generic "iPhone" since
+        // iOS 16 without an entitlement — the model name reads better.
+        deviceName = defaults.string(forKey: Keys.deviceName)
+            ?? UIDevice.current.model
+        #endif
         colorTagsByValue = defaults.object(forKey: Keys.colorTagsByValue) == nil
             ? true : defaults.bool(forKey: Keys.colorTagsByValue)  // default on
         menuTagSetLimit = defaults.object(forKey: Keys.menuTagSetLimit) == nil
@@ -319,14 +323,14 @@ final class AppModel {
 
     /// The engine reconciling the store with a connected sync server; nil
     /// when no server is connected (or in demo mode — a demo never syncs).
-    var syncEngine: SyncEngine?
+    package var syncEngine: SyncEngine?
     /// Its CloudKit sibling (#121); at most one of the two is non-nil —
     /// transports are mutually exclusive per device in v1.
-    var cloudSync: CloudSyncController?
+    package var cloudSync: CloudSyncController?
     /// The connection row, mirrored from the store for Settings to display.
-    var syncServer: SyncServerRow?
-    var isConnectingSync = false
-    var syncConnectError: String?
+    package var syncServer: SyncServerRow?
+    package var isConnectingSync = false
+    package var syncConnectError: String?
 
     /// Re-attach the engine for a connection that survives a relaunch: an
     /// active sync_server row in the store, plus its credential — the
@@ -361,7 +365,7 @@ final class AppModel {
     /// Mint a device token on the sync server, remember the connection, and
     /// run the first reconciliation. The password is used once and never
     /// stored; the token goes to the Keychain.
-    func connectSyncServer(url: String, username: String, password: String) async {
+    package func connectSyncServer(url: String, username: String, password: String) async {
         guard !isDemo, let store = localStore, !isConnectingSync else { return }
         var normalized = url.trimmingCharacters(in: .whitespaces)
         while normalized.hasSuffix("/") { normalized.removeLast() }
@@ -391,7 +395,7 @@ final class AppModel {
     /// Stop syncing. Local data, server-id mappings, and clean/dirty state
     /// all stay, so reconnecting to the same server resumes instead of
     /// duplicating.
-    func disconnectSyncServer() {
+    package func disconnectSyncServer() {
         syncEngine?.stop()
         syncEngine = nil
         try? localStore?.disconnectSyncServer()
@@ -404,7 +408,7 @@ final class AppModel {
     /// Connecting wipes any self-hosted bookkeeping and re-dirties every
     /// row, so the full local dataset uploads (and merges with whatever the
     /// account's other devices already put there).
-    func connectCloudKit() async {
+    package func connectCloudKit() async {
         guard !isDemo, let store = localStore, !isConnectingSync,
               BuildEntitlements.cloudKitAvailable else { return }
         isConnectingSync = true
@@ -430,7 +434,7 @@ final class AppModel {
     /// Stop iCloud sync. Mirrors `disconnectSyncServer`: data, record
     /// mappings, and clean/dirty state stay, so turning it back on resumes
     /// instead of re-uploading the world.
-    func disconnectCloudKit() {
+    package func disconnectCloudKit() {
         cloudSync?.stop()
         cloudSync = nil
         try? localStore?.disconnectSyncServer()
@@ -496,19 +500,19 @@ final class AppModel {
     /// when stale instead of asking the user to refresh (#225): compare the
     /// version you loaded at, re-check on appearance, and `.onChange` on it
     /// while visible. Mark Review's `rescanIfStale` is the pattern to copy.
-    private(set) var spanDataVersion = 0
+    package private(set) var spanDataVersion = 0
 
     /// Span data changed somewhere — tell observing surfaces. Call it next
     /// to `syncSoon()` on every span write path (and on the pull paths,
     /// which don't sync back).
-    func noteSpanDataChanged() {
+    package func noteSpanDataChanged() {
         spanDataVersion += 1
     }
 
     /// A local mutation happened — reconcile soon. Called by every write
     /// path here and in the sibling models; harmlessly does nothing when no
     /// transport is connected (at most one of the two ever is).
-    func syncSoon() {
+    package func syncSoon() {
         syncEngine?.kick()
         cloudSync?.kick()
     }
@@ -572,21 +576,21 @@ final class AppModel {
     /// Live state of the one-shot traggo import, observed by the Settings
     /// pane. Errors are kept apart from `errorMessage` so a background
     /// refresh can't overwrite a failed import's explanation.
-    var isImporting = false
+    package var isImporting = false
     /// Spans upserted so far, for progress while the import walks pages.
-    var importedSpanCount = 0
-    var importSummary: ImportSummary?
-    var importError: String?
+    package var importedSpanCount = 0
+    package var importSummary: ImportSummary?
+    package var importError: String?
 
     /// Whether a traggo session is saved (in the Keychain) — the import can
     /// reuse it instead of asking for credentials.
-    var hasTraggoSession: Bool { token != nil }
+    package var hasTraggoSession: Bool { token != nil }
 
     /// One-shot import of a traggo server's full history into the local
     /// store — `TraggoClient`'s only remaining job. Pass credentials only
     /// when no saved session exists (or the saved one expired): a successful
     /// one-off login keeps its token so re-runs are already signed in.
-    func importFromTraggo(username: String = "", password: String = "") async {
+    package func importFromTraggo(username: String = "", password: String = "") async {
         guard !isImporting else { return }
         guard let store = localStore else {
             importError = "The local database isn't open."
@@ -644,7 +648,7 @@ final class AppModel {
 
     /// The store's JSON snapshot, for the Settings export button. Works in
     /// demo mode too — it just snapshots the demo store.
-    func exportJSON() throws -> Data {
+    package func exportJSON() throws -> Data {
         guard let store = localStore else {
             throw LocalBackend.Error(message: "The local database isn't open.")
         }
@@ -653,7 +657,7 @@ final class AppModel {
 
     // MARK: Data
 
-    func refresh() async {
+    package func refresh() async {
         guard let backend = api, isReady else { return }
         do {
             async let timers = backend.timers()
@@ -675,7 +679,7 @@ final class AppModel {
     /// rendering off `editSession` never sees a gap while the previous
     /// drafts flush; those are committed right after, because switching
     /// what's being edited must never silently discard an edit (#70).
-    func beginEditing(_ span: TimeSpan) async {
+    package func beginEditing(_ span: TimeSpan) async {
         let previous = editSession
         editSession = SpanEditSession(span: span)
         await commit(previous)
@@ -687,7 +691,7 @@ final class AppModel {
     /// a Task would land after the running row's editor has already rendered
     /// unclaimed and collapsed itself). Claims now, flushes the previous
     /// session's drafts in the background.
-    func claimEditingNow(_ span: TimeSpan) {
+    package func claimEditingNow(_ span: TimeSpan) {
         let previous = editSession
         editSession = SpanEditSession(span: span)
         Task { await commit(previous) }
@@ -698,7 +702,7 @@ final class AppModel {
     /// closing. Returns false when the write failed (the session stays put so
     /// nothing is lost); a no-op counts as success.
     @discardableResult
-    func commitEditSession() async -> Bool {
+    package func commitEditSession() async -> Bool {
         await commit(editSession)
     }
 
@@ -714,12 +718,12 @@ final class AppModel {
     }
 
     /// Commit and close the editor; a failed write keeps it open for a retry.
-    func finishEditing() async {
+    package func finishEditing() async {
         if await commitEditSession() { editSession = nil }
     }
 
     /// Close the editor, discarding any uncommitted drafts.
-    func cancelEditing() {
+    package func cancelEditing() {
         editSession = nil
     }
 
@@ -733,7 +737,7 @@ final class AppModel {
         }
     }
 
-    func start(tagSet: TagSet) async {
+    package func start(tagSet: TagSet) async {
         await start(tags: tagSet.labels)
     }
 
@@ -741,7 +745,7 @@ final class AppModel {
     /// gets classified while it runs. Returns the created timespan so the
     /// caller can e.g. open it for editing right away.
     @discardableResult
-    func start(tags: [SpanLabel]) async -> TimeSpan? {
+    package func start(tags: [SpanLabel]) async -> TimeSpan? {
         guard let backend = api else { return nil }
         // Flush any pending edit of another timer first — a quick-start or
         // blank-timer click must not discard drafts sitting in an open
@@ -774,7 +778,7 @@ final class AppModel {
     /// refreshes the cache from its result — an edit path that creates a key
     /// mid-session must not leave `tagDefinitions` behind, or the next commit
     /// re-creates the key and hits the duplicate-insert error (#61).
-    func ensureTagDefinitions(for tags: [SpanLabel]) async throws {
+    package func ensureTagDefinitions(for tags: [SpanLabel]) async throws {
         guard let backend = api else { return }
         tagDefinitions = try await backend.ensureLabelDefinitions(for: tags,
                                                                   defaultColor: "#2196f3")
@@ -785,8 +789,8 @@ final class AppModel {
     /// (traggo rejects unknown keys), the same guard `start(tags:)` uses.
     /// Returns whether the write succeeded.
     @discardableResult
-    func updateRunning(id: Int, start: Date? = nil,
-                       tags: [SpanLabel], note: String) async -> Bool {
+    package func updateRunning(id: Int, start: Date? = nil,
+                               tags: [SpanLabel], note: String) async -> Bool {
         guard let backend = api,
               let span = activeTimers.first(where: { $0.id == id }) else { return false }
         isBusy = true
@@ -809,7 +813,7 @@ final class AppModel {
     }
 
     /// Stop a running timespan — a specific one, or the top row's by default.
-    func stop(id: Int? = nil) async {
+    package func stop(id: Int? = nil) async {
         guard let backend = api, let target = id ?? activeTimer?.id else { return }
         isBusy = true
         defer { isBusy = false }
@@ -837,7 +841,7 @@ final class AppModel {
     /// as an ordinary dirty-span push. Returns the now-running span, nil on
     /// failure, so the caller can move straight into editing it.
     @discardableResult
-    func reopen(id: Int, start: Date, tags: [SpanLabel], note: String) async -> TimeSpan? {
+    package func reopen(id: Int, start: Date, tags: [SpanLabel], note: String) async -> TimeSpan? {
         guard let backend = api else { return nil }
         isBusy = true
         defer { isBusy = false }
@@ -873,14 +877,14 @@ final class AppModel {
     /// (`TagSet.matches(spanLabels:quicks:)`) covers the set's quick-label
     /// starts too — a timer started from a card's quick-mark chip lights that
     /// card (regression flagged in #207).
-    func isRunning(_ set: TagSet) -> Bool {
+    package func isRunning(_ set: TagSet) -> Bool {
         runningTimer(for: set) != nil
     }
 
     /// The running timespan reading as this set, if any — same rule as
     /// `isRunning(_:)`. Lets a surface that shows sets (the Launcher) stop
     /// "the set's" timer by id.
-    func runningTimer(for set: TagSet) -> TimeSpan? {
+    package func runningTimer(for set: TagSet) -> TimeSpan? {
         let quicks = quickLabels(for: set)
         return activeTimers.first {
             set.matches(spanLabels: $0.labels, quicks: quicks)
@@ -892,7 +896,7 @@ final class AppModel {
     /// Whether some saved tag set carries exactly these tags — exact set
     /// equality. Log rows without a match offer "save these tags as a tag
     /// set".
-    func hasTagSet(matching tags: [SpanLabel]) -> Bool {
+    package func hasTagSet(matching tags: [SpanLabel]) -> Bool {
         let want = Set(tags)
         return tagSets.contains { Set($0.labels) == want }
     }
@@ -900,14 +904,14 @@ final class AppModel {
     /// Set when another surface (a Log row's ＋, the Launcher's ＋ card)
     /// creates a tag set and wants the Tag Sets pane to open on it.
     /// Consumed by the pane when it appears or sees the change.
-    var pendingTagSetSelection: TagSet.ID?
+    package var pendingTagSetSelection: TagSet.ID?
 
     /// Append a fresh tag set — seeded from existing tags when given — and
     /// mark it for selection in the Tag Sets pane, where the user names it.
     /// The name starts empty so the editor's Name field is genuinely blank
     /// under its placeholder, not prefilled text to clear first (#134).
     @discardableResult
-    func newTagSet(from tags: [SpanLabel] = []) -> TagSet {
+    package func newTagSet(from tags: [SpanLabel] = []) -> TagSet {
         let set = TagSet(tags: tags.map { TagRow(key: $0.key, value: $0.value) })
         tagSets.append(set)
         pendingTagSetSelection = set.id
@@ -919,7 +923,7 @@ final class AppModel {
     /// The color to render a tag with. With "color by value" on, a
     /// per-value override wins; otherwise the color the backend has on
     /// record for the tag key, or a sensible default.
-    func tagColor(for rawKey: String, value: String? = nil) -> Color {
+    package func tagColor(for rawKey: String, value: String? = nil) -> Color {
         if colorTagsByValue, let value,
            let color = valueColor(key: rawKey, value: value) {
             return color
@@ -936,7 +940,7 @@ final class AppModel {
     /// then the set's own fallback (the quick-marks-only case), then accent.
     /// Shared by the Launcher cards and the popover rows' mini tiles, so the
     /// two surfaces always agree.
-    func cardTint(for set: TagSet) -> Color {
+    package func cardTint(for set: TagSet) -> Color {
         if let first = set.labels.first {
             return tagColor(for: first.key, value: first.value)
         }
@@ -946,26 +950,26 @@ final class AppModel {
     // MARK: Per-value color overrides
 
     /// The override picked for a `key: value` pair, if any.
-    func valueColor(key rawKey: String, value: String) -> Color? {
+    package func valueColor(key rawKey: String, value: String) -> Color? {
         guard !value.isEmpty else { return nil }
         return valueColors[ValueColorKey.join(normalizeKey(rawKey), value)]
             .flatMap { Color(hex: $0) }
     }
 
-    func setValueColor(key rawKey: String, value: String, color: Color) {
+    package func setValueColor(key rawKey: String, value: String, color: Color) {
         guard let hex = color.hexString, !value.isEmpty else { return }
         valueColors[ValueColorKey.join(normalizeKey(rawKey), value)] = hex
     }
 
-    func clearValueColor(key rawKey: String, value: String) {
+    package func clearValueColor(key rawKey: String, value: String) {
         valueColors.removeValue(forKey: ValueColorKey.join(normalizeKey(rawKey), value))
     }
 
     /// A Label Review rewrite respelled labels: their per-value color
     /// overrides move with them (#69 — without this, renaming a value
     /// silently dropped its color).
-    func migrateValueColors(fromKey: String, fromValue: String?,
-                            toKey: String, toValue: String?) {
+    package func migrateValueColors(fromKey: String, fromValue: String?,
+                                    toKey: String, toValue: String?) {
         valueColors = ValueColorKey.migrating(valueColors,
                                               fromKey: fromKey, fromValue: fromValue,
                                               toKey: toKey, toValue: toValue)
@@ -973,7 +977,7 @@ final class AppModel {
 
     /// Persist a new color for a tag key, debounced so a color-wheel drag
     /// collapses into a single write once it settles.
-    func scheduleTagColor(for rawKey: String, color: Color) {
+    package func scheduleTagColor(for rawKey: String, color: Color) {
         let key = normalizeKey(rawKey)
         guard !key.isEmpty else { return }
         colorTasks[key]?.cancel()
@@ -1002,12 +1006,12 @@ final class AppModel {
 
     // MARK: Menu-bar label + elapsed formatting
 
-    var menuBarLabel: String? {
+    package var menuBarLabel: String? {
         guard let active = activeTimer else { return nil }
         return "● " + elapsedString(since: active.start)
     }
 
-    func elapsedString(since start: Date) -> String {
+    package func elapsedString(since start: Date) -> String {
         let seconds = max(0, Int(currentDate.timeIntervalSince(start)))
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
@@ -1035,8 +1039,10 @@ final class AppModel {
     /// is how those writes reach a running app. Re-read the live surfaces and
     /// give sync a kick: a CLI-started span is dirty local data like any
     /// other. Not in demo mode — a demo session runs on its own throwaway
-    /// store, not the one the CLI targets.
+    /// store, not the one the CLI targets. macOS-only twice over: there is
+    /// no CLI on iOS, and no DistributedNotificationCenter either.
     private func startObservingStoreChanges() {
+        #if os(macOS)
         guard !isDemo else { return }
         storeChangeObserver = DistributedNotificationCenter.default().addObserver(
             forName: .momentTallyStoreDidChange, object: nil, queue: .main) { [weak self] _ in
@@ -1048,6 +1054,7 @@ final class AppModel {
                 self.syncSoon()
             }
         }
+        #endif
     }
 
     // MARK: Tag-set + value-color persistence

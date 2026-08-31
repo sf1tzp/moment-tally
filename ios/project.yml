@@ -26,6 +26,14 @@ packages:
 # Only MomentTallyCoreTests — MomentTallyTests needs the Mac executable and
 # stays a swift-test concern.
 schemes:
+  # Declaring any scheme suppresses xcodegen's auto-schemes, so the app
+  # target's is spelled out too.
+  MomentTallyIOS:
+    build:
+      targets:
+        MomentTallyIOS: all
+    run:
+      config: Debug
   CoreTests:
     build:
       targets:

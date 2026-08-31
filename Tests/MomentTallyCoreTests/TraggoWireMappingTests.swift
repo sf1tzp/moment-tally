@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MomentTally
+@testable import MomentTallyKit
 @testable import MomentTallyCore
 
 /// The DTO ↔ domain mapping at the TraggoClient boundary: the RFC3339 time

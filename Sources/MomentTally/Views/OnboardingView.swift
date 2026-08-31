@@ -1,5 +1,6 @@
 import SwiftUI
 import MomentTallyCore
+import MomentTallyKit
 
 /// The first-run sequence (issue #93): Welcome (optionally connect a sync
 /// server or import from Traggo) → interactive walkthrough of the mark model

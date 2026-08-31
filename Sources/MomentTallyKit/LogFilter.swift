@@ -6,14 +6,20 @@ import MomentTallyCore
 /// free-text term; all tokens must match (AND). A deliberately tiny parser,
 /// kept apart from the view so the field can grow into the #52 query
 /// language instead of being replaced.
-struct LogFilter: Equatable {
+package struct LogFilter: Equatable {
     /// One parsed `key:value` token. A bare value matches as a prefix; a
     /// quoted value (`client:"app"`) must match exactly — the escape hatch
     /// when one value prefixes another (`app` vs `app-server`).
-    struct Pair: Equatable {
-        var key: String
-        var value: String
-        var exact: Bool = false
+    package struct Pair: Equatable {
+        package var key: String
+        package var value: String
+        package var exact: Bool = false
+
+        package init(key: String, value: String, exact: Bool = false) {
+            self.key = key
+            self.value = value
+            self.exact = exact
+        }
     }
 
     /// `key:value` tokens — the span must carry every one. Keys compare
@@ -21,14 +27,19 @@ struct LogFilter: Equatable {
     /// are prefixes, so the list narrows smoothly while one is typed, and
     /// the empty value (`client:`) is just the empty prefix — any span
     /// carrying the key.
-    var pairs: [Pair] = []
+    package var pairs: [Pair] = []
     /// Free-text tokens — each must appear as a case-insensitive substring
     /// somewhere in the span's label keys, label values, or note.
-    var terms: [String] = []
+    package var terms: [String] = []
 
-    var isEmpty: Bool { pairs.isEmpty && terms.isEmpty }
+    package init(pairs: [Pair] = [], terms: [String] = []) {
+        self.pairs = pairs
+        self.terms = terms
+    }
 
-    static func parse(_ text: String) -> LogFilter {
+    package var isEmpty: Bool { pairs.isEmpty && terms.isEmpty }
+
+    package static func parse(_ text: String) -> LogFilter {
         var filter = LogFilter()
         for token in tokenize(text) {
             if let colon = token.firstIndex(of: ":"),
@@ -76,7 +87,7 @@ struct LogFilter: Equatable {
         return tokens
     }
 
-    func matches(_ span: TimeSpan) -> Bool {
+    package func matches(_ span: TimeSpan) -> Bool {
         for pair in pairs {
             guard span.labels.contains(where: { pairMatches(pair, $0) })
             else { return false }
@@ -92,14 +103,14 @@ struct LogFilter: Equatable {
     /// True when the filter singles this label out — a `key:value` pair
     /// selects it, or a free-text term appears in its key or value. The Log
     /// view uses this to move matched pills to the front of a row.
-    func highlights(_ label: SpanLabel) -> Bool {
+    package func highlights(_ label: SpanLabel) -> Bool {
         pairs.contains { pairMatches($0, label) }
             || terms.contains { termMatches($0, label) }
     }
 
     /// `labels` reordered so highlighted ones come first, each group keeping
     /// its original order.
-    func highlightedFirst(_ labels: [SpanLabel]) -> [SpanLabel] {
+    package func highlightedFirst(_ labels: [SpanLabel]) -> [SpanLabel] {
         guard !isEmpty else { return labels }
         let hits = labels.filter(highlights)
         guard !hits.isEmpty else { return labels }

@@ -1,5 +1,6 @@
 import SwiftUI
 import MomentTallyCore
+import MomentTallyKit
 import AppKit
 import UniformTypeIdentifiers
 
@@ -10,6 +11,8 @@ import UniformTypeIdentifiers
 
 struct GeneralSettingsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(UpdaterModel.self) private var appUpdater
+    @Environment(LoginItemModel.self) private var appLoginItem
     @State private var username = ""
     @State private var password = ""
     @State private var syncURL = ""
@@ -237,8 +240,8 @@ struct GeneralSettingsView: View {
         }
         // Start at Login (#169). Absent from dev builds and demos, where
         // there is no bundle to register — see LoginItemModel.
-        if model.loginItem.isAvailable {
-            @Bindable var loginItem = model.loginItem
+        if appLoginItem.isAvailable {
+            @Bindable var loginItem = appLoginItem
             Section("Login") {
                 Toggle("Start Moment Tally at login", isOn: $loginItem.startsAtLogin)
                 if loginItem.requiresApproval {
@@ -266,8 +269,8 @@ struct GeneralSettingsView: View {
         }
         // Sparkle (#46). Absent from dev builds and demos, where there is no
         // updater to configure.
-        if model.updater.isAvailable {
-            @Bindable var updater = model.updater
+        if appUpdater.isAvailable {
+            @Bindable var updater = appUpdater
             Section("Updates") {
                 Toggle("Check for updates in the background",
                        isOn: $updater.automaticallyChecksForUpdates)

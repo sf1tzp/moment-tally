@@ -10,23 +10,36 @@ import MomentTallyCore
 /// Auth is unchanged in shape from the traggo lineage: the header is
 /// `Authorization: traggo <token>` (literally "traggo"). The `Time` scalar
 /// is the same RFC3339 wire form, so `TraggoTime` is reused for it.
-struct MomentTallyClient: SyncServerAPI {
-    var baseURL: URL
-    var token: String?
+package struct MomentTallyClient: SyncServerAPI {
+    package var baseURL: URL
+    package var token: String?
+
+    package init(baseURL: URL, token: String?) {
+        self.baseURL = baseURL
+        self.token = token
+    }
 
     /// The server rejected the operation (a GraphQL error). Distinguished
     /// from transport failures so the sync engine can tolerate rejections
     /// that mean "already done" without swallowing real outages.
-    struct RejectionError: LocalizedError, ServerRejection {
-        let message: String
-        var errorDescription: String? { message }
+    package struct RejectionError: LocalizedError, ServerRejection {
+        package let message: String
+        package var errorDescription: String? { message }
+
+        package init(message: String) {
+            self.message = message
+        }
     }
 
     /// Anything that isn't a server answer: HTTP failures, no response,
     /// undecodable payloads. (URLSession's own errors pass through as-is.)
-    struct TransportError: LocalizedError {
-        let message: String
-        var errorDescription: String? { message }
+    package struct TransportError: LocalizedError {
+        package let message: String
+        package var errorDescription: String? { message }
+
+        package init(message: String) {
+            self.message = message
+        }
     }
 
     // MARK: GraphQL envelopes
@@ -43,7 +56,7 @@ struct MomentTallyClient: SyncServerAPI {
 
     private struct GraphQLError: Decodable { let message: String }
 
-    struct NoVariables: Encodable {}
+    package struct NoVariables: Encodable {}
 
     private func run<Variables: Encodable, Payload: Decodable>(
         _ query: String,
@@ -148,7 +161,7 @@ struct MomentTallyClient: SyncServerAPI {
 
     // MARK: Session (not part of SyncServerAPI)
 
-    func login(username: String, password: String, deviceName: String) async throws -> Login {
+    package func login(username: String, password: String, deviceName: String) async throws -> Login {
         struct Variables: Encodable {
             let username: String
             let pass: String
@@ -171,7 +184,7 @@ struct MomentTallyClient: SyncServerAPI {
         return try await run(query, variables: vars, as: Payload.self).login
     }
 
-    func currentUser() async throws -> User? {
+    package func currentUser() async throws -> User? {
         struct Payload: Decodable { let currentUser: User? }
         let query = "query { currentUser { id name admin } }"
         return try await run(query, variables: NoVariables(), as: Payload.self).currentUser
@@ -179,7 +192,7 @@ struct MomentTallyClient: SyncServerAPI {
 
     // MARK: Pull
 
-    func timeSpanChanges(since: Date, afterId: Int) async throws -> RemoteTimeSpanChanges {
+    package func timeSpanChanges(since: Date, afterId: Int) async throws -> RemoteTimeSpanChanges {
         struct Variables: Encodable { let since: TraggoTime; let afterId: Int }
         struct WireDeletion: Decodable { let id: Int; let deletedAt: TraggoTime }
         struct WireChanges: Decodable {
@@ -209,7 +222,7 @@ struct MomentTallyClient: SyncServerAPI {
             now: changes.now.date)
     }
 
-    func labelDefinitions() async throws -> [RemoteLabelDefinition] {
+    package func labelDefinitions() async throws -> [RemoteLabelDefinition] {
         struct Payload: Decodable { let labelDefinitions: [WireLabelDefinition]? }
         let query = """
         query { labelDefinitions { key color updatedAt valueColors { value color updatedAt } } }
@@ -218,7 +231,7 @@ struct MomentTallyClient: SyncServerAPI {
             .labelDefinitions.map { $0.map(\.remote) } ?? []
     }
 
-    func labelSets() async throws -> [RemoteLabelSet] {
+    package func labelSets() async throws -> [RemoteLabelSet] {
         struct Payload: Decodable { let labelSets: [WireLabelSet]? }
         let query = """
         query { labelSets { id name symbolName updatedAt labels { key value } quickLabels { key value } } }
@@ -227,7 +240,7 @@ struct MomentTallyClient: SyncServerAPI {
             .labelSets.map { $0.map(\.remote) } ?? []
     }
 
-    func userPreferences() async throws -> RemotePreferences {
+    package func userPreferences() async throws -> RemotePreferences {
         struct WirePreferences: Decodable {
             let colorByValue: Bool
             let menuLabelSetLimit: Int
@@ -244,7 +257,7 @@ struct MomentTallyClient: SyncServerAPI {
 
     // MARK: Push — timespans
 
-    func createTimeSpan(start: Date, end: Date?, labels: [SpanLabel], note: String) async throws -> Int {
+    package func createTimeSpan(start: Date, end: Date?, labels: [SpanLabel], note: String) async throws -> Int {
         struct Variables: Encodable {
             let start: TraggoTime
             let end: TraggoTime?
@@ -263,7 +276,7 @@ struct MomentTallyClient: SyncServerAPI {
         return try await run(query, variables: vars, as: Payload.self).createTimeSpan.id
     }
 
-    func updateTimeSpan(id: Int, start: Date, end: Date?, labels: [SpanLabel], note: String) async throws {
+    package func updateTimeSpan(id: Int, start: Date, end: Date?, labels: [SpanLabel], note: String) async throws {
         struct Variables: Encodable {
             let id: Int
             let start: TraggoTime
@@ -283,7 +296,7 @@ struct MomentTallyClient: SyncServerAPI {
         _ = try await run(query, variables: vars, as: Payload.self)
     }
 
-    func removeTimeSpan(id: Int) async throws {
+    package func removeTimeSpan(id: Int) async throws {
         struct Variables: Encodable { let id: Int }
         struct Removed: Decodable { let id: Int }
         struct Payload: Decodable { let removeTimeSpan: Removed? }
@@ -293,7 +306,7 @@ struct MomentTallyClient: SyncServerAPI {
 
     // MARK: Push — label definitions and value colors
 
-    func createLabelDefinition(key: String, color: String) async throws {
+    package func createLabelDefinition(key: String, color: String) async throws {
         struct Variables: Encodable { let key: String; let color: String }
         struct Definition: Decodable { let key: String }
         struct Payload: Decodable { let createLabelDefinition: Definition? }
@@ -305,7 +318,7 @@ struct MomentTallyClient: SyncServerAPI {
         _ = try await run(query, variables: Variables(key: key, color: color), as: Payload.self)
     }
 
-    func updateLabelDefinition(key: String, color: String) async throws {
+    package func updateLabelDefinition(key: String, color: String) async throws {
         struct Variables: Encodable { let key: String; let color: String }
         struct Definition: Decodable { let key: String }
         struct Payload: Decodable { let updateLabelDefinition: Definition? }
@@ -317,7 +330,7 @@ struct MomentTallyClient: SyncServerAPI {
         _ = try await run(query, variables: Variables(key: key, color: color), as: Payload.self)
     }
 
-    func setLabelValueColor(key: String, value: String, color: String) async throws {
+    package func setLabelValueColor(key: String, value: String, color: String) async throws {
         struct Variables: Encodable { let key: String; let value: String; let color: String }
         struct Definition: Decodable { let key: String }
         struct Payload: Decodable { let setLabelValueColor: Definition? }
@@ -330,7 +343,7 @@ struct MomentTallyClient: SyncServerAPI {
                           as: Payload.self)
     }
 
-    func clearLabelValueColor(key: String, value: String) async throws {
+    package func clearLabelValueColor(key: String, value: String) async throws {
         struct Variables: Encodable { let key: String; let value: String }
         struct Definition: Decodable { let key: String }
         struct Payload: Decodable { let clearLabelValueColor: Definition? }
@@ -349,8 +362,8 @@ struct MomentTallyClient: SyncServerAPI {
     // them alone" (the pre-#92 client compat path) while an empty list
     // clears them — see api-v1.md.
 
-    func createLabelSet(name: String, symbolName: String, labels: [SpanLabel],
-                        quickLabels: [SpanLabel], position: Int) async throws -> Int {
+    package func createLabelSet(name: String, symbolName: String, labels: [SpanLabel],
+                                quickLabels: [SpanLabel], position: Int) async throws -> Int {
         struct Variables: Encodable {
             let name: String
             let symbolName: String
@@ -372,8 +385,8 @@ struct MomentTallyClient: SyncServerAPI {
         return try await run(query, variables: vars, as: Payload.self).createLabelSet.id
     }
 
-    func updateLabelSet(id: Int, name: String, symbolName: String, labels: [SpanLabel],
-                        quickLabels: [SpanLabel], position: Int) async throws {
+    package func updateLabelSet(id: Int, name: String, symbolName: String, labels: [SpanLabel],
+                                quickLabels: [SpanLabel], position: Int) async throws {
         struct Variables: Encodable {
             let id: Int
             let name: String
@@ -396,7 +409,7 @@ struct MomentTallyClient: SyncServerAPI {
         _ = try await run(query, variables: vars, as: Payload.self)
     }
 
-    func removeLabelSet(id: Int) async throws {
+    package func removeLabelSet(id: Int) async throws {
         struct Variables: Encodable { let id: Int }
         struct Removed: Decodable { let id: Int }
         struct Payload: Decodable { let removeLabelSet: Removed? }
@@ -406,7 +419,7 @@ struct MomentTallyClient: SyncServerAPI {
 
     // MARK: Push — preferences
 
-    func setUserPreferences(colorByValue: Bool, menuLabelSetLimit: Int) async throws {
+    package func setUserPreferences(colorByValue: Bool, menuLabelSetLimit: Int) async throws {
         struct Preferences: Encodable { let colorByValue: Bool; let menuLabelSetLimit: Int }
         struct Variables: Encodable { let preferences: Preferences }
         struct Saved: Decodable { let colorByValue: Bool }

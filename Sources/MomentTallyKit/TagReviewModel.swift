@@ -4,21 +4,32 @@ import Observation
 
 /// Usage of one value under a key: how many scanned timespans carry it and
 /// how much tracked time they add up to.
-struct ValueStat: Identifiable {
-    var id: String { value }
-    let value: String
-    let count: Int
-    let seconds: TimeInterval
+package struct ValueStat: Identifiable {
+    package var id: String { value }
+    package let value: String
+    package let count: Int
+    package let seconds: TimeInterval
+
+    package init(value: String, count: Int, seconds: TimeInterval) {
+        self.value = value
+        self.count = count
+        self.seconds = seconds
+    }
 }
 
 /// One tag key with its value cardinality — the review's unit of display.
-struct KeyStat: Identifiable {
-    var id: String { key }
-    let key: String
-    let values: [ValueStat]   // most-used first
+package struct KeyStat: Identifiable {
+    package var id: String { key }
+    package let key: String
+    package let values: [ValueStat]   // most-used first
 
-    var spanCount: Int { values.reduce(0) { $0 + $1.count } }
-    var seconds: TimeInterval { values.reduce(0) { $0 + $1.seconds } }
+    package init(key: String, values: [ValueStat]) {
+        self.key = key
+        self.values = values
+    }
+
+    package var spanCount: Int { values.reduce(0) { $0 + $1.count } }
+    package var seconds: TimeInterval { values.reduce(0) { $0 + $1.seconds } }
 }
 
 /// One pending tag rewrite, staged for review in the Approve Changes pane.
@@ -26,19 +37,29 @@ struct KeyStat: Identifiable {
 /// new value), rename a key (`fromValue` and `toValue` nil — values ride
 /// along), move a value under another key, and move just a subset of its
 /// instances (`spanIDs` non-nil).
-struct StagedChange: Identifiable {
-    var id = UUID()
-    var fromKey: String       // mutable: key renames applied earlier in a batch fold in
-    let fromValue: String?    // nil = every value under the key
-    var toKey: String
-    var toValue: String?      // nil = keep each span's value; editable while staged
-    let spanIDs: [Int]?       // nil = every scanned match
+package struct StagedChange: Identifiable {
+    package var id = UUID()
+    package var fromKey: String       // mutable: key renames applied earlier in a batch fold in
+    package let fromValue: String?    // nil = every value under the key
+    package var toKey: String
+    package var toValue: String?      // nil = keep each span's value; editable while staged
+    package let spanIDs: [Int]?       // nil = every scanned match
 
-    var isKeyRename: Bool { fromValue == nil }
+    package init(id: UUID = UUID(), fromKey: String, fromValue: String?,
+                 toKey: String, toValue: String?, spanIDs: [Int]?) {
+        self.id = id
+        self.fromKey = fromKey
+        self.fromValue = fromValue
+        self.toKey = toKey
+        self.toValue = toValue
+        self.spanIDs = spanIDs
+    }
+
+    package var isKeyRename: Bool { fromValue == nil }
 
     /// Same source scope — the same spans, described the same way. Two staged
     /// changes sharing a scope are two intents for one slot, not two changes.
-    func sameScope(as other: StagedChange) -> Bool {
+    package func sameScope(as other: StagedChange) -> Bool {
         fromKey == other.fromKey && fromValue == other.fromValue
             && spanIDs == other.spanIDs
     }
@@ -47,7 +68,7 @@ struct StagedChange: Identifiable {
     /// The one rewrite rule for everything that stores marks as key/value
     /// rows outside the spans themselves — label sets and quick labels —
     /// so a rename can't update one and strand the other (#177).
-    func applied(to row: TagRow, toKey: String) -> TagRow {
+    package func applied(to row: TagRow, toKey: String) -> TagRow {
         var row = row
         if normalizeKey(row.key) == fromKey,
            fromValue == nil || row.value == fromValue {
@@ -62,7 +83,7 @@ extension Sequence<StagedChange> {
     /// The spelling `key` will have once this batch's key renames have
     /// applied, in order. Following sequentially matches apply order exactly,
     /// including chains (a→b staged, then b→c: a ends at c) and re-renames.
-    func effectiveKey(_ key: String) -> String {
+    package func effectiveKey(_ key: String) -> String {
         var key = key
         for change in self where change.isKeyRename && change.fromKey == key {
             key = normalizeKey(change.toKey)
@@ -77,7 +98,7 @@ extension [StagedChange] {
     /// re-staging a rename from the pencil) updates the earlier entry, so a
     /// change can't be queued twice (#69). A key rename back onto its own
     /// spelling stages nothing.
-    func adding(_ change: StagedChange) -> [StagedChange] {
+    package func adding(_ change: StagedChange) -> [StagedChange] {
         if change.isKeyRename, normalizeKey(change.toKey) == change.fromKey {
             return self
         }
@@ -91,28 +112,28 @@ extension [StagedChange] {
 /// `AppModel`.
 @MainActor
 @Observable
-final class TagReviewModel {
-    @ObservationIgnored unowned let app: AppModel
+package final class TagReviewModel {
+    @ObservationIgnored package unowned let app: AppModel
 
-    var range: TrailingRange = .days90
+    package var range: TrailingRange = .days90
     /// Everything the last scan fetched (finished + running), deduplicated.
-    private(set) var spans: [TimeSpan] = []
-    private(set) var hasScanned = false
-    var isScanning = false
+    package private(set) var spans: [TimeSpan] = []
+    package private(set) var hasScanned = false
+    package var isScanning = false
     /// Spans fetched so far, for progress while paging a large window.
-    var scannedCount = 0
-    var errorMessage: String?
+    package var scannedCount = 0
+    package var errorMessage: String?
 
     /// Pending rewrites, in staging order — applied together on approve.
-    var staged: [StagedChange] = []
+    package var staged: [StagedChange] = []
 
     // Batch/rewrite progress, observed by the Approve Changes pane.
-    var isApplying = false
+    package var isApplying = false
     /// Index into the batch of the change currently applying.
-    var applyIndex = 0
-    var renameDone = 0
-    var renameTotal = 0
-    var renameFailures = 0
+    package var applyIndex = 0
+    package var renameDone = 0
+    package var renameTotal = 0
+    package var renameFailures = 0
     @ObservationIgnored private var cancelRequested = false
     @ObservationIgnored private var cancelBatch = false
     /// Invalidates in-flight scans when the range changes mid-fetch.
@@ -122,14 +143,14 @@ final class TagReviewModel {
     /// still reads as stale afterwards. -1 = never scanned.
     @ObservationIgnored private var scannedVersion = -1
 
-    init(app: AppModel) {
+    package init(app: AppModel) {
         self.app = app
     }
 
     /// Forget the scan and anything staged — called when the active backend
     /// switches, since scanned spans and staged rewrites reference ids that
     /// mean nothing in the other store.
-    func reset() {
+    package func reset() {
         scanGeneration += 1     // invalidates any in-flight scan
         scannedVersion = -1
         spans = []
@@ -142,7 +163,7 @@ final class TagReviewModel {
 
     // MARK: Scanning
 
-    func scan() async {
+    package func scan() async {
         guard let backend = app.api, app.isReady else { return }
         scanGeneration += 1
         let generation = scanGeneration
@@ -184,7 +205,7 @@ final class TagReviewModel {
     /// calls it on appearance and whenever `spanDataVersion` bumps while
     /// visible; a fresh snapshot is a no-op. Never during an apply: the
     /// rewrite maintains `spans` itself and marks the snapshot current.
-    func rescanIfStale() async {
+    package func rescanIfStale() async {
         guard hasScanned, !isApplying,
               scannedVersion != app.spanDataVersion else { return }
         await scan()
@@ -194,7 +215,7 @@ final class TagReviewModel {
 
     /// Per-key value cardinality over the scanned spans, messiest keys first
     /// (most distinct values), ties alphabetical.
-    var keyStats: [KeyStat] {
+    package var keyStats: [KeyStat] {
         var byKey: [String: [String: (count: Int, seconds: TimeInterval)]] = [:]
         for span in spans {
             let duration = max(0, (span.end ?? Date()).timeIntervalSince(span.start))
@@ -215,7 +236,7 @@ final class TagReviewModel {
 
     /// Scanned spans carrying `key` (and, when given, exactly `value`) — the
     /// blast radius shown before a rename and the set it rewrites.
-    func matches(key: String, value: String? = nil) -> [TimeSpan] {
+    package func matches(key: String, value: String? = nil) -> [TimeSpan] {
         spans.filter { span in
             span.labels.contains { $0.key == key && (value == nil || $0.value == value) }
         }
@@ -223,7 +244,7 @@ final class TagReviewModel {
 
     // MARK: Staging
 
-    func stage(_ change: StagedChange) {
+    package func stage(_ change: StagedChange) {
         staged = staged.adding(change)
     }
 
@@ -232,12 +253,12 @@ final class TagReviewModel {
     /// this change applies. Keeps the Approve pane honest — dropping a value
     /// onto a row whose key has a pending rename reads "to <new name>", and
     /// discarding the rename reverts the description (#69).
-    func effectiveTargetKey(of change: StagedChange) -> String {
+    package func effectiveTargetKey(of change: StagedChange) -> String {
         let index = staged.firstIndex { $0.id == change.id } ?? staged.endIndex
         return staged[..<index].effectiveKey(normalizeKey(change.toKey))
     }
 
-    func discard(_ id: StagedChange.ID) {
+    package func discard(_ id: StagedChange.ID) {
         staged.removeAll { $0.id == id }
     }
 
@@ -245,14 +266,14 @@ final class TagReviewModel {
     /// rewriting a timespan that's still ticking proved flaky (its identity
     /// shifts under the list mid-drag), and the popover already edits the
     /// live timer. It becomes movable once stopped and rescanned.
-    func movableMatches(key: String, value: String? = nil) -> [TimeSpan] {
+    package func movableMatches(key: String, value: String? = nil) -> [TimeSpan] {
         matches(key: key, value: value).filter { !$0.isRunning }
     }
 
     /// The spans a staged change would rewrite right now — its blast radius.
     /// Explicit span ids are re-filtered against the tag match, so instances
     /// already moved (or edited away) drop out rather than being re-written.
-    func spans(for change: StagedChange) -> [TimeSpan] {
+    package func spans(for change: StagedChange) -> [TimeSpan] {
         let all = movableMatches(key: change.fromKey, value: change.fromValue)
         guard let ids = change.spanIDs else { return all }
         return all.filter { ids.contains($0.id) }
@@ -261,7 +282,7 @@ final class TagReviewModel {
     /// Apply the staged batch in order. Changes that fail (or are interrupted
     /// by cancel) stay staged — applying again converges, since spans already
     /// rewritten no longer match.
-    func applyStaged() async {
+    package func applyStaged() async {
         guard !isApplying, !staged.isEmpty else { return }
         isApplying = true
         cancelBatch = false
@@ -299,7 +320,7 @@ final class TagReviewModel {
 
     /// Stop the batch: the in-flight rewrite halts and everything not fully
     /// applied stays staged.
-    func cancelApply() {
+    package func cancelApply() {
         cancelBatch = true
         cancelRequested = true
     }

@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Observation
 import MomentTallyCore
+import MomentTallyKit
 import ServiceManagement
 
 /// Start at Login (#169), via `SMAppService.mainApp`: the app registers its

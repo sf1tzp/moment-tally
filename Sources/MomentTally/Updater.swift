@@ -1,5 +1,6 @@
 import Foundation
 import MomentTallyCore
+import MomentTallyKit
 import Combine
 
 #if MAS_BUILD

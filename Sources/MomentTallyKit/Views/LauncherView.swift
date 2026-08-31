@@ -17,7 +17,7 @@ import MomentTallyCore
 /// the same live-reshuffle feel with no session to strand. The columns are
 /// computed from the width (rather than `.adaptive`) so the gesture can turn
 /// cursor travel into a grid slot.
-struct LauncherView: View {
+package struct LauncherView: View {
     @Environment(AppModel.self) private var model
     /// Mid-drag display order: the reshuffle animates through this draft
     /// only, so the model — and its per-mutation persist + the other
@@ -31,7 +31,9 @@ struct LauncherView: View {
     /// one-line content stays under it) plus the grid spacing.
     private static let rowStride: CGFloat = 96 + spacing
 
-    var body: some View {
+    package init() {}
+
+    package var body: some View {
         GeometryReader { geo in
             let content = geo.size.width - Self.padding * 2
             let columns = max(1, Int((content + Self.spacing)
@@ -136,12 +138,13 @@ private struct CardReorderGesture: ViewModifier {
 /// action rather than a set. Opens the Tag Sets pane on a fresh set.
 private struct NewTagSetCard: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openAppSection) private var openAppSection
     @State private var hovering = false
 
     var body: some View {
         Button {
             model.newTagSet()
-            SettingsWindowManager.shared.show(model: model, tab: .tagSets)
+            openAppSection(.tagSets)
         } label: {
             VStack(spacing: 8) {
                 Image(systemName: "plus")
@@ -174,17 +177,17 @@ private struct NewTagSetCard: View {
 /// rows' 180ms hover intent — a sweep or a mid-drag reshuffle doesn't count)
 /// also floats the quick-label chips over it — same one-click "set plus
 /// honing label" as the popover's quick-start rows.
-struct TagSetCard: View {
+package struct TagSetCard: View {
     @Environment(AppModel.self) private var model
-    let set: TagSet
+    package let set: TagSet
     /// The Tallies editor embeds the card as a live preview (#179): the
     /// full hover choreography stays (that's what's being previewed), but
     /// clicks are inert and the running/busy states don't leak in.
-    var isPreview = false
+    package var isPreview = false
     /// True while the launcher grid is mid drag-reorder: the reshuffle parks
     /// the dragged card under the cursor and sweeps others past it, so the
     /// chip reveal stays suppressed until the drop.
-    var reordering = false
+    package var reordering = false
     @State private var hovering = false
     /// Chips reveal on hover *intent* — the popover rows' 180ms pause — not
     /// raw hover, so a cursor sweeping the grid (or the post-drop settle)
@@ -192,14 +195,32 @@ struct TagSetCard: View {
     @State private var chipsShown = false
     @State private var chipIntent: Task<Void, Never>?
 
+    package init(set: TagSet, isPreview: Bool = false, reordering: Bool = false) {
+        self.set = set
+        self.isPreview = isPreview
+        self.reordering = reordering
+    }
+
+    /// Touch platforms get standing affordances where the Mac uses hover
+    /// (#124): the running card's stop scrim stays on, and quick-label
+    /// chips reveal on long-press instead of hover intent.
+    private static var touchIdioms: Bool {
+        #if os(iOS)
+        true
+        #else
+        false
+        #endif
+    }
+
     private var tint: Color { model.cardTint(for: set) }
 
     private var isRunning: Bool { !isPreview && model.isRunning(set) }
     private var busy: Bool { !isPreview && model.isBusy }
 
-    var body: some View {
+    package var body: some View {
         Button {
             guard !isPreview else { return }
+            if Self.touchIdioms { revealChips(false) }
             Task {
                 if let running = model.runningTimer(for: set) {
                     await model.stop(id: running.id)
@@ -223,7 +244,7 @@ struct TagSetCard: View {
                 ? AnyShapeStyle(Brand.tileGradient(for: tint))
                 : AnyShapeStyle(tint)))
             .overlay {
-                if isRunning && hovering {
+                if isRunning && (hovering || Self.touchIdioms) {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(.black.opacity(0.35))
                     Image(systemName: "stop.fill")
@@ -239,7 +260,7 @@ struct TagSetCard: View {
         }
         .buttonStyle(.plain)
         .disabled(busy)
-        .opacity(busy || (isRunning && !hovering) ? 0.5 : 1)
+        .opacity(busy || (isRunning && !hovering && !Self.touchIdioms) ? 0.5 : 1)
         // The chips are separate buttons, so they sit over the card rather
         // than nesting inside its label — on the same full-card scrim the
         // running state uses for its stop square, which also keeps them
@@ -255,9 +276,10 @@ struct TagSetCard: View {
                     FlowLayout(spacing: 4) {
                         ForEach(quicks) { quick in
                             // In preview the chips keep their hover feedback
-                            // but the start routes to a no-op.
+                            // but the start routes to a no-op; on touch the
+                            // start also dismisses the long-press reveal.
                             QuickLabelChip(set: set, quick: quick, filled: true,
-                                           start: isPreview ? { _ in } : nil)
+                                           start: chipStart)
                         }
                     }
                     .padding(8)
@@ -275,6 +297,14 @@ struct TagSetCard: View {
         .onChange(of: reordering) { _, dragging in
             revealChips(hovering && !dragging)
         }
+        // The hover-intent reveal, re-expressed for touch (#124): press and
+        // hold a startable card to float its quick-label chips; tapping a
+        // chip (or the card itself — clicking off a chip still starts the
+        // set plain) starts and dismisses.
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in
+            guard Self.touchIdioms, !isRunning, !isPreview else { return }
+            withAnimation(.snappy(duration: 0.18)) { chipsShown.toggle() }
+        })
         .help(isRunning
               ? "Stop the running timer"
               : set.labels.isEmpty
@@ -282,6 +312,17 @@ struct TagSetCard: View {
               : "Start " + set.labels.map {
                     $0.value.isEmpty ? $0.key : "\($0.key): \($0.value)"
                 }.joined(separator: ", "))
+    }
+
+    /// The chips' start action: a no-op in preview; on touch, a start that
+    /// also dismisses the reveal (there is no pointer exit to do it).
+    private var chipStart: (([SpanLabel]) async -> Void)? {
+        if isPreview { return { _ in } }
+        guard Self.touchIdioms else { return nil }
+        return { labels in
+            _ = await model.start(tags: labels)
+            withAnimation(.snappy(duration: 0.18)) { chipsShown = false }
+        }
     }
 
     /// Hover-intent gate for the chip overlay, same shape as the popover
@@ -306,12 +347,17 @@ struct TagSetCard: View {
 /// (gradient or flat, per the card, #226) at row scale, so the popover's
 /// quick-start rows read as the same objects as the Launcher grid's cards
 /// (#201).
-struct LauncherTileIcon: View {
+package struct LauncherTileIcon: View {
     @Environment(AppModel.self) private var model
-    let set: TagSet
-    var size: CGFloat = 22
+    package let set: TagSet
+    package var size: CGFloat = 22
 
-    var body: some View {
+    package init(set: TagSet, size: CGFloat = 22) {
+        self.set = set
+        self.size = size
+    }
+
+    package var body: some View {
         let tint = model.cardTint(for: set)
         TagSetIcon(set: set, size: size * 0.5, weight: .medium)
             .foregroundStyle(set.showsGradient

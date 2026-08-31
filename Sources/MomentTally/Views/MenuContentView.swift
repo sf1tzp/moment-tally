@@ -1,10 +1,12 @@
 import SwiftUI
 import MomentTallyCore
+import MomentTallyKit
 import AppKit
 
 /// The contents of the menu-bar popover.
 struct MenuContentView: View {
     @Environment(AppModel.self) private var model
+    @Environment(UpdaterModel.self) private var updater
 
     // The edit drafts live in `model.editSession`, shared with the Log
     // view's running-row editor (#61) and surviving the popover closing
@@ -201,14 +203,14 @@ struct MenuContentView: View {
             .buttonStyle(MenuRowButtonStyle())
 
             // Only in installed builds — dev builds and demos have no updater.
-            if model.updater.isAvailable {
+            if updater.isAvailable {
                 Button {
-                    model.updater.checkForUpdates()
+                    updater.checkForUpdates()
                 } label: {
                     Label("Check for Updates…", systemImage: "arrow.down.circle")
                 }
                 .buttonStyle(MenuRowButtonStyle())
-                .disabled(!model.updater.canCheckForUpdates)
+                .disabled(!updater.canCheckForUpdates)
             }
 
             Button {

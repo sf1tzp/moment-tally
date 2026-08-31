@@ -1,4 +1,5 @@
 import SwiftUI
+import MomentTallyKit
 import Charts
 
 /// The History tab: a donut + totals breakdown and a daily stacked bar chart

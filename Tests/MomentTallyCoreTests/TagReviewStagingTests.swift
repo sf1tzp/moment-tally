@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MomentTally
+@testable import MomentTallyKit
 @testable import MomentTallyCore
 
 /// Staging semantics for the Label Review batch (#69): one pending change per

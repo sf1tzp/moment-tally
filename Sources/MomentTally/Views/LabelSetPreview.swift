@@ -1,5 +1,6 @@
 import SwiftUI
 import MomentTallyCore
+import MomentTallyKit
 
 /// The Tallies editor's preview (#179), floating above the form on the
 /// window background — no section box — centred, with air before the fields

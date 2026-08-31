@@ -1,5 +1,6 @@
 import SwiftUI
 import MomentTallyCore
+import MomentTallyKit
 
 // Shared pieces for the three history tabs (Log, Calendar, History/charts).
 

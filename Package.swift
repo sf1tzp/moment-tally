@@ -15,8 +15,9 @@ import PackageDescription
 let masBuild = ProcessInfo.processInfo.environment["MOMENTTALLY_MAS"] == "1"
 
 let appDependencies: [Target.Dependency] = masBuild
-    ? ["MomentTallyCore"]
-    : ["MomentTallyCore", .product(name: "Sparkle", package: "Sparkle")]
+    ? ["MomentTallyCore", "MomentTallyKit"]
+    : ["MomentTallyCore", "MomentTallyKit",
+       .product(name: "Sparkle", package: "Sparkle")]
 
 let package = Package(
     name: "MomentTally",
@@ -66,12 +67,14 @@ let package = Package(
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift")
             ],
-            path: "Sources/MomentTallyCore"
+            path: "Sources/MomentTallyCore",
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "MomentTally",
             dependencies: appDependencies,
             path: "Sources/MomentTally",
+            exclude: ["README.md"],
             // The brand font (OFL text rides alongside) and the icon the
             // onboarding masthead draws. Resolved via Brand.resources, which
             // handles both unbundled builds (swift run) and the .app, where
@@ -109,13 +112,16 @@ let package = Package(
                               "-Xlinker", "@executable_path/../Frameworks"])
             ]
         ),
-        // The shared app layer above core (#123/#125): today just the iOS
-        // scaffold façade (root view, brand-font registration); grows into
-        // the home of AppModel + the portable views.
+        // The shared app layer above core (#123/#124): AppModel and its
+        // sub-models, the brand, and the portable launcher/popover
+        // components — everything both apps render. The Mac target keeps
+        // only its shell (MenuBarExtra, windows, Sparkle, login item) and
+        // window-hosted views (#125 moves those too).
         .target(
             name: "MomentTallyKit",
             dependencies: ["MomentTallyCore"],
-            path: "Sources/MomentTallyKit"
+            path: "Sources/MomentTallyKit",
+            exclude: ["README.md"]
         ),
         // The scriptable surface (#80): export to stdout, timer start/stop/
         // status for scripts and agent hooks (#79). Talks to the same store
@@ -127,22 +133,24 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
-            path: "Sources/MomentTallyCLI"
+            path: "Sources/MomentTallyCLI",
+            exclude: ["README.md"]
         ),
         .testTarget(
             name: "MomentTallyTests",
             // GRDB so tests can hand LocalBackend an in-memory DatabaseQueue
             // and inspect rows directly.
-            dependencies: ["MomentTally", "MomentTallyCore",
+            dependencies: ["MomentTally", "MomentTallyCore", "MomentTallyKit",
                            .product(name: "GRDB", package: "GRDB.swift")],
             path: "Tests/MomentTallyTests"
         ),
-        // Core-only tests, deliberately free of the Mac executable so the
-        // suite also runs against an iOS simulator destination (#123). A test
-        // that needs an app-layer symbol belongs in MomentTallyTests above.
+        // Core+kit tests, deliberately free of the Mac executable so the
+        // suite also runs against an iOS simulator destination (#123). A
+        // test that needs a Mac-shell symbol belongs in MomentTallyTests
+        // above.
         .testTarget(
             name: "MomentTallyCoreTests",
-            dependencies: ["MomentTallyCore",
+            dependencies: ["MomentTallyCore", "MomentTallyKit",
                            .product(name: "GRDB", package: "GRDB.swift")],
             path: "Tests/MomentTallyCoreTests"
         )

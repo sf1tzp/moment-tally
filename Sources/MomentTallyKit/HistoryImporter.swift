@@ -2,15 +2,24 @@ import Foundation
 import MomentTallyCore
 
 /// What one import run did — the Settings summary line reports these.
-struct ImportSummary: Equatable {
-    var spansInserted = 0
-    var spansUpdated = 0
+package struct ImportSummary: Equatable {
+    package var spansInserted = 0
+    package var spansUpdated = 0
     /// How many of the imported spans were still running at the source.
-    var runningSpans = 0
-    var definitionsCreated = 0
-    var definitionsRecolored = 0
+    package var runningSpans = 0
+    package var definitionsCreated = 0
+    package var definitionsRecolored = 0
 
-    var spansImported: Int { spansInserted + spansUpdated }
+    package init(spansInserted: Int = 0, spansUpdated: Int = 0, runningSpans: Int = 0,
+                 definitionsCreated: Int = 0, definitionsRecolored: Int = 0) {
+        self.spansInserted = spansInserted
+        self.spansUpdated = spansUpdated
+        self.runningSpans = runningSpans
+        self.definitionsCreated = definitionsCreated
+        self.definitionsRecolored = definitionsRecolored
+    }
+
+    package var spansImported: Int { spansInserted + spansUpdated }
 }
 
 /// One-shot import of a backend's full history into the local store (#30):
@@ -32,20 +41,28 @@ struct ImportSummary: Equatable {
 /// source-of-truth rule sets the color merge policy: an imported key color
 /// replaces the local one, because the colors a user picked over time at the
 /// source beat the auto-created defaults that usually sit locally.
-struct HistoryImporter {
-    let source: any Backend
-    let destination: LocalBackend
+package struct HistoryImporter {
+    package let source: any Backend
+    package let destination: LocalBackend
     /// Namespaces the source's span ids in the origin mapping — the server
     /// URL — so histories imported from two different servers can't collide.
-    let origin: String
+    package let origin: String
 
     /// Defensive bound on the page walk, same idea as the Tag Review scan's
     /// but sized for a full history (10k pages ≈ 1M spans on traggo's cap).
-    var maxPages = 10_000
+    package var maxPages = 10_000
+
+    package init(source: any Backend, destination: LocalBackend, origin: String,
+                 maxPages: Int = 10_000) {
+        self.source = source
+        self.destination = destination
+        self.origin = origin
+        self.maxPages = maxPages
+    }
 
     /// Runs the import. `progress` is awaited with the number of spans
     /// upserted so far, once per batch — the Settings surface shows it live.
-    func run(progress: (Int) async -> Void = { _ in }) async throws -> ImportSummary {
+    package func run(progress: (Int) async -> Void = { _ in }) async throws -> ImportSummary {
         var summary = ImportSummary()
 
         // Definitions first, so imported spans never reference unknown keys.

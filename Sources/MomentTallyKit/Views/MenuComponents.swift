@@ -1,17 +1,20 @@
 import SwiftUI
-import AppKit
 import MomentTallyCore
 
 /// A menu row that highlights (accent-filled, white text) on mouse-over, like
 /// Rectangle's status-menu rows. Disabled rows dim and don't highlight.
-struct MenuRowButtonStyle: ButtonStyle {
+package struct MenuRowButtonStyle: ButtonStyle {
     /// Off for quick-start rows: their hover treatment is an accent outline
     /// the caller draws around a larger region (button plus the
     /// hover-revealed quick-label chips), so the style must not paint its
     /// own accent fill, which would end at the button's edge.
-    var fillsOnHover = true
+    package var fillsOnHover = true
 
-    func makeBody(configuration: Configuration) -> some View {
+    package init(fillsOnHover: Bool = true) {
+        self.fillsOnHover = fillsOnHover
+    }
+
+    package func makeBody(configuration: Configuration) -> some View {
         Row(configuration: configuration, fillsOnHover: fillsOnHover)
     }
 
@@ -43,8 +46,10 @@ struct MenuRowButtonStyle: ButtonStyle {
 /// A small inline icon button (pencil, stop, ＋) for menu rows: secondary grey
 /// at rest, stepping up to primary on a subtle backing pill on mouse-over —
 /// SwiftUI's `.onHover` standing in for CSS's :hover.
-struct HoverIconButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
+package struct HoverIconButtonStyle: ButtonStyle {
+    package init() {}
+
+    package func makeBody(configuration: Configuration) -> some View {
         Icon(configuration: configuration)
     }
 
@@ -68,12 +73,18 @@ struct HoverIconButtonStyle: ButtonStyle {
 
 /// A tag shown as a colored capsule ("key: value"), colored by the tag's
 /// server-side color.
-struct TagPill: View {
-    let key: String
-    let value: String
-    let color: Color
+package struct TagPill: View {
+    package let key: String
+    package let value: String
+    package let color: Color
 
-    var body: some View {
+    package init(key: String, value: String, color: Color) {
+        self.key = key
+        self.value = value
+        self.color = color
+    }
+
+    package var body: some View {
         Text(value.isEmpty ? key : "\(key): \(value)")
             .font(.caption2)
             .lineLimit(1)
@@ -89,21 +100,29 @@ struct TagPill: View {
 /// starts the set with the quick label applied, replacing the set's value for
 /// the same key (see `TagSet.labels(applying:)`). Shared by the popover's
 /// quick-start rows and the Launcher cards.
-struct QuickLabelChip: View {
+package struct QuickLabelChip: View {
     @Environment(AppModel.self) private var model
-    let set: TagSet
-    let quick: TagRow
+    package let set: TagSet
+    package let quick: TagRow
     /// See `QuickLabelChipStyle.filled`.
-    var filled = false
+    package var filled = false
     /// The popover routes chip starts through its quickStart so a set still
     /// carrying a value-less label opens the editor, value focused (#162).
     /// The Launcher has no editor at hand and keeps the plain-start default.
-    var start: (([SpanLabel]) async -> Void)? = nil
+    package var start: (([SpanLabel]) async -> Void)? = nil
+
+    package init(set: TagSet, quick: TagRow, filled: Bool = false,
+                 start: (([SpanLabel]) async -> Void)? = nil) {
+        self.set = set
+        self.quick = quick
+        self.filled = filled
+        self.start = start
+    }
 
     private var key: String { normalizeKey(quick.key) }
     private var value: String { quick.value.trimmingCharacters(in: .whitespaces) }
 
-    var body: some View {
+    package var body: some View {
         Button {
             Task {
                 let labels = set.labels(applying: quick)
@@ -129,11 +148,16 @@ struct QuickLabelChip: View {
 /// filling with it on mouse-over. On busy backgrounds (the Launcher card
 /// scrim) the outline is too faint, so `filled` renders the fill at rest and
 /// moves the mouse-over feedback to a white ring instead.
-struct QuickLabelChipStyle: ButtonStyle {
-    let color: Color
-    var filled = false
+package struct QuickLabelChipStyle: ButtonStyle {
+    package let color: Color
+    package var filled = false
 
-    func makeBody(configuration: Configuration) -> some View {
+    package init(color: Color, filled: Bool = false) {
+        self.color = color
+        self.filled = filled
+    }
+
+    package func makeBody(configuration: Configuration) -> some View {
         Chip(configuration: configuration, color: color, filled: filled)
     }
 
@@ -147,12 +171,22 @@ struct QuickLabelChipStyle: ButtonStyle {
         private var highlighted: Bool { hovering && isEnabled }
         private var showFill: Bool { filled || highlighted }
 
+        /// Touch needs meat: the Mac popover's caption-sized chip is a ~17pt
+        /// target, fine for a cursor, hopeless for a thumb (#124).
+        private var touch: Bool {
+            #if os(iOS)
+            true
+            #else
+            false
+            #endif
+        }
+
         var body: some View {
             configuration.label
-                .font(.caption2)
+                .font(touch ? .footnote : .caption2)
                 .lineLimit(1)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
+                .padding(.horizontal, touch ? 12 : 7)
+                .padding(.vertical, touch ? 7 : 2)
                 .foregroundStyle(showFill
                                  ? AnyShapeStyle(color.contrastingTextColor)
                                  : AnyShapeStyle(.primary))
@@ -167,111 +201,18 @@ struct QuickLabelChipStyle: ButtonStyle {
     }
 }
 
-/// A color swatch for a tag. With "color by value" on (and a non-empty
-/// value) it edits the local per-`key: value` override; otherwise it edits the
-/// tag key's server-side color. Disabled when the key is blank. Shared by the
-/// Tag Sets settings pane and the running-timer tag editor.
-struct TagColorPicker: View {
-    @Environment(AppModel.self) private var model
-    let key: String
-    let value: String
-
-    private var keyEmpty: Bool { key.trimmingCharacters(in: .whitespaces).isEmpty }
-
-    var body: some View {
-        if model.colorTagsByValue && !value.isEmpty {
-            ColorPicker("", selection: Binding(
-                get: { model.tagColor(for: key, value: value) },
-                set: { model.setValueColor(key: key, value: value, color: $0) }
-            ), supportsOpacity: false)
-            .labelsHidden()
-            .disabled(keyEmpty)
-            .contextMenu {
-                Button("Use key color") {
-                    model.clearValueColor(key: key, value: value)
-                }
-                .disabled(model.valueColor(key: key, value: value) == nil)
-            }
-        } else {
-            ColorPicker("", selection: Binding(
-                get: { model.tagColor(for: key) },
-                set: { model.scheduleTagColor(for: key, color: $0) }
-            ), supportsOpacity: false)
-            .labelsHidden()
-            .disabled(keyEmpty)
-        }
-    }
-}
-
-extension NSColorPanel {
-    /// Close the shared color panel when the surface whose swatch opened it
-    /// goes away (the settings/onboarding window closing, the popover
-    /// dismissing).
-    ///
-    /// Every `TagColorPicker` fronts the one shared panel. When this
-    /// accessory app loses its last regular window it deactivates, and AppKit
-    /// hides the panel (`hidesOnDeactivate`) to re-show on the next
-    /// activation — which never comes for the non-activating menu-bar
-    /// popover, so a swatch click there re-fronted a window AppKit was
-    /// keeping hidden (#142). A real `close()` clears that state; the next
-    /// activation then opens it fresh. The `sharedColorPanelExists` guard
-    /// avoids instantiating the panel just to close it.
-    static func closeShared() {
-        guard sharedColorPanelExists else { return }
-        shared.close()
-    }
-}
-
 /// Shared metrics for key: value editor rows. Every label editor (popover
 /// timer editor, Tallies pane, log editor, the onboarding editors) follows
 /// the same anatomy: chip-shaped color swatch, narrow key field with a "key"
 /// hint, standalone colon, wide value field with a "value" hint, then a
 /// borderless "+ Add Mark" button directly after the rows.
-enum LabelEditorStyle {
+package enum LabelEditorStyle {
     /// Keys are short (`repo`, `feat`) — the value field takes the rest.
-    static let keyFieldWidth: CGFloat = 96
+    package static let keyFieldWidth: CGFloat = 96
     /// For the 300pt popover, where 96 would leave the value field narrower
     /// than the key — this keeps the small-key / wide-value proportion of
     /// the full-width editors.
-    static let compactKeyFieldWidth: CGFloat = 72
-}
-
-/// Rebuilds the window's key-view loop (the Tab order) when `token` changes.
-///
-/// The Moment Tally window computes the loop once and never revisits it when
-/// SwiftUI inserts fields later — an "+ Add Mark" row, or a whole editor
-/// expanding in place — so those fields are unreachable by Tab (resizing the
-/// window doesn't recompute it either). NSPopover's window evidently does
-/// recalculate on its own, which is why the popover editor never shows this.
-/// Attach with `refreshesKeyViewLoop(on:)`, keyed by whatever the field set
-/// derives from (row counts, the selected set's id).
-private struct KeyViewLoopRefresher: NSViewRepresentable {
-    let token: AnyHashable
-
-    final class Coordinator {
-        var lastToken: AnyHashable?
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-    func makeNSView(context: Context) -> NSView { NSView() }
-
-    func updateNSView(_ view: NSView, context: Context) {
-        guard context.coordinator.lastToken != token else { return }
-        context.coordinator.lastToken = token
-        // After the current update commits, so the new fields are in the
-        // window's view tree when the loop is recomputed.
-        DispatchQueue.main.async { [weak view] in
-            view?.window?.recalculateKeyViewLoop()
-        }
-    }
-}
-
-extension View {
-    /// Recompute the containing window's Tab order whenever `token` changes
-    /// (and once when this view first lands in the window).
-    func refreshesKeyViewLoop(on token: some Hashable) -> some View {
-        background(KeyViewLoopRefresher(token: AnyHashable(token)))
-    }
+    package static let compactKeyFieldWidth: CGFloat = 72
 }
 
 /// A stand-in for `TagColorPicker`'s well — the popover picker's swatch
@@ -279,10 +220,14 @@ extension View {
 /// user's palette (the walkthrough's mock editor). Sized and shaped to match
 /// the native `ColorPicker` well in the window editors (Tallies, Log), a
 /// 48×20 capsule, so every label-editor row reads the same.
-struct TagColorChip: View {
-    let color: Color
+package struct TagColorChip: View {
+    package let color: Color
 
-    var body: some View {
+    package init(color: Color) {
+        self.color = color
+    }
+
+    package var body: some View {
         Capsule()
             .fill(color)
             .frame(width: 18, height: 18)
@@ -292,10 +237,14 @@ struct TagColorChip: View {
 
 /// A simple left-to-right flow layout that wraps to the next line when it runs
 /// out of width — used for rows of `TagPill`s.
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 4
+package struct FlowLayout: Layout {
+    package var spacing: CGFloat = 4
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    package init(spacing: CGFloat = 4) {
+        self.spacing = spacing
+    }
+
+    package func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
         var x: CGFloat = 0, y: CGFloat = 0
         var rowHeight: CGFloat = 0, widest: CGFloat = 0
@@ -314,7 +263,7 @@ struct FlowLayout: Layout {
         return CGSize(width: min(widest, maxWidth), height: y + rowHeight)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    package func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var x: CGFloat = 0, y: CGFloat = 0
         var rowHeight: CGFloat = 0
         for subview in subviews {

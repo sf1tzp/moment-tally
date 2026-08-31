@@ -9,8 +9,9 @@ import Security
 /// CKContainer, which raises an uncatchable ObjC exception when the
 /// identifier isn't in the entitlements. Settings consults this to decide
 /// whether iCloud sync is offered at all.
-enum BuildEntitlements {
-    static let cloudKitAvailable: Bool = {
+package enum BuildEntitlements {
+    #if os(macOS)
+    package static let cloudKitAvailable: Bool = {
         guard let task = SecTaskCreateFromSelf(nil),
               let value = SecTaskCopyValueForEntitlement(
                 task, "com.apple.developer.icloud-container-identifiers" as CFString, nil)
@@ -24,11 +25,19 @@ enum BuildEntitlements {
     /// dev-profile build, "Production" for Developer ID). nil when the
     /// binary claims none; the store's environment guard then stays out of
     /// the way.
-    static let cloudKitEnvironment: String? = {
+    package static let cloudKitEnvironment: String? = {
         guard let task = SecTaskCreateFromSelf(nil),
               let value = SecTaskCopyValueForEntitlement(
                 task, "com.apple.developer.icloud-container-environment" as CFString, nil)
         else { return nil }
         return value as? String
     }()
+    #else
+    // SecTask is macOS-only. The iOS shell (ios/project.yml) claims no
+    // iCloud entitlements yet, so hard-coding "no CloudKit" is the truthful
+    // answer; when iOS sync lands, read the embedded provisioning profile
+    // (or gate on the entitlements plist the build injects) instead.
+    package static let cloudKitAvailable = false
+    package static let cloudKitEnvironment: String? = nil
+    #endif
 }

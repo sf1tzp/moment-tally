@@ -5,11 +5,11 @@ import Foundation
 /// of cases lives here. (History adds "the displayed week" as a nil case on
 /// its optional selection rather than here: a navigable week isn't a trailing
 /// window, and the review has no use for it.)
-enum TrailingRange: String, CaseIterable, Identifiable {
+package enum TrailingRange: String, CaseIterable, Identifiable {
     case days30, days90, year, all
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var label: String {
+    package var label: String {
         switch self {
         case .days30: "Last 30 days"
         case .days90: "Last 90 days"
@@ -20,9 +20,9 @@ enum TrailingRange: String, CaseIterable, Identifiable {
 
     /// Lower bound of the window. "All" uses 1970 — traggo needs a concrete
     /// bound, and nothing predates the epoch.
-    var start: Date { start(from: Date()) }
+    package var start: Date { start(from: Date()) }
 
-    func start(from now: Date, calendar: Calendar = .current) -> Date {
+    package func start(from now: Date, calendar: Calendar = .current) -> Date {
         switch self {
         case .days30: return calendar.date(byAdding: .day, value: -30, to: now) ?? .distantPast
         case .days90: return calendar.date(byAdding: .day, value: -90, to: now) ?? .distantPast

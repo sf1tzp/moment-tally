@@ -16,11 +16,16 @@ import UniformTypeIdentifiers
 /// dragging from the text fields must keep selecting text. The preview is a
 /// clear pixel: the live reshuffle is the feedback, and any real image would
 /// trail the cursor with AppKit's item-count badge stuck to it.
-struct RowReorderGrip: View {
-    let tag: TagRow
-    @Binding var dragged: UUID?
+package struct RowReorderGrip: View {
+    package let tag: TagRow
+    @Binding package var dragged: UUID?
 
-    var body: some View {
+    package init(tag: TagRow, dragged: Binding<UUID?>) {
+        self.tag = tag
+        self._dragged = dragged
+    }
+
+    package var body: some View {
         Image(systemName: "line.3.horizontal")
             .foregroundStyle(.tertiary)
             .help("Drag to reorder")
@@ -63,7 +68,7 @@ extension View {
     /// triggers wherever the drag hovers, not just over the grip. `onPerform`
     /// runs once the drop lands, for editors that persist through an explicit
     /// commit funnel rather than a binding observer (the popover's).
-    func rowReorderDrop(_ tag: TagRow, rows: Binding<[TagRow]>,
+    package func rowReorderDrop(_ tag: TagRow, rows: Binding<[TagRow]>,
                         dragged: Binding<UUID?>,
                         onPerform: (() -> Void)? = nil) -> some View {
         onDrop(of: [.text], delegate: RowReorderDropDelegate(
@@ -78,17 +83,25 @@ extension View {
 /// `DragGesture` drives the reshuffle instead: vertical travel in row-stride
 /// units picks the target slot, and the row snaps there live. `stride` is the
 /// measured row height plus the stack spacing; `onEnd` is the editor's commit.
-struct GestureReorderGrip: View {
-    let tag: TagRow
-    @Binding var rows: [TagRow]
-    let stride: CGFloat
-    let onEnd: () -> Void
+package struct GestureReorderGrip: View {
+    package let tag: TagRow
+    @Binding package var rows: [TagRow]
+    package let stride: CGFloat
+    package let onEnd: () -> Void
     /// The dragged row's index at gesture start — translation is cumulative,
     /// so the target slot is always start + travel, immune to the reshuffles
     /// the gesture itself causes.
     @State private var startIndex: Int?
 
-    var body: some View {
+    package init(tag: TagRow, rows: Binding<[TagRow]>, stride: CGFloat,
+                 onEnd: @escaping () -> Void) {
+        self.tag = tag
+        self._rows = rows
+        self.stride = stride
+        self.onEnd = onEnd
+    }
+
+    package var body: some View {
         Image(systemName: "line.3.horizontal")
             .foregroundStyle(.tertiary)
             .help("Drag to reorder")

@@ -1,5 +1,16 @@
 import SwiftUI
 import AppKit
+import MomentTallyKit
+
+/// The Mac shell's own observable models — auto-update and Start at Login
+/// are app-shell concerns with no iOS analogue, so they live beside
+/// `AppModel` rather than inside it (#124) and ride the environment into
+/// every window (see also SettingsWindowManager.item).
+@MainActor
+enum MacShell {
+    static let updater = UpdaterModel()
+    static let loginItem = LoginItemModel()
+}
 
 @main
 struct MomentTallyApp: App {
@@ -22,6 +33,8 @@ struct MomentTallyApp: App {
         MenuBarExtra {
             MenuContentView()
                 .environment(model)
+                .environment(MacShell.updater)
+                .environment(MacShell.loginItem)
                 .frame(width: 300)
         } label: {
             // The menu-bar label is reactive: when `activeTimer` changes (or the

@@ -1,5 +1,6 @@
 import SwiftUI
 import MomentTallyCore
+import MomentTallyKit
 import Observation
 
 /// The dataset behind the interactive walkthrough (issue #93): one

@@ -1,4 +1,5 @@
 import SwiftUI
+import MomentTallyKit
 import AppKit
 
 /// Owns the first-run "Welcome to Moment Tally" window (issue #93): a fixed-size,

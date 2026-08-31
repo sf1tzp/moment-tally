@@ -1,11 +1,6 @@
 import SwiftUI
 import AppKit
-
-/// The sections of the settings window, in toolbar order. Raw value = tab index.
-/// Content tabs first, then the one preferences tab (connection + behaviour).
-enum SettingsTab: Int, CaseIterable {
-    case launcher, tagSets, log, calendar, history, review, help, settings
-}
+import MomentTallyKit
 
 /// Owns the settings window and reuses a single instance. Modelled on
 /// Rectangle's preferences window: a toolbar-style `NSTabViewController` with an
@@ -93,6 +88,13 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
         // rather than to whatever SwiftUI proposes.
         let host = NSHostingController(rootView:
             AnyView(content.environment(model)
+                .environment(MacShell.updater)
+                .environment(MacShell.loginItem)
+                // Portable views (LauncherView) route sections through this
+                // seam; on the Mac that means switching this window's tab.
+                .environment(\.openAppSection, OpenAppSectionAction { [weak self] tab in
+                    self?.show(model: model, tab: tab)
+                })
                 .frame(width: size.width, height: size.height)))
         // In `.toolbar` style the window title follows the selected controller's
         // `title`. Give every section the same title so it stays static (an

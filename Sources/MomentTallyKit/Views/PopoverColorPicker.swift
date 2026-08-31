@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
 /// The popover's replacement for `TagColorPicker` (#13). The system
 /// `ColorPicker` fronts the shared `NSColorPanel` — a floating singleton that
@@ -16,11 +18,16 @@ import AppKit
 /// for the override case carries over too. Window surfaces (Settings, Log
 /// editor, Onboarding) keep `TagColorPicker` — the shared panel behaves
 /// conventionally in a regular activating window.
-struct PopoverTagColorPicker: View {
+package struct PopoverTagColorPicker: View {
     @Environment(AppModel.self) private var model
-    let key: String
-    let value: String
+    package let key: String
+    package let value: String
     @State private var isShowingPicker = false
+
+    package init(key: String, value: String) {
+        self.key = key
+        self.value = value
+    }
 
     private var keyEmpty: Bool { key.trimmingCharacters(in: .whitespaces).isEmpty }
     private var valueMode: Bool { model.colorTagsByValue && !value.isEmpty }
@@ -33,7 +40,7 @@ struct PopoverTagColorPicker: View {
                       set: { model.scheduleTagColor(for: key, color: $0) })
     }
 
-    var body: some View {
+    package var body: some View {
         Button {
             isShowingPicker.toggle()
         } label: {
@@ -53,6 +60,11 @@ struct PopoverTagColorPicker: View {
         }
         .popover(isPresented: $isShowingPicker, arrowEdge: .leading) {
             ColorPickerPanel(selection: selection)
+                #if os(iOS)
+                // Keep the chip-anchored popover shape on iPhone too — the
+                // default compact adaptation would blow it up to a sheet.
+                .presentationCompactAdaptation(.popover)
+                #endif
         }
     }
 }
@@ -69,8 +81,10 @@ private struct ColorPickerPanel: View {
     @State private var hue = 0.0
     @State private var saturation = 0.0
     @State private var brightness = 1.0
+    #if os(macOS)
     // Must outlive the async magnifier session or the callback never fires.
     @State private var sampler = NSColorSampler()
+    #endif
 
     /// Warm-to-cool through the persona palette (#201 — the website
     /// launcher.ts hexes), with traggo blue (#00add8) and the app's default
@@ -95,6 +109,9 @@ private struct ColorPickerPanel: View {
             HStack(spacing: 8) {
                 BrightnessBar(hue: hue, saturation: saturation, brightness: $brightness,
                               onChange: commit)
+                // The eyedropper is a Mac idea (NSColorSampler magnifies the
+                // shared screen); there is no iOS analogue, per #124.
+                #if os(macOS)
                 Button {
                     sampler.show { picked in
                         guard let picked else { return }
@@ -106,6 +123,7 @@ private struct ColorPickerPanel: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Pick color from screen")
+                #endif
             }
         }
         .padding(12)
@@ -134,11 +152,22 @@ private struct ColorPickerPanel: View {
         selection.wrappedValue = Color(hue: hue, saturation: saturation, brightness: brightness)
     }
 
+    /// RGB→HSB by hand, off `srgbComponents` — the same math NSColor's
+    /// `getHue` does, spelled portably so the panel compiles for iOS.
     private func seed(from color: Color) {
-        guard let c = NSColor(color).usingColorSpace(.sRGB) else { return }
-        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0
-        c.getHue(&h, saturation: &s, brightness: &b, alpha: nil)
-        hue = h; saturation = s; brightness = b
+        let (r, g, b) = color.srgbComponents
+        let mx = max(r, g, b), mn = min(r, g, b)
+        brightness = mx
+        saturation = mx == 0 ? 0 : (mx - mn) / mx
+        if mx == mn {
+            hue = 0
+        } else {
+            let d = mx - mn
+            let h: Double = if mx == r { (g - b) / d + (g < b ? 6 : 0) }
+                            else if mx == g { (b - r) / d + 2 }
+                            else { (r - g) / d + 4 }
+            hue = h / 6
+        }
     }
 }
 
