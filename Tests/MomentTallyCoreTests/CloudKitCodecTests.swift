@@ -2,7 +2,6 @@ import CloudKit
 import Foundation
 import GRDB
 import Testing
-@testable import MomentTally
 @testable import MomentTallyCore
 
 /// The CloudKit record codec (#121) and the v7 identity migration, exercised

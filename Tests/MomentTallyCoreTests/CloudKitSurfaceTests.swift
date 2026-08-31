@@ -1,7 +1,6 @@
 import CloudKit
 import Foundation
 import Testing
-@testable import MomentTally
 @testable import MomentTallyCore
 
 // MARK: - Delegate harness

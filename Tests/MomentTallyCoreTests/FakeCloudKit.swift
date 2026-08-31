@@ -1,6 +1,5 @@
 import CloudKit
 import Foundation
-@testable import MomentTally
 @testable import MomentTallyCore
 
 // MARK: - The fake CK layer (#121)

@@ -2,7 +2,6 @@ import CloudKit
 import Foundation
 import GRDB
 import Testing
-@testable import MomentTally
 @testable import MomentTallyCore
 
 /// One device: an in-memory store connected to CloudKit, a fake engine on

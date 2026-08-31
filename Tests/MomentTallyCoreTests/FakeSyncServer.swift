@@ -1,5 +1,4 @@
 import Foundation
-@testable import MomentTally
 @testable import MomentTallyCore
 
 /// An in-process v1 sync server: the same `SyncServerAPI` surface

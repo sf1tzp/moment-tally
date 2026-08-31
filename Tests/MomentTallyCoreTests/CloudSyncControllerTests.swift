@@ -1,7 +1,6 @@
 import Foundation
 import GRDB
 import Testing
-@testable import MomentTally
 @testable import MomentTallyCore
 
 /// The CloudKit trigger shell around the transport — status transitions,

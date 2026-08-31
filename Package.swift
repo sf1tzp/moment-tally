@@ -22,10 +22,22 @@ let package = Package(
     name: "MomentTally",
     platforms: [
         // macOS 14 gives us MenuBarExtra + the Observation framework (@Observable).
-        .macOS(.v14)
+        .macOS(.v14),
+        // iOS 17 pairs with macOS 14: CKSyncEngine (#121) and @Observable
+        // share the same floor. Only MomentTallyCore builds for iOS; the two
+        // executables stay Mac-only (the ios/ app shell links the library).
+        .iOS(.v17)
     ],
     products: [
         .executable(name: "MomentTally", targets: ["MomentTally"]),
+        // The shared app layer (#123): the iOS app shell (ios/project.yml)
+        // lives outside the package, so it cannot see `package`-access
+        // symbols — SwiftPM derives -package-name from the checkout
+        // directory, so Xcode's SWIFT_PACKAGE_NAME can't join it to the
+        // boundary portably. The shell instead links this library and uses
+        // its small public façade. #125 moves AppModel + the portable views
+        // in here so both apps render the same files.
+        .library(name: "MomentTallyKit", targets: ["MomentTallyKit"]),
         // The scriptable CLI (#80). The product is `moment-tally-cli`, not
         // `moment-tally`: keeping the -cli suffix preserves the guard against
         // a case-insensitive .build/ collision with the app's binary (the
@@ -97,6 +109,14 @@ let package = Package(
                               "-Xlinker", "@executable_path/../Frameworks"])
             ]
         ),
+        // The shared app layer above core (#123/#125): today just the iOS
+        // scaffold façade (root view, brand-font registration); grows into
+        // the home of AppModel + the portable views.
+        .target(
+            name: "MomentTallyKit",
+            dependencies: ["MomentTallyCore"],
+            path: "Sources/MomentTallyKit"
+        ),
         // The scriptable surface (#80): export to stdout, timer start/stop/
         // status for scripts and agent hooks (#79). Talks to the same store
         // file the app uses, through the same MomentTallyCore code.
@@ -116,6 +136,15 @@ let package = Package(
             dependencies: ["MomentTally", "MomentTallyCore",
                            .product(name: "GRDB", package: "GRDB.swift")],
             path: "Tests/MomentTallyTests"
+        ),
+        // Core-only tests, deliberately free of the Mac executable so the
+        // suite also runs against an iOS simulator destination (#123). A test
+        // that needs an app-layer symbol belongs in MomentTallyTests above.
+        .testTarget(
+            name: "MomentTallyCoreTests",
+            dependencies: ["MomentTallyCore",
+                           .product(name: "GRDB", package: "GRDB.swift")],
+            path: "Tests/MomentTallyCoreTests"
         )
     ],
     // Tools 6.0 only for the Swift Testing integration; the code stays in the

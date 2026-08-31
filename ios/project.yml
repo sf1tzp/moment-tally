@@ -1,0 +1,88 @@
+# The iOS app shell (#123). The Mac app stays pure SwiftPM — this project
+# exists only because simulator/device/App Store builds require Xcode. The
+# .xcodeproj is generated, never committed:
+#
+#     xcodegen generate --spec ios/project.yml
+#
+# The target is a thin shell over the local package: one @main file linking
+# MomentTallyKit's public façade. All real code lives in the package.
+name: MomentTally
+options:
+  bundleIdPrefix: com.streetfortress
+  deploymentTarget:
+    iOS: "17.0"
+  # The generated project sits in ios/; the package is the repo root.
+  createIntermediateGroups: true
+
+packages:
+  MomentTally:
+    path: ..
+
+# The core suite against an iOS destination (#123's test-split payoff):
+#
+#     xcodebuild test -project ios/MomentTally.xcodeproj -scheme CoreTests \
+#       -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+#
+# Only MomentTallyCoreTests — MomentTallyTests needs the Mac executable and
+# stays a swift-test concern.
+schemes:
+  CoreTests:
+    build:
+      targets:
+        MomentTallyIOS: build
+    test:
+      targets:
+        - package: MomentTally/MomentTallyCoreTests
+
+targets:
+  # Not `MomentTally`: that name collides with the package's Mac executable
+  # product, and Xcode's by-name implicit matching then drags the
+  # Sparkle-linked executable into the iOS build.
+  MomentTallyIOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: MomentTally
+        product: MomentTallyKit
+    settings:
+      base:
+        # Universal purchase (#116): the iOS app is the same ASC record as
+        # the Mac app, so it shares the Mac bundle id
+        # (scripts/Info.plist.in) — which is also what grants access to the
+        # CloudKit container (CloudKitCodec.containerId).
+        PRODUCT_BUNDLE_IDENTIFIER: com.streetfortress.MomentTally
+        PRODUCT_NAME: Moment Tally
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: 1
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 2GY54R95TD
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Moment Tally
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        # The font build phase below reads $HOME; Xcode's script sandbox
+        # would block that.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        SWIFT_VERSION: "5.10"
+    preBuildScripts:
+      # The iOS twin of bundle-app.sh's font-seeding step: licensed brand
+      # fonts live in the private sfi/brand-assets repo — never in this one,
+      # which mirrors to public GitHub — and inject at build time when the
+      # build machine has a checkout. BrandFonts.register() scans Fonts/ at
+      # launch and falls back to system faces when the directory is absent,
+      # so a mirror build still assembles a working app. xattr -c mirrors
+      # the quarantine-stripping the MAS pipeline needed (#244).
+      - name: Inject brand fonts
+        shell: /bin/bash
+        script: |
+          FONTS_DIR="${BRAND_FONTS_DIR:-$HOME/.sfi/brand-assets/fonts}"
+          DEST="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Fonts"
+          if [[ -d "$FONTS_DIR" ]]; then
+              mkdir -p "$DEST"
+              find "$FONTS_DIR" -maxdepth 1 \( -name '*.otf' -o -name '*.ttf' \) \
+                  -exec cp {} "$DEST/" \;
+              xattr -cr "$DEST"
+              echo "Injected brand fonts from $FONTS_DIR"
+          fi

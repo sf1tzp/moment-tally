@@ -1,7 +1,6 @@
 import Foundation
 import GRDB
 import Testing
-@testable import MomentTally
 @testable import MomentTallyCore
 
 /// The sync engine against the in-process `FakeSyncServer`: push of dirty
@@ -448,7 +447,9 @@ import Testing
 
         // Reorder locally; positions travel with the update pushes.
         var sets = try store.loadTagSets()
-        sets.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+        // Not move(fromOffsets:) — that's SwiftUI's, and this target imports
+        // no UI framework so it stays runnable on any destination.
+        sets.insert(sets.remove(at: 2), at: 0)
         try store.saveTagSets(sets)
         try await sync(engine)
         #expect(server.orderedSetNames == ["C", "A", "B"])

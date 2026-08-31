@@ -7,6 +7,35 @@ run:
 demo:
   ./.build/debug/MomentTally --demo
 
+# --- iOS (#123) ---
+
+# Regenerate ios/MomentTally.xcodeproj from ios/project.yml (the project is
+# generated, never committed). Deps: brew install xcodegen; full Xcode.
+ios-project:
+  xcodegen generate --spec ios/project.yml --project ios
+
+# Build the iOS app for the simulator. Brand fonts inject from
+# ~/.sfi/brand-assets/fonts when present (see ios/project.yml).
+ios-build sim="iPhone 17 Pro": ios-project
+  xcodebuild -project ios/MomentTally.xcodeproj -scheme MomentTallyIOS \
+    -destination 'platform=iOS Simulator,name={{sim}}' \
+    -derivedDataPath .build/ios-dd build
+
+# Install + launch on a booted simulator (boot one with:
+# `xcrun simctl boot "iPhone 17 Pro"` or from Simulator.app). Pass
+# `--demo`-equivalent via: SIMCTL_CHILD_MOMENTTALLY_DEMO=1 just ios-run
+ios-run: ios-build
+  xcrun simctl install booted \
+    ".build/ios-dd/Build/Products/Debug-iphonesimulator/Moment Tally.app"
+  xcrun simctl launch booted com.streetfortress.MomentTally
+
+# The core suite (MomentTallyCoreTests — everything free of the Mac
+# executable) against an iOS simulator destination.
+ios-test sim="iPhone 17 Pro": ios-project
+  xcodebuild test -project ios/MomentTally.xcodeproj -scheme CoreTests \
+    -destination 'platform=iOS Simulator,name={{sim}}' \
+    -derivedDataPath .build/ios-dd
+
 # --- Release assets (capture pipeline) ---
 
 # Process raw demo-mode captures (captures/raw/) into distributable

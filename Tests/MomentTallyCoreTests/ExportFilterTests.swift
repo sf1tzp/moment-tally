@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-@testable import MomentTally
 @testable import MomentTallyCore
 
 /// The CLI's export filter (#80): selector parsing, the include/exclude

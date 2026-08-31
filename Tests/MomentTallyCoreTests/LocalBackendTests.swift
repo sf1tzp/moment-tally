@@ -1,7 +1,6 @@
 import Foundation
 import GRDB
 import Testing
-@testable import MomentTally
 @testable import MomentTallyCore
 
 /// The local store, exercised end to end over real (in-memory or temp-file)

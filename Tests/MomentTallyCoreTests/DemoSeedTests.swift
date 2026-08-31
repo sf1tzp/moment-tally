@@ -1,7 +1,6 @@
 import Foundation
 import GRDB
 import Testing
-@testable import MomentTally
 @testable import MomentTallyCore
 
 /// The demo seeder (#39, renovated in #172): activation parsing,

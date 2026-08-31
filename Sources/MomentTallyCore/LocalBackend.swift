@@ -163,12 +163,19 @@ package final class LocalBackend: Backend {
     /// shrink it to exercise the page walk with few rows.
     var pageSize = 200
 
-    /// The store has no login — the "account" is whoever owns the Mac.
+    /// The store has no login — the "account" is whoever owns the device.
     /// A stable id keeps `TimeSpan`/`User` shapes identical across backends.
-    package static let localUser = User(
-        id: 1,
-        name: NSFullUserName().isEmpty ? NSUserName() : NSFullUserName(),
-        admin: true)
+    /// iOS has no user-account name to read (NSFullUserName() exists there
+    /// but answers "mobile"), so the display name degrades to a pronoun.
+    package static let localUser = User(id: 1, name: localUserName, admin: true)
+
+    private static var localUserName: String {
+        #if os(macOS)
+        NSFullUserName().isEmpty ? NSUserName() : NSFullUserName()
+        #else
+        "Me"
+        #endif
+    }
 
     /// Opens (creating on first run) the default on-disk store.
     package convenience init(legacyDefaults: UserDefaults = .standard) throws {

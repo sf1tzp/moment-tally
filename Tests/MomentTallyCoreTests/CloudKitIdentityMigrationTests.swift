@@ -1,7 +1,6 @@
 import Foundation
 import GRDB
 import Testing
-@testable import MomentTally
 @testable import MomentTallyCore
 
 /// The v7 identity migration: existing spans are backfilled with distinct
