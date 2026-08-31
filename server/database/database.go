@@ -65,6 +65,24 @@ func New(dialect, connection string) (*gorm.DB, error) {
 		Where("quick IS NULL").
 		Update("quick", false)
 
+	// And for span-tag positions (#159). On sqlite, rank by rowid within
+	// each span — the insertion order clients had been observing before the
+	// column existed. Other dialects never returned a stable pre-column
+	// order to preserve (and mysql cannot update a table its subquery
+	// reads), so zero is as good as any; the next edit of a span rewrites
+	// its tags with real positions.
+	if dialect == "sqlite3" {
+		db.Exec(`UPDATE time_span_tags SET position = (
+			SELECT COUNT(*) FROM time_span_tags AS other
+			WHERE other.time_span_id = time_span_tags.time_span_id
+			AND other.rowid < time_span_tags.rowid)
+			WHERE position IS NULL`)
+	} else {
+		db.Table("time_span_tags").
+			Where("position IS NULL").
+			Update("position", 0)
+	}
+
 	log.Debug().Msg("Database initialized")
 	return db, nil
 }

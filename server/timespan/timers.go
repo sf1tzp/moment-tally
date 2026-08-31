@@ -13,7 +13,7 @@ func (r *ResolverForTimeSpan) Timers(ctx context.Context) ([]*gqlmodel.TimeSpan,
 	user := auth.GetUser(ctx)
 
 	var timeSpans []model.TimeSpan
-	r.DB.Preload("Tags").
+	preloadTags(r.DB).
 		Where("user_id = ?", user.ID).
 		Where("end_user_time is null").
 		Order("start_user_time DESC").

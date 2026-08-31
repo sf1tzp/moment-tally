@@ -31,7 +31,7 @@ func (r *ResolverForTimeSpan) TimeSpanChanges(ctx context.Context, since model.T
 
 	sinceUTC := since.UTC()
 	var spans []model.TimeSpan
-	find := r.DB.Preload("Tags").
+	find := preloadTags(r.DB).
 		Where("user_id = ?", userID).
 		Where("updated_at_utc > ? OR (updated_at_utc = ? AND id > ?)", sinceUTC, sinceUTC, afterID).
 		Order("updated_at_utc, id").

@@ -22,7 +22,7 @@ func (r *ResolverForTimeSpan) TimeSpans(ctx context.Context, fromInclusive *mode
 		cursor.StartID = &s.ID
 	}
 
-	call := r.DB.Preload("Tags").Where("user_id = ?", user.ID).Not("end_user_time is NULL").Order("start_user_time DESC").Limit(*cursor.PageSize)
+	call := preloadTags(r.DB).Where("user_id = ?", user.ID).Not("end_user_time is NULL").Order("start_user_time DESC").Limit(*cursor.PageSize)
 	if cursor.Offset != nil && cursor.StartID != nil {
 		call = call.Where("id <= ?", *cursor.StartID).Offset(*cursor.Offset)
 	}

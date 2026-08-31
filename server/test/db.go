@@ -178,10 +178,11 @@ func (d *TimeSpanWithDatabase) AssertExists(exist bool) *TimeSpanWithDatabase {
 	return d
 }
 
-// Tag adds a tag to the time span.
+// Tag adds a tag to the time span, positioned after the existing ones.
 func (d *TimeSpanWithDatabase) Tag(key string, stringValue string) *TimeSpanWithDatabase {
 	tag := model.TimeSpanTag{
 		TimeSpanID:  d.TimeSpan.ID,
+		Position:    len(d.TimeSpan.Tags),
 		Key:         key,
 		StringValue: stringValue,
 	}

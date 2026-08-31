@@ -13,7 +13,7 @@ import (
 func (r *ResolverForTimeSpan) StopTimeSpan(ctx context.Context, id int, end model.Time) (*gqlmodel.TimeSpan, error) {
 	old := &model.TimeSpan{ID: id}
 
-	if r.DB.Preload("Tags").Where("user_id = ?", auth.GetUser(ctx).ID).Find(old).RecordNotFound() {
+	if preloadTags(r.DB).Where("user_id = ?", auth.GetUser(ctx).ID).Find(old).RecordNotFound() {
 		return nil, fmt.Errorf("time span with id %d does not exist", id)
 	}
 

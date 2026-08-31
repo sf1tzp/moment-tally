@@ -22,7 +22,10 @@ type TimeSpan struct {
 
 // TimeSpanTag is a tag for a time range
 type TimeSpanTag struct {
-	TimeSpanID  int `gorm:"type:int REFERENCES time_spans(id) ON DELETE CASCADE"`
+	TimeSpanID int `gorm:"type:int REFERENCES time_spans(id) ON DELETE CASCADE"`
+	// Position orders the tags within their span (ascending). Rows that
+	// predate the column are backfilled on startup (see database.New).
+	Position    int
 	Key         string
 	StringValue string
 }

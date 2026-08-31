@@ -4,9 +4,19 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jinzhu/gorm"
 	"momenttally.com/server/generated/gqlmodel"
 	"momenttally.com/server/model"
 )
+
+// preloadTags preloads span tags in position order. Every read path must use
+// this — a plain Preload("Tags") returns rows in incidental storage order,
+// which is not label order after a reorder or row rewrite (#159).
+func preloadTags(db *gorm.DB) *gorm.DB {
+	return db.Preload("Tags", func(db *gorm.DB) *gorm.DB {
+		return db.Order("position")
+	})
+}
 
 // syncNow is the clock for sync timestamps (UpdatedAtUTC, tombstones):
 // whole seconds so values round-trip through RFC3339 exactly, which the
@@ -71,8 +81,10 @@ func tagsToExternal(tags []model.TimeSpanTag) []*gqlmodel.Label {
 
 func tagsToInternal(gqls []*gqlmodel.InputLabel) []model.TimeSpanTag {
 	result := make([]model.TimeSpanTag, 0)
-	for _, tag := range gqls {
-		result = append(result, tagToInternal(*tag))
+	for i, tag := range gqls {
+		internal := tagToInternal(*tag)
+		internal.Position = i
+		result = append(result, internal)
 	}
 	return result
 }
