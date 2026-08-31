@@ -1,0 +1,24 @@
+name: Unicode Linting Gate
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  lint-unicode:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Run Unicode Detector
+        # This scans all codebase files including READMEs, YAMLs, and source text
+        run: npx anti-trojan-source --files="**/*" --verbose
+
