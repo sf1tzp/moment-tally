@@ -75,10 +75,33 @@ let package = Package(
             dependencies: appDependencies,
             path: "Sources/MomentTally",
             exclude: ["README.md"],
+            // Resources (brand art, license texts) live in the kit since
+            // #125 — both apps render them. This target carries none.
+            // MAS_BUILD switches Updater.swift to its Sparkle-free stub.
+            swiftSettings: masBuild ? [.define("MAS_BUILD")] : [],
+            linkerSettings: [
+                // Sparkle.framework rides in the .app at Contents/Frameworks;
+                // SwiftPM only adds an rpath into .build/artifacts (which also
+                // keeps unbundled dev builds working), so add the bundle-
+                // relative one ourselves.
+                .unsafeFlags(["-Xlinker", "-rpath",
+                              "-Xlinker", "@executable_path/../Frameworks"])
+            ]
+        ),
+        // The shared app layer above core (#123/#124): AppModel and its
+        // sub-models, the brand, and the portable launcher/popover
+        // components — everything both apps render. The Mac target keeps
+        // only its shell (MenuBarExtra, windows, Sparkle, login item) and
+        // window-hosted views (#125 moves those too).
+        .target(
+            name: "MomentTallyKit",
+            dependencies: ["MomentTallyCore"],
+            path: "Sources/MomentTallyKit",
+            exclude: ["README.md"],
             // The brand font (OFL text rides alongside) and the icon the
             // onboarding masthead draws. Resolved via Brand.resources, which
-            // handles both unbundled builds (swift run) and the .app, where
-            // bundle-app.sh copies the bundle into Contents/Resources —
+            // handles unbundled builds (swift run), the Mac .app (bundle-app.sh
+            // copies the bundle into Contents/Resources), and the iOS app —
             // swift build's Bundle.module accessor can't find it there.
             resources: [
                 .copy("Resources/AppIcon.icns"),
@@ -101,27 +124,9 @@ let package = Package(
                 .copy("Resources/Sparkle-MIT.txt"),
                 .copy("Resources/SwiftArgumentParser-Apache.txt")
             ],
-            // MAS_BUILD switches Updater.swift to its Sparkle-free stub.
-            swiftSettings: masBuild ? [.define("MAS_BUILD")] : [],
-            linkerSettings: [
-                // Sparkle.framework rides in the .app at Contents/Frameworks;
-                // SwiftPM only adds an rpath into .build/artifacts (which also
-                // keeps unbundled dev builds working), so add the bundle-
-                // relative one ourselves.
-                .unsafeFlags(["-Xlinker", "-rpath",
-                              "-Xlinker", "@executable_path/../Frameworks"])
-            ]
-        ),
-        // The shared app layer above core (#123/#124): AppModel and its
-        // sub-models, the brand, and the portable launcher/popover
-        // components — everything both apps render. The Mac target keeps
-        // only its shell (MenuBarExtra, windows, Sparkle, login item) and
-        // window-hosted views (#125 moves those too).
-        .target(
-            name: "MomentTallyKit",
-            dependencies: ["MomentTallyCore"],
-            path: "Sources/MomentTallyKit",
-            exclude: ["README.md"]
+            // HelpView's acknowledgements list drops Sparkle/argument-parser
+            // entries in the store build, same define as the app target.
+            swiftSettings: masBuild ? [.define("MAS_BUILD")] : []
         ),
         // The scriptable surface (#80): export to stdout, timer start/stop/
         // status for scripts and agent hooks (#79). Talks to the same store
@@ -136,18 +141,12 @@ let package = Package(
             path: "Sources/MomentTallyCLI",
             exclude: ["README.md"]
         ),
-        .testTarget(
-            name: "MomentTallyTests",
-            // GRDB so tests can hand LocalBackend an in-memory DatabaseQueue
-            // and inspect rows directly.
-            dependencies: ["MomentTally", "MomentTallyCore", "MomentTallyKit",
-                           .product(name: "GRDB", package: "GRDB.swift")],
-            path: "Tests/MomentTallyTests"
-        ),
-        // Core+kit tests, deliberately free of the Mac executable so the
-        // suite also runs against an iOS simulator destination (#123). A
-        // test that needs a Mac-shell symbol belongs in MomentTallyTests
-        // above.
+        // The whole suite: core + kit tests, deliberately free of the Mac
+        // executable so it also runs against an iOS simulator destination
+        // (#123). Since #125 moved the last app-layer types into the kit,
+        // nothing tests the Mac shell itself and the old MomentTallyTests
+        // target is gone; a future shell test would bring it back with a
+        // "MomentTally" dependency.
         .testTarget(
             name: "MomentTallyCoreTests",
             dependencies: ["MomentTallyCore", "MomentTallyKit",

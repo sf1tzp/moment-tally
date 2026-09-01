@@ -1,17 +1,19 @@
 import SwiftUI
 import MomentTallyCore
-import MomentTallyKit
 
 /// The Log tab: a day-sectioned, scrollable list of the week's moments.
 /// Clicking a row expands it into an inline `TimeSpanEditorView`.
-struct LogView: View {
+package struct LogView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openAppSection) private var openAppSection
     /// The id of the span currently expanded for editing (one at a time).
     @State private var editingID: Int?
     /// The filter field's raw text (#51); parsed fresh each render.
     @State private var filterText = ""
 
-    var body: some View {
+    package init() {}
+
+    package var body: some View {
         let history = model.history
         ScrollViewReader { proxy in
             VStack(spacing: 0) {
@@ -253,7 +255,7 @@ struct LogView: View {
                     if !span.labels.isEmpty, !model.hasTagSet(matching: span.labels) {
                         Button {
                             model.newTagSet(from: span.labels)
-                            SettingsWindowManager.shared.show(model: model, tab: .tagSets)
+                            openAppSection(.tagSets)
                         } label: {
                             Image(systemName: "plus")
                         }

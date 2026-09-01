@@ -1,5 +1,4 @@
 import SwiftUI
-import MomentTallyKit
 import Charts
 
 /// The History tab: a donut + totals breakdown and a daily stacked bar chart
@@ -13,11 +12,27 @@ import Charts
 /// toggle (#109) in the header row can instead nest the first grouping
 /// inside the second ("in Groups"): one full-width donut and one daily stack
 /// of strict "outer · inner" pairs (#151).
-struct HistoryChartsView: View {
+package struct HistoryChartsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    #endif
 
-    var body: some View {
+    package init() {}
+
+    /// Compact width — iPhone portrait, iPad Slide Over / narrow Split View
+    /// — stacks what the regular arrangement sets side by side (#125; #126
+    /// builds on the same switch). The Mac window is always regular.
+    private var isCompact: Bool {
+        #if os(iOS)
+        horizontalSizeClass == .compact
+        #else
+        false
+        #endif
+    }
+
+    package var body: some View {
         let history = model.history
         VStack(spacing: 0) {
             header
@@ -54,41 +69,68 @@ struct HistoryChartsView: View {
     /// The trailing side mirrors the navigator (mode toggle, progress,
     /// refresh) so the three history tabs keep one row shape.
     private var header: some View {
-        @Bindable var history = model.history
-        return HStack(spacing: 8) {
-            Picker("Range", selection: $history.chartRange) {
-                Text("Week").tag(TrailingRange?.none)
-                ForEach(TrailingRange.allCases) { range in
-                    Text(range.label).tag(TrailingRange?.some(range))
+        Group {
+            if isCompact {
+                // The one row overflows a portrait phone; the mode toggle
+                // gets a line of its own.
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        rangeCluster
+                        Spacer()
+                        refreshCluster
+                    }
+                    modeToggle
+                }
+            } else {
+                HStack(spacing: 8) {
+                    rangeCluster
+                    Spacer()
+                    modeToggle
+                    refreshCluster
                 }
             }
-            .fixedSize()
-
-            if history.chartRange == nil {
-                WeekControlsView()
-                Text(history.weekLabel)
-                    .font(.headline)
-            } else {
-                Text(history.chartRangeLabel)
-                    .font(.headline)
-            }
-
-            Spacer()
-
-            modeToggle
-
-            if history.isLoading || history.isLoadingRange {
-                ProgressView().controlSize(.small)
-            }
-            Button {
-                Task { await history.reloadChartWindow() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .help("Refresh")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private var rangeCluster: some View {
+        @Bindable var history = model.history
+        Picker("Range", selection: $history.chartRange) {
+            Text("Week").tag(TrailingRange?.none)
+            ForEach(TrailingRange.allCases) { range in
+                Text(range.label).tag(TrailingRange?.some(range))
+            }
+        }
+        .fixedSize()
+
+        if history.chartRange == nil {
+            WeekControlsView()
+            Text(history.weekLabel)
+                .font(.headline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)   // compact header: shrink, don't wrap
+        } else {
+            Text(history.chartRangeLabel)
+                .font(.headline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+    }
+
+    @ViewBuilder
+    private var refreshCluster: some View {
+        let history = model.history
+        if history.isLoading || history.isLoadingRange {
+            ProgressView().controlSize(.small)
+        }
+        Button {
+            Task { await history.reloadChartWindow() }
+        } label: {
+            Image(systemName: "arrow.clockwise")
+        }
+        .help("Refresh")
     }
 
     /// The mode toggle, slotted into the header row (#151):
@@ -128,10 +170,18 @@ struct HistoryChartsView: View {
                     // second compares another breakdown of the same window; until
                     // one is picked (or it has no data) a placeholder ring holds
                     // its place.
-                    HStack(alignment: .top, spacing: 20) {
-                        donutColumn(selection: $history.chartGrouping, includeNone: false)
-                        Divider()
-                        donutColumn(selection: $history.chartGrouping2, includeNone: true)
+                    if isCompact {
+                        VStack(alignment: .leading, spacing: 16) {
+                            donutColumn(selection: $history.chartGrouping, includeNone: false)
+                            Divider()
+                            donutColumn(selection: $history.chartGrouping2, includeNone: true)
+                        }
+                    } else {
+                        HStack(alignment: .top, spacing: 20) {
+                            donutColumn(selection: $history.chartGrouping, includeNone: false)
+                            Divider()
+                            donutColumn(selection: $history.chartGrouping2, includeNone: true)
+                        }
                     }
                 }
 
@@ -162,9 +212,17 @@ struct HistoryChartsView: View {
                 } else {
                     let colors = colorMap(for: totals, grouping: grouping)
                     let grand = totals.reduce(0) { $0 + $1.seconds }
-                    HStack(alignment: .center, spacing: 16) {
-                        donut(totals: totals, colors: colors, grand: grand)
-                        breakdownList(totals: totals, colors: colors, grand: grand)
+                    if isCompact {
+                        VStack(alignment: .leading, spacing: 12) {
+                            donut(totals: totals, colors: colors, grand: grand)
+                                .frame(maxWidth: .infinity)
+                            breakdownList(totals: totals, colors: colors, grand: grand)
+                        }
+                    } else {
+                        HStack(alignment: .center, spacing: 16) {
+                            donut(totals: totals, colors: colors, grand: grand)
+                            breakdownList(totals: totals, colors: colors, grand: grand)
+                        }
                     }
                 }
             } else {
@@ -262,17 +320,30 @@ struct HistoryChartsView: View {
             // empty, #151 follow-up) the donut and its legend centre as a unit,
             // with flanking Spacers giving symmetric breathing room. A bigger
             // donut than the split view's earns the extra prominence.
-            HStack(alignment: .center, spacing: 28) {
-                Spacer(minLength: 24)
-                // Strict pairing excludes spans missing either dimension,
-                // so this total can undershoot the week's — "matched"
-                // keeps it from contradicting the footer's "tracked".
-                donut(totals: totals, colors: colors, grand: grand,
-                      caption: "matched", size: 200)
-                combinedBreakdownList(totals: totals, colors: colors, grand: grand)
-                Spacer(minLength: 24)
+            if isCompact {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Strict pairing excludes spans missing either dimension,
+                    // so this total can undershoot the week's — "matched"
+                    // keeps it from contradicting the footer's "tracked".
+                    donut(totals: totals, colors: colors, grand: grand,
+                          caption: "matched", size: 200)
+                        .frame(maxWidth: .infinity)
+                    combinedBreakdownList(totals: totals, colors: colors, grand: grand)
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                HStack(alignment: .center, spacing: 28) {
+                    Spacer(minLength: 24)
+                    // Strict pairing excludes spans missing either dimension,
+                    // so this total can undershoot the week's — "matched"
+                    // keeps it from contradicting the footer's "tracked".
+                    donut(totals: totals, colors: colors, grand: grand,
+                          caption: "matched", size: 200)
+                    combinedBreakdownList(totals: totals, colors: colors, grand: grand)
+                    Spacer(minLength: 24)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
         }
     }
 

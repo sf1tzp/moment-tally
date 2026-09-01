@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import MomentTally
+@testable import MomentTallyKit
 
 /// The Help → Acknowledgements list (#115) against the resource bundle: every
 /// entry's license text must load, or the card silently shows nothing when a

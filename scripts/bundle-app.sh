@@ -104,8 +104,8 @@ cp "$ROOT/scripts/container-migration.plist" \
 # The SwiftPM resource bundle (brand font + masthead icon). Brand.resources
 # looks here — swift build's Bundle.module accessor does NOT check
 # Contents/Resources, only the .app root and the builder's absolute .build path.
-ditto "$REL/MomentTally_MomentTally.bundle" \
-      "$APP/Contents/Resources/MomentTally_MomentTally.bundle"
+ditto "$REL/MomentTally_MomentTallyKit.bundle" \
+      "$APP/Contents/Resources/MomentTally_MomentTallyKit.bundle"
 # Licensed brand fonts (PR #202): live in the private sfi/brand-assets repo —
 # never in this one, which mirrors to public GitHub — and inject at bundle
 # time when the build machine has a checkout. Brand.registerFonts() scans

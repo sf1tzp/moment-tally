@@ -1,6 +1,5 @@
 import SwiftUI
 import MomentTallyCore
-import MomentTallyKit
 
 // Shared pieces for the three history tabs (Log, Calendar, History/charts).
 
@@ -11,10 +10,12 @@ import MomentTallyKit
 /// The History/charts tab renders its own header (`HistoryChartsView`): its
 /// range picker can swap the week controls out entirely (#163), but it reuses
 /// `WeekControlsView` so the stepping cluster stays one implementation.
-struct WeekNavigatorView: View {
+package struct WeekNavigatorView: View {
     @Environment(AppModel.self) private var model
 
-    var body: some View {
+    package init() {}
+
+    package var body: some View {
         let history = model.history
         HStack(spacing: 8) {
             WeekControlsView()
@@ -41,10 +42,12 @@ struct WeekNavigatorView: View {
 
 /// The `‹ Today ›` week-stepping cluster, shared by the week navigator and
 /// the charts header's week mode.
-struct WeekControlsView: View {
+package struct WeekControlsView: View {
     @Environment(AppModel.self) private var model
 
-    var body: some View {
+    package init() {}
+
+    package var body: some View {
         let history = model.history
         HStack(spacing: 2) {
             Button { history.goToPreviousWeek() } label: {
@@ -72,16 +75,16 @@ struct WeekControlsView: View {
 /// so the running timer has one edit, whichever surface it's typed into
 /// (#61). Explicit Save for now; whether the running editor should
 /// live-commit like the popover is a review decision.
-struct TimeSpanEditorView: View {
+package struct TimeSpanEditorView: View {
     @Environment(AppModel.self) private var model
-    let span: TimeSpan
-    var onDone: () -> Void
+    package let span: TimeSpan
+    package var onDone: () -> Void
     /// Move the editing surface to another timespan — New Timer hands the
     /// panel over to the span it just started. Parents that can re-anchor
     /// their editor (the Log's expanded row) pass this; ones that can't (the
     /// Calendar's per-block popover, whose blocks don't exist until relayout)
     /// leave it nil and the panel just closes.
-    var onOpen: ((TimeSpan) -> Void)?
+    package var onOpen: ((TimeSpan) -> Void)?
 
     @State private var start: Date
     @State private var end: Date
@@ -93,7 +96,7 @@ struct TimeSpanEditorView: View {
     /// autosave below must not re-commit (or resurrect) their drafts.
     @State private var closedExplicitly = false
 
-    init(span: TimeSpan, onDone: @escaping () -> Void,
+    package init(span: TimeSpan, onDone: @escaping () -> Void,
          onOpen: ((TimeSpan) -> Void)? = nil) {
         self.span = span
         self.onDone = onDone
@@ -106,7 +109,7 @@ struct TimeSpanEditorView: View {
         _note = State(initialValue: span.note)
     }
 
-    var body: some View {
+    package var body: some View {
         // A stop registers in two steps: the span leaves `activeTimers`
         // synchronously, and the reloaded (finished) span value arrives a
         // beat later. Route on the first signal so the finished editor is on
@@ -459,7 +462,10 @@ private struct MinuteSteppingDatePicker: View {
         HStack(spacing: 2) {
             DatePicker(label, selection: $date,
                        displayedComponents: [.date, .hourAndMinute])
+                // .field is a Mac style; iOS keeps .compact's tappable pills.
+                #if os(macOS)
                 .datePickerStyle(.field)
+                #endif
                 // Keep the intrinsic width: sharing a row with a Spacer and
                 // the #60 action buttons otherwise squeezes the label into a
                 // one-character-per-line vertical wrap.
@@ -487,7 +493,7 @@ private struct MinuteSteppingDatePicker: View {
 
 extension TimeSpan {
     /// "10:32 – 11:25", or "10:32 –" while running.
-    var timeRangeLabel: String {
+    package var timeRangeLabel: String {
         let f = Date.FormatStyle.dateTime.hour(.twoDigits(amPM: .omitted)).minute()
         let startText = start.formatted(f)
         guard let end else { return "\(startText) –" }
@@ -495,7 +501,7 @@ extension TimeSpan {
     }
 
     /// Duration so far (running spans count up to now).
-    var durationSeconds: TimeInterval {
+    package var durationSeconds: TimeInterval {
         (end ?? Date()).timeIntervalSince(start)
     }
 }

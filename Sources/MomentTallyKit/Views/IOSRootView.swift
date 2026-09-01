@@ -2,10 +2,10 @@
 import SwiftUI
 import MomentTallyCore
 
-/// The iOS app's root (#124): the launcher as the first tab of a TabView —
-/// the navigation shape settled with #125 in mind — with Log / Calendar /
-/// History tabs stubbed until view parity (#125) fills them in. Owns the
-/// `AppModel`, exactly like the Mac's `MomentTallyApp`.
+/// The iOS app's root (#124/#125): the launcher as the first tab of a
+/// TabView, with the parity views (#125) on the remaining tabs and the
+/// section sheets. Owns the `AppModel`, exactly like the Mac's
+/// `MomentTallyApp`.
 public struct MomentTallyRootView: View {
     @State private var model = AppModel()
     @State private var selection: Pane = .launcher
@@ -15,8 +15,8 @@ public struct MomentTallyRootView: View {
         case launcher, log, calendar, history
     }
 
-    /// Sections with no tab of their own yet: they present as sheets. Real
-    /// content lands with #125 (Tallies editor, Review, Help, Settings).
+    /// Sections with no tab of their own: they present as sheets over
+    /// whichever tab is up (#125).
     private enum SheetRoute: String, Identifiable {
         case tagSets, review, help, settings
         var id: String { rawValue }
@@ -38,36 +38,85 @@ public struct MomentTallyRootView: View {
             IOSLauncherHome()
                 .tabItem { Label("Launch", systemImage: "square.grid.2x2") }
                 .tag(Pane.launcher)
-            placeholder("Log", icon: "list.bullet.rectangle")
-                .tabItem { Label("Log", systemImage: "list.bullet.rectangle") }
-                .tag(Pane.log)
-            placeholder("Calendar", icon: "calendar")
-                .tabItem { Label("Calendar", systemImage: "calendar") }
-                .tag(Pane.calendar)
-            placeholder("History", icon: "chart.pie")
-                .tabItem { Label("History", systemImage: "chart.pie") }
-                .tag(Pane.history)
+            NavigationStack {
+                LogView()
+                    .navigationTitle("Log")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            .tabItem { Label("Log", systemImage: "list.bullet.rectangle") }
+            .tag(Pane.log)
+            NavigationStack {
+                CalendarView()
+                    .navigationTitle("Calendar")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            .tabItem { Label("Calendar", systemImage: "calendar") }
+            .tag(Pane.calendar)
+            NavigationStack {
+                HistoryChartsView()
+                    .navigationTitle("History")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            .tabItem { Label("History", systemImage: "chart.pie") }
+            .tag(Pane.history)
         }
         .environment(model)
         .environment(\.openAppSection, OpenAppSectionAction { tab in
             open(tab)
         })
         .sheet(item: $sheet) { route in
+            sheetContent(route)
+                .environment(model)
+                .environment(\.openAppSection, OpenAppSectionAction { tab in
+                    // A section chosen from inside a sheet (Log ＋ → Tallies,
+                    // Review → Log) lands on its tab/sheet, not on top.
+                    sheet = nil
+                    open(tab)
+                })
+        }
+    }
+
+    /// The sheet-presented sections. TagSetsSettingsView brings its own
+    /// NavigationStack (it pushes the detail editor); the rest get one here
+    /// with an explicit Done.
+    @ViewBuilder
+    private func sheetContent(_ route: SheetRoute) -> some View {
+        switch route {
+        case .tagSets:
+            TagSetsSettingsView()
+        case .review:
             NavigationStack {
-                ContentUnavailableView {
-                    Label(route.title, systemImage: "hammer")
-                } description: {
-                    Text("Arrives with iOS view parity — issue #125.")
-                }
-                .navigationTitle(route.title)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { sheet = nil }
+                TagReviewView()
+                    .navigationTitle("Review")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { sheet = nil }
+                        }
                     }
-                }
             }
-            .presentationDetents([.medium])
+        case .help:
+            NavigationStack {
+                HelpView()
+                    .navigationTitle("Help")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { sheet = nil }
+                        }
+                    }
+            }
+        case .settings:
+            NavigationStack {
+                GeneralSettingsView()
+                    .navigationTitle("Settings")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { sheet = nil }
+                        }
+                    }
+            }
         }
     }
 
@@ -85,15 +134,5 @@ public struct MomentTallyRootView: View {
         }
     }
 
-    private func placeholder(_ title: String, icon: String) -> some View {
-        NavigationStack {
-            ContentUnavailableView {
-                Label(title, systemImage: icon)
-            } description: {
-                Text("Arrives with iOS view parity — issue #125.")
-            }
-            .navigationTitle(title)
-        }
-    }
 }
 #endif

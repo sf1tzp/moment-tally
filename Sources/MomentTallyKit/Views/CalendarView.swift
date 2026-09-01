@@ -1,20 +1,34 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 import MomentTallyCore
-import MomentTallyKit
 
 /// The Calendar tab: a 7-day week grid with a vertical time axis, moments as
 /// colored blocks (like the web UI's calendar). Overlapping spans share the
 /// column width via lane packing; clicking a block jumps to the Log tab with
 /// that span open for editing (#130 — the grid is too dense for a popover).
 /// Spans crossing midnight render one segment per day they touch.
-struct CalendarView: View {
+/// The hairline between day cells — NSColor.separatorColor / UIColor.separator.
+private var separatorColor: Color {
+    #if os(macOS)
+    Color(nsColor: .separatorColor)
+    #else
+    Color(uiColor: .separator)
+    #endif
+}
+
+package struct CalendarView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openAppSection) private var openAppSection
 
     private let hourHeight: CGFloat = 40
     private let gutterWidth: CGFloat = 46
     private var gridHeight: CGFloat { hourHeight * 24 }
 
-    var body: some View {
+    package init() {}
+
+    package var body: some View {
         let history = model.history
         VStack(spacing: 0) {
             WeekNavigatorView()
@@ -103,12 +117,12 @@ struct CalendarView: View {
                 // Hour lines + left border.
                 ForEach(0..<24, id: \.self) { hour in
                     Rectangle()
-                        .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                        .fill(separatorColor.opacity(0.5))
                         .frame(height: 1)
                         .padding(.top, CGFloat(hour) * hourHeight)
                 }
                 Rectangle()
-                    .fill(Color(nsColor: .separatorColor))
+                    .fill(separatorColor)
                     .frame(width: 1)
 
                 ForEach(segments(for: day)) { segment in
@@ -132,7 +146,7 @@ struct CalendarView: View {
             // Hand the span to the Log tab and switch over — it scrolls to
             // the row and expands it.
             model.history.requestLogEdit(of: segment.span)
-            SettingsWindowManager.shared.show(model: model, tab: .log)
+            openAppSection(.log)
         } label: {
             VStack(alignment: .leading, spacing: 1) {
                 Text(segment.span.timeRangeLabel)

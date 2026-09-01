@@ -1,18 +1,23 @@
 import SwiftUI
 import MomentTallyCore
-import MomentTallyKit
-import AppKit
 import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 // The settings window itself (a toolbar-style NSTabViewController) is built in
 // SettingsWindowManager. These are the individual section panes it hosts.
 
 // MARK: - Settings (connection + behaviour)
 
-struct GeneralSettingsView: View {
+/// Generic over the shell's own settings sections: Sparkle and Start at
+/// Login are Mac-shell concerns whose types this module cannot see, so the
+/// Mac window passes them in as trailing content (#125); iOS passes none.
+package struct GeneralSettingsView<PlatformSections: View>: View {
     @Environment(AppModel.self) private var model
-    @Environment(UpdaterModel.self) private var appUpdater
-    @Environment(LoginItemModel.self) private var appLoginItem
+    private let platformSections: PlatformSections
     @State private var username = ""
     @State private var password = ""
     @State private var syncURL = ""
@@ -20,8 +25,14 @@ struct GeneralSettingsView: View {
     @State private var syncPassword = ""
     @State private var exportError: String?
     @State private var exportedTo: String?
+    @State private var exportDocument: JSONExportDocument?
+    @State private var showExporter = false
 
-    var body: some View {
+    package init(@ViewBuilder platformSections: () -> PlatformSections) {
+        self.platformSections = platformSections()
+    }
+
+    package var body: some View {
         @Bindable var model = model
         Form {
             Section("Storage") {
@@ -49,7 +60,7 @@ struct GeneralSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Export as JSON…", action: runExport)
+                    Button("Export as JSON…", action: prepareExport)
                 }
                 if let exportedTo {
                     Label("Exported to \(exportedTo)", systemImage: "checkmark.circle.fill")
@@ -71,6 +82,13 @@ struct GeneralSettingsView: View {
             menuAndTagSections
         }
         .formStyle(.grouped)
+        .fileExporter(isPresented: $showExporter, document: exportDocument,
+                      contentType: .json, defaultFilename: exportFilename) { result in
+            switch result {
+            case .success(let url): exportedTo = url.lastPathComponent
+            case .failure(let error): exportError = error.localizedDescription
+            }
+        }
     }
 
     // MARK: Sync (#33 self-hosted, #121 iCloud)
@@ -238,47 +256,7 @@ struct GeneralSettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        // Start at Login (#169). Absent from dev builds and demos, where
-        // there is no bundle to register — see LoginItemModel.
-        if appLoginItem.isAvailable {
-            @Bindable var loginItem = appLoginItem
-            Section("Login") {
-                Toggle("Start Moment Tally at login", isOn: $loginItem.startsAtLogin)
-                if loginItem.requiresApproval {
-                    // Switched off behind the app's back — only System
-                    // Settings can turn it back on.
-                    HStack {
-                        Text("Switched off in System Settings › Login Items. Turn it back on there — the toggle above can’t override it.")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                        Spacer()
-                        Button("Open Login Items…") { loginItem.openSystemSettings() }
-                    }
-                } else {
-                    Text("Opens Moment Tally in the menu bar when you log in to this Mac. A per-Mac setting — it doesn’t sync.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if let error = loginItem.lastError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .lineLimit(3)
-                }
-            }
-        }
-        // Sparkle (#46). Absent from dev builds and demos, where there is no
-        // updater to configure.
-        if appUpdater.isAvailable {
-            @Bindable var updater = appUpdater
-            Section("Updates") {
-                Toggle("Check for updates in the background",
-                       isOn: $updater.automaticallyChecksForUpdates)
-                Text("Checks about once a day and offers new versions when they appear. Off means updates only come from “Check for Updates…” in the menu.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
+        platformSections
     }
 
     // MARK: Import from traggo (#30)
@@ -349,47 +327,59 @@ struct GeneralSettingsView: View {
 
     // MARK: Export to JSON (#57)
 
-    /// Ask where to save, then write the store's snapshot there. The panel
-    /// runs modal: the settings window is a plain AppKit window and the
-    /// export itself is a synchronous single-file read.
-    private func runExport() {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.json]
-        panel.canCreateDirectories = true
-        panel.isExtensionHidden = false
-        panel.nameFieldStringValue = "Moment Tally Export \(Self.filenameDate.string(from: Date())).json"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+    /// Snapshot the store, then hand the bytes to `fileExporter` — the one
+    /// cross-platform save flow (#125 retired the Mac's NSSavePanel for it).
+    /// The read is synchronous and single-file, so snapshotting before the
+    /// picker appears is fine and surfaces store errors immediately.
+    private func prepareExport() {
         exportedTo = nil
         exportError = nil
         do {
-            try model.exportJSON().write(to: url)
-            exportedTo = url.lastPathComponent
+            exportDocument = JSONExportDocument(data: try model.exportJSON())
+            showExporter = true
         } catch {
             exportError = error.localizedDescription
         }
     }
 
-    /// The default filename's date stamp — the user's calendar day, safe in a
-    /// filename (no colons or slashes).
-    private static let filenameDate: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
+    private var exportFilename: String {
+        "Moment Tally Export \(exportFilenameDate.string(from: Date()))"
+    }
+
 }
+
+extension GeneralSettingsView where PlatformSections == EmptyView {
+    /// The no-platform-sections case (iOS): nothing to append to the form.
+    package init() {
+        self.init { EmptyView() }
+    }
+}
+
+/// The default export filename's date stamp — the user's calendar day, safe
+/// in a filename (no colons or slashes). File-scope: generic types can't
+/// hold static stored properties.
+private let exportFilenameDate: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd"
+    return formatter
+}()
 
 // MARK: - Tallies
 
-struct TagSetsSettingsView: View {
+package struct TagSetsSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var selection: TagSet.ID?
     @State private var pendingDelete: TagSet?
+    /// iOS: the pushed detail (the Mac shows a sidebar + detail split).
+    @State private var path: [TagSet.ID] = []
 
-    var body: some View {
-        splitView
+    package init() {}
+
+    package var body: some View {
+        platformBody
             // Pre-select a set so the editor is populated on open: one handed
             // over from another surface (Log ＋ / Launcher ＋ card) wins,
-            // otherwise the first set.
+            // otherwise the first set (Mac; iOS pushes only on hand-over).
             .onAppear { consumePendingSelection() }
             .onChange(of: model.pendingTagSetSelection) { consumePendingSelection() }
             .confirmationDialog(
@@ -420,14 +410,76 @@ struct TagSetsSettingsView: View {
     }
 
     private func consumePendingSelection() {
+        #if os(macOS)
         if let pending = model.pendingTagSetSelection {
             selection = pending
             model.pendingTagSetSelection = nil
         } else if selection == nil {
             selection = model.tagSets.first?.id
         }
+        #else
+        if let pending = model.pendingTagSetSelection {
+            path = [pending]
+            model.pendingTagSetSelection = nil
+        }
+        #endif
     }
 
+    @ViewBuilder
+    private var platformBody: some View {
+        #if os(macOS)
+        splitView
+        #else
+        iosBody
+        #endif
+    }
+
+    #if os(iOS)
+    /// The list-and-push shape (#125): rows reorder with the standard edit
+    /// mode (order matters — the popover and home grid read the first N),
+    /// swipe deletes, ＋ creates and pushes via the same
+    /// `pendingTagSetSelection` hand-over the Mac surfaces use.
+    private var iosBody: some View {
+        @Bindable var model = model
+        return NavigationStack(path: $path) {
+            List {
+                ForEach(model.tagSets) { set in
+                    NavigationLink(value: set.id) {
+                        HStack(spacing: 12) {
+                            LauncherTileIcon(set: set, size: 28)
+                            Text(set.name.isEmpty ? "Untitled" : set.name)
+                        }
+                    }
+                }
+                .onDelete { offsets in
+                    if let index = offsets.first {
+                        requestDelete(model.tagSets[index])
+                    }
+                }
+                .onMove { model.tagSets.move(fromOffsets: $0, toOffset: $1) }
+            }
+            .navigationTitle("Tallies")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: TagSet.ID.self) { id in
+                if let index = model.tagSets.firstIndex(where: { $0.id == id }) {
+                    TagSetDetailView(tagSet: $model.tagSets[index])
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { EditButton() }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        model.newTagSet()
+                    } label: {
+                        Label("New Tally", systemImage: "plus")
+                    }
+                }
+            }
+        }
+    }
+    #endif
+
+    #if os(macOS)
     private var splitView: some View {
         @Bindable var model = model
         return HSplitView {
@@ -479,16 +531,21 @@ struct TagSetsSettingsView: View {
             }
         }
     }
+    #endif
 }
 
-struct TagSetDetailView: View {
+package struct TagSetDetailView: View {
     @Environment(AppModel.self) private var model
-    @Binding var tagSet: TagSet
+    @Binding package var tagSet: TagSet
     @FocusState private var nameFocused: Bool
     /// The row being drag-reordered — see RowReorder.swift.
     @State private var dragged: UUID?
 
-    var body: some View {
+    package init(tagSet: Binding<TagSet>) {
+        self._tagSet = tagSet
+    }
+
+    package var body: some View {
         VStack(spacing: 0) {
             // The preview leads (#179): what the edits below add up to,
             // floating over the window background above the scrolling form.
@@ -518,7 +575,9 @@ struct TagSetDetailView: View {
             Section("Marks") {
                 ForEach($tagSet.tags) { $tag in
                     HStack(spacing: 6) {
+                        #if os(macOS)
                         RowReorderGrip(tag: tag, dragged: $dragged)
+                        #endif
                         // With no effective labels every row is keyless, so
                         // instead of a disabled swatch each row offers the
                         // set's fallback card color — the first place a
@@ -544,6 +603,9 @@ struct TagSetDetailView: View {
                             .labelsHidden()
                             .multilineTextAlignment(.leading)
                             .autocorrectionDisabled()
+                        // iOS deletes by swipe and reorders in edit mode;
+                        // the Mac keeps the per-row minus and drag grip.
+                        #if os(macOS)
                         Button(role: .destructive) {
                             // Read the id before removeAll — reading the
                             // `tag` binding inside the predicate re-enters
@@ -554,9 +616,16 @@ struct TagSetDetailView: View {
                             Image(systemName: "minus.circle")
                         }
                         .buttonStyle(.borderless)
+                        #endif
                     }
+                    #if os(macOS)
                     .rowReorderDrop(tag, rows: $tagSet.tags, dragged: $dragged)
+                    #endif
                 }
+                #if os(iOS)
+                .onDelete { tagSet.tags.remove(atOffsets: $0) }
+                .onMove { tagSet.tags.move(fromOffsets: $0, toOffset: $1) }
+                #endif
                 HStack(spacing: 6) {
                     // A set with no rows at all (quick labels do the work)
                     // still needs somewhere to pick its card color — the
@@ -608,6 +677,13 @@ struct TagSetDetailView: View {
         // sidebar selection moves, so onAppear alone misses set switches.
         .onAppear { if tagSet.name.isEmpty { nameFocused = true } }
         .onChange(of: tagSet.id) { if tagSet.name.isEmpty { nameFocused = true } }
+        #if os(iOS)
+        .navigationTitle(tagSet.name.isEmpty ? "Untitled" : tagSet.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { EditButton() }
+        }
+        #endif
     }
 
     /// This set's quick labels (#61): hovering the set in the popover or
@@ -618,7 +694,9 @@ struct TagSetDetailView: View {
         Section {
             ForEach(quickRows) { $tag in
                 HStack(spacing: 6) {
+                    #if os(macOS)
                     RowReorderGrip(tag: tag, dragged: $dragged)
+                    #endif
                     TagColorPicker(key: tag.key, value: tag.value)
                     TextField("key", text: $tag.key, prompt: Text("key"))
                         .textFieldStyle(.roundedBorder)
@@ -632,6 +710,7 @@ struct TagSetDetailView: View {
                         .labelsHidden()
                         .multilineTextAlignment(.leading)
                         .autocorrectionDisabled()
+                    #if os(macOS)
                     Button(role: .destructive) {
                         // Read the id before removeAll — reading the `tag`
                         // binding inside the predicate re-enters the array's
@@ -642,9 +721,16 @@ struct TagSetDetailView: View {
                         Image(systemName: "minus.circle")
                     }
                     .buttonStyle(.borderless)
+                    #endif
                 }
+                #if os(macOS)
                 .rowReorderDrop(tag, rows: quickRows, dragged: $dragged)
+                #endif
             }
+            #if os(iOS)
+            .onDelete { quickRows.wrappedValue.remove(atOffsets: $0) }
+            .onMove { quickRows.wrappedValue.move(fromOffsets: $0, toOffset: $1) }
+            #endif
             Button {
                 quickRows.wrappedValue.append(TagRow())
             } label: {
@@ -797,6 +883,30 @@ private struct SymbolPicker: View {
     /// otherwise be flagged as the very typo this is looking for.
     private var selectionResolves: Bool {
         guard let name = selection, name != TagSet.markSymbol else { return true }
+        #if os(macOS)
         return NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil
+        #else
+        return UIImage(systemName: name) != nil
+        #endif
+    }
+}
+
+/// The export payload as a `FileDocument`, so both platforms share
+/// `fileExporter` for Save-as-JSON (#57/#125). Write-only in practice —
+/// reading exists to satisfy the protocol (and round-trips the bytes).
+package struct JSONExportDocument: FileDocument {
+    package static let readableContentTypes: [UTType] = [.json]
+    package let data: Data
+
+    package init(data: Data) {
+        self.data = data
+    }
+
+    package init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    package func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }

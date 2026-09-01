@@ -8,22 +8,6 @@ import MomentTallyKit
 // lives in MomentTallyKit/Brand.swift.
 extension Brand {
 
-    /// The SwiftPM resource bundle. `swift build`'s generated `Bundle.module`
-    /// checks only the .app root and the absolute .build path of the machine
-    /// that compiled the release — on any other machine it fatalErrors before
-    /// the first frame. Look where bundle-app.sh actually puts the bundle
-    /// (Contents/Resources), then fall back to `.module` for unbundled
-    /// `swift run` builds, where the baked-in .build path is the right one.
-    /// Non-private: HelpView's acknowledgements load license texts from here.
-    /// Mac-side (not the kit): the resources live in the Mac target, whose
-    /// `Bundle.module` this is; iOS's resource story arrives with #125.
-    static let resources: Bundle = {
-        if let url = Bundle.main.resourceURL?
-            .appendingPathComponent("MomentTally_MomentTally.bundle"),
-           let bundle = Bundle(url: url) { return bundle }
-        return .module
-    }()
-
     /// The tally-mark tile, from the bundled icns (works unbundled, where
     /// `NSApp.applicationIconImage` would be the generic executable icon).
     static var appIcon: NSImage? {

@@ -189,12 +189,16 @@ package struct IOSLauncherHome: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             if model.tagSets.isEmpty {
-                // Set creation lives in the Tallies editor (#125); until it
-                // lands the empty state points at the Mac app.
                 ContentUnavailableView {
                     Label("No tallies yet", systemImage: "square.grid.2x2")
                 } description: {
-                    Text("Tallies made on your Mac appear here when iCloud sync is on.")
+                    Text("A tally is a one-tap timer for something you do often.")
+                } actions: {
+                    Button("Create a tally") {
+                        model.newTagSet()
+                        openAppSection(.tagSets)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
             } else {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(),

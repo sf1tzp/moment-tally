@@ -28,6 +28,36 @@ import UIKit
 /// Sources/MomentTally/BrandMac.swift.
 package enum Brand {
 
+    /// The SwiftPM resource bundle (brand art, license texts — kit-owned
+    /// since #125, both apps render them). `swift build`'s generated
+    /// `Bundle.module` checks only the .app root and the absolute .build
+    /// path of the machine that compiled the release — on any other machine
+    /// it fatalErrors before the first frame. Look where the builds actually
+    /// put the bundle (Mac: Contents/Resources via bundle-app.sh; iOS: the
+    /// bundle root, where Xcode lands it under the same name), then fall
+    /// back to `.module` for unbundled `swift run` builds, where the
+    /// baked-in .build path is the right one.
+    package static let resources: Bundle = {
+        if let url = Bundle.main.resourceURL?
+            .appendingPathComponent("MomentTally_MomentTallyKit.bundle"),
+           let bundle = Bundle(url: url) { return bundle }
+        return .module
+    }()
+
+    /// A masthead lockup ("Wordmark", "Tagline", "Motif") as a SwiftUI
+    /// image, appearance-keyed because the renders bake their ink color in.
+    /// The platform-image twins for AppKit spots stay in BrandMac.swift.
+    package static func lockupImage(_ name: String, for scheme: ColorScheme) -> Image? {
+        guard let url = resources.url(
+            forResource: "\(name)-\(scheme == .dark ? "dark" : "light")",
+            withExtension: "png") else { return nil }
+        #if os(macOS)
+        return NSImage(contentsOf: url).map { Image(nsImage: $0) }
+        #else
+        return UIImage(contentsOfFile: url.path).map { Image(uiImage: $0) }
+        #endif
+    }
+
     /// The display face: SF compressed black oblique — the closest system
     /// stand-in for Morganite Pro's ultra-condensed heavy oblique (the
     /// website lockup's face, licensed here as rasterised art only).

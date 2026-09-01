@@ -1,6 +1,5 @@
 import SwiftUI
 import MomentTallyCore
-import MomentTallyKit
 
 /// The Tallies editor's preview (#179), floating above the form on the
 /// window background — no section box — centred, with air before the fields
@@ -12,10 +11,14 @@ import MomentTallyKit
 /// lookalike with the chips permanently revealed — the state the onboarding
 /// walkthrough's Quick Marks page shows, since in the real popover they
 /// only appear on hover.
-struct TagSetPreview: View {
-    let tagSet: TagSet
+package struct TagSetPreview: View {
+    package let tagSet: TagSet
 
-    var body: some View {
+    package init(tagSet: TagSet) {
+        self.tagSet = tagSet
+    }
+
+    package var body: some View {
         HStack(alignment: .center, spacing: 32) {
             Spacer(minLength: 0)
             TagSetCard(set: tagSet, isPreview: true)

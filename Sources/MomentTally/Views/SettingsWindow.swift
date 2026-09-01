@@ -52,7 +52,8 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
         tabController.addTabViewItem(item("Help", symbol: "questionmark.circle",
                                           content: HelpView(), model: model, size: size))
         tabController.addTabViewItem(item("Settings", symbol: "gear",
-                                          content: GeneralSettingsView(), model: model, size: size))
+                                          content: GeneralSettingsView { MacSettingsSections() },
+                                          model: model, size: size))
 
         let window = NSWindow(contentViewController: tabController)
         window.styleMask = [.titled, .closable, .miniaturizable]
@@ -95,6 +96,9 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
                 .environment(\.openAppSection, OpenAppSectionAction { [weak self] tab in
                     self?.show(model: model, tab: tab)
                 })
+                .environment(\.replayTour) {
+                    OnboardingWindowManager.shared.show(model: model, replay: true)
+                }
                 .frame(width: size.width, height: size.height)))
         // In `.toolbar` style the window title follows the selected controller's
         // `title`. Give every section the same title so it stays static (an

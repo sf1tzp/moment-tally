@@ -1,6 +1,5 @@
 import SwiftUI
 import MomentTallyCore
-import MomentTallyKit
 import CoreTransferable
 import UniformTypeIdentifiers
 
@@ -25,8 +24,9 @@ private struct TagMovePayload: Codable, Transferable {
 /// value, to land on that exact spelling — stages a move. Staged changes
 /// collect in the Approve Changes pane at the bottom as a red/green diff and
 /// apply as one batch.
-struct TagReviewView: View {
+package struct TagReviewView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openAppSection) private var openAppSection
 
     /// What the rename sheet is renaming: a value of a key, or (value == nil)
     /// the key itself.
@@ -65,7 +65,9 @@ struct TagReviewView: View {
                 })
     }
 
-    var body: some View {
+    package init() {}
+
+    package var body: some View {
         let review = model.review
         VStack(spacing: 0) {
             controls
@@ -361,7 +363,7 @@ struct TagReviewView: View {
     /// the span first when it's outside the loaded one.
     private func openInLog(_ span: TimeSpan) {
         model.history.requestLogEdit(of: span)
-        SettingsWindowManager.shared.show(model: model, tab: .log)
+        openAppSection(.log)
     }
 
     /// Dragging a row that's part of the current selection carries the whole

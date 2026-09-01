@@ -20,4 +20,8 @@ package struct OpenAppSectionAction {
 
 extension EnvironmentValues {
     @Entry package var openAppSection = OpenAppSectionAction { _ in }
+
+    /// Replay the onboarding tour — injected by shells that have one (the
+    /// Mac's walkthrough window); Help hides its replay card when absent.
+    @Entry package var replayTour: (() -> Void)? = nil
 }

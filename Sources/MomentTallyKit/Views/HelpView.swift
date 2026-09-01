@@ -1,5 +1,4 @@
 import SwiftUI
-import MomentTallyKit
 
 /// The Help tab: a "Replay the tour" launcher up top (issue #192 — the
 /// interactive walkthrough explains the app better than any of the prose
@@ -9,15 +8,20 @@ import MomentTallyKit
 /// tag sets as launch presets, review rewrites bounded by the scan) otherwise
 /// live only in code comments — keep the sections short and cheap to amend as
 /// features change.
-struct HelpView: View {
+package struct HelpView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.replayTour) private var replayTour
     @State private var expanded: Set<String> = []
 
-    var body: some View {
+    package init() {}
+
+    package var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                ReplayTourCard {
-                    OnboardingWindowManager.shared.show(model: model, replay: true)
+                // The interactive tour is Mac-only until the walkthrough
+                // ports; shells that have it inject the action (#125).
+                if let replayTour {
+                    ReplayTourCard { replayTour() }
                 }
                 ForEach(HelpSection.all) { section in
                     HelpSectionCard(section: section, isExpanded: binding(for: section.id))
@@ -386,23 +390,30 @@ private struct HelpSection: Identifiable {
 /// swift-argument-parser: that binary links no updater and bundles no CLI,
 /// so their notices would credit code the user didn't receive. Internal (not
 /// fileprivate) so the resource-drift test can see it.
-struct Acknowledgement: Identifiable {
-    let name: String
-    let detail: String
-    let license: String
+package struct Acknowledgement: Identifiable {
+    package let name: String
+    package let detail: String
+    package let license: String
     /// Filename (no extension) of the bundled license text.
-    let resource: String
+    package let resource: String
 
-    var id: String { name }
+    package init(name: String, detail: String, license: String, resource: String) {
+        self.name = name
+        self.detail = detail
+        self.license = license
+        self.resource = resource
+    }
+
+    package var id: String { name }
 
     /// The full license text; nil only if this list and the resource bundle
     /// drift apart, which AcknowledgementTests pins.
-    var licenseText: String? {
+    package var licenseText: String? {
         Brand.resources.url(forResource: resource, withExtension: "txt")
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
     }
 
-    static let all: [Acknowledgement] = {
+    package static let all: [Acknowledgement] = {
         var all = [
             Acknowledgement(
                 name: "GRDB.swift",
@@ -435,12 +446,16 @@ struct Acknowledgement: Identifiable {
 /// per component with its license text expandable underneath, so the
 /// notices those licenses ask for ship inside the app rather than in a
 /// file nobody finds).
-struct AboutCard: View {
-    static let id = "about"
-    @Binding var isExpanded: Bool
+package struct AboutCard: View {
+    package static let id = "about"
+    @Binding package var isExpanded: Bool
     @Environment(\.colorScheme) private var colorScheme
 
-    var body: some View {
+    package init(isExpanded: Binding<Bool>) {
+        self._isExpanded = isExpanded
+    }
+
+    package var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 withAnimation(.easeOut(duration: 0.15)) { isExpanded.toggle() }
@@ -494,16 +509,16 @@ struct AboutCard: View {
     /// ~3× headroom on Retina.
     private var masthead: some View {
         VStack(spacing: 0) {
-            if let motif = Brand.motif(for: colorScheme) {
-                Image(nsImage: motif)
+            if let motif = Brand.lockupImage("Motif", for: colorScheme) {
+                motif
                     .resizable()
                     .interpolation(.high)
                     .scaledToFit()
                     .frame(height: 120)
                     .accessibilityHidden(true)  // decorative; the wordmark speaks
             }
-            if let wordmark = Brand.wordmarkLockup(for: colorScheme) {
-                Image(nsImage: wordmark)
+            if let wordmark = Brand.lockupImage("Wordmark", for: colorScheme) {
+                wordmark
                     .resizable()
                     .interpolation(.high)
                     .scaledToFit()
