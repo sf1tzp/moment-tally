@@ -1,3 +1,6 @@
+// Apple-only (#85): these tests exercise the app layer in MomentTallyKit,
+// which (like the SwiftUI beneath it) does not exist on Linux.
+#if canImport(MomentTallyKit)
 import Foundation
 import Testing
 @testable import MomentTallyKit
@@ -188,3 +191,4 @@ import Testing
         #expect(LogFilter.parse("").matches(span(labels: [SpanLabel(key: "a", value: "b")])))
     }
 }
+#endif

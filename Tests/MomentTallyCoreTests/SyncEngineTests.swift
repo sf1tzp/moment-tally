@@ -455,6 +455,37 @@ import Testing
         #expect(server.orderedSetNames == ["C", "A", "B"])
     }
 
+    /// The other half of #159's test gap: span label order through a full
+    /// sync round-trip — push order, a reorder edit, and what a second
+    /// device holds after pulling it. (The server side pins its own ORDER BY
+    /// against a scrambled store; here the fake preserves arrays, so this
+    /// guards the client bookkeeping around it.)
+    @Test func spanLabelOrderRoundTrips() async throws {
+        let (store, server, engine) = try makeConnected()
+        let labels = [SpanLabel(key: "proj", value: "sync"),
+                      SpanLabel(key: "area", value: "server"),
+                      SpanLabel(key: "mood", value: "good")]
+        let span = try await store.startTimeSpan(start: date(1_000),
+                                                 labels: labels, note: "")
+        try await sync(engine)
+        #expect(server.spans.values.first?.labels == labels)
+
+        // A local reorder pushes; the server copy follows element for element.
+        let reordered = Array(labels.reversed())
+        _ = try await store.updateTimeSpan(id: span.id, start: date(1_000),
+                                           end: nil, labels: reordered, note: "")
+        try await sync(engine)
+        #expect(server.spans.values.first?.labels == reordered)
+
+        // A second device stores the pulled order, not an incidental one.
+        let storeB = try LocalBackend(DatabaseQueue())
+        try storeB.connectSyncServer(url: "https://sync.test",
+                                     user: User(id: 1, name: "steven", admin: false))
+        let engineB = SyncEngine(store: storeB, server: server)
+        _ = try await engineB.performSync()
+        #expect(try await allSpans(storeB).map(\.labels) == [reordered])
+    }
+
     // MARK: Preferences
 
     @Test func preferencesPushWhenNeverSetOnServer() async throws {

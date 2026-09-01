@@ -1,4 +1,6 @@
+#if canImport(CloudKit)
 import CloudKit
+#endif
 import Foundation
 
 // MARK: - CloudKit schema (#121)
@@ -32,9 +34,11 @@ package enum CloudKitSchema {
     /// buys atomic batch saves, change tokens, and CKSyncEngine support.
     package static let zoneName = "MomentTally"
 
+    #if canImport(CloudKit)
     package static var zoneID: CKRecordZone.ID {
         CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
     }
+    #endif
 
     package enum RecordType {
         package static let span = "Span"
@@ -150,6 +154,11 @@ package struct CloudPreferences: Equatable {
 }
 
 // MARK: - The codec
+
+// Apple-only from here down (#85): the payload structs above are plain
+// values the CK-keyed store surface uses on every platform; the codec is
+// the CKRecord half.
+#if canImport(CloudKit)
 
 /// Payload ↔ CKRecord, both directions, no CloudKit I/O — records are plain
 /// objects until an operation ships them, which is what lets the whole codec
@@ -362,3 +371,4 @@ package enum CloudKitRecordCodec {
         }
     }
 }
+#endif

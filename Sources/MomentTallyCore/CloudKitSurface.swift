@@ -1,3 +1,6 @@
+// Apple-only (#85): CloudKit does not exist on Linux; without it this file
+// contributes nothing to the core build.
+#if canImport(CloudKit)
 import CloudKit
 import Foundation
 
@@ -176,3 +179,4 @@ package protocol CloudSyncEngineControl: AnyObject {
     /// transport failure and whatever wasn't attempted stays queued.
     func sendChanges() async throws
 }
+#endif

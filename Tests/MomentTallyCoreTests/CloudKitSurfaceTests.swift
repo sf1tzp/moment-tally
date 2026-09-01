@@ -1,3 +1,6 @@
+// Apple-only (#85): these tests drive the CloudKit framework (the fakes
+// construct real CKRecords), which does not exist on Linux.
+#if canImport(CloudKit)
 import CloudKit
 import Foundation
 import Testing
@@ -476,3 +479,4 @@ private final class Device {
         #expect(a.delegate.accountChanges == [.signOut])
     }
 }
+#endif

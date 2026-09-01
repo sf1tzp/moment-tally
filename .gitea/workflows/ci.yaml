@@ -9,10 +9,13 @@
 #                   to the built-in registry (gitea.zen.lofi) — same secret
 #                   the other repos' workflows use.
 #
-# The Swift targets are not built here: the runners have no Swift toolchain,
-# and the app + test targets need macOS regardless. MomentTallyCore and
-# moment-tally-cli do build on Linux (#85), so a swiftly-based check job is
-# possible later if compile drift becomes a problem.
+# The Swift side runs in the official swift image (the runners themselves
+# have no toolchain): off-Mac the manifest drops the app layers and
+# MomentTallyTests, so a plain `swift test` covers MomentTallyCore, the
+# CLI, and MomentTallyCoreTests — including the self-hosted sync engine
+# round-trips (#85). What still needs a Mac: MomentTallyTests (the app
+# module) and the CloudKit-backed core tests, which gate themselves out
+# off-Apple via canImport.
 
 name: CI
 
@@ -26,6 +29,23 @@ env:
   IMAGE: gitea.zen.lofi/sfi/moment-tally-server
 
 jobs:
+  swift-core-check:
+    runs-on: ubuntu-latest
+    # Match the swiftly toolchain the dev machines use (justfile builds).
+    container: swift:6.3
+    steps:
+      # The swift image is bare: no node (actions/checkout is a JS action,
+      # and unlike the runner's default ubuntu image the container must
+      # supply it) and no sqlite3.h (GRDB compiles against the system
+      # SQLite on Linux).
+      - name: Install build deps
+        run: apt-get update -qq && apt-get install -y -qq nodejs libsqlite3-dev
+      - uses: actions/checkout@v6
+      # No dependency cache: GRDB is the only real fetch, and the runner
+      # has no cache server wired up — revisit if this job gets slow.
+      - name: Test (core + CLI + MomentTallyCoreTests)
+        run: swift test
+
   server-check:
     runs-on: ubuntu-latest
     defaults:

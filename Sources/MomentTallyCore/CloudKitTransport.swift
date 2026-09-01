@@ -1,3 +1,6 @@
+// Apple-only (#85): CloudKit does not exist on Linux; without it this file
+// contributes nothing to the core build.
+#if canImport(CloudKit)
 import CloudKit
 import Foundation
 
@@ -414,3 +417,4 @@ package final class CloudKitTransport: CloudSyncEngineDelegate {
         try? NSKeyedUnarchiver.unarchivedObject(ofClass: CKRecord.self, from: data)
     }
 }
+#endif

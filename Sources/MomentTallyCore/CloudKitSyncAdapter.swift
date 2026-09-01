@@ -1,3 +1,6 @@
+// Apple-only (#85): CloudKit does not exist on Linux; without it this file
+// contributes nothing to the core build.
+#if canImport(CloudKit)
 import CloudKit
 import Foundation
 
@@ -202,3 +205,4 @@ package final class CloudKitSyncAdapter: NSObject, CloudSyncEngineControl, CKSyn
         }
     }
 }
+#endif

@@ -1,3 +1,6 @@
+// Apple-only (#85): these tests drive the CloudKit framework (the fakes
+// construct real CKRecords), which does not exist on Linux.
+#if canImport(CloudKit)
 import CloudKit
 import Foundation
 import GRDB
@@ -182,3 +185,4 @@ import Testing
         #expect(try CloudKitRecordCodec.span(from: record) == edited)
     }
 }
+#endif

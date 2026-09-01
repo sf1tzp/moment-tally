@@ -60,3 +60,10 @@ for the header. When in doubt, a file stays derived.
 The [README](README.md) covers building and running the app (`just build`,
 `just run`, `just demo`) and the server. Run `swift test` before submitting;
 keep commits focused and their subjects in the imperative mood.
+
+`swift test` works on Linux too: off-Mac the manifest drops the app layers
+and `MomentTallyTests`, and the CloudKit-backed files in
+`MomentTallyCoreTests` gate themselves out, so what runs is the rest of the
+core suite — the store, exports, and the sync engine against the in-process
+fake server — the same set CI runs on every push. `MomentTallyTests` (the
+app module) and the CloudKit tests still need a Mac.

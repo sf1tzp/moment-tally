@@ -1,3 +1,6 @@
+// Apple-only (#85): CloudKit does not exist on Linux; without it this file
+// contributes nothing to the core build.
+#if canImport(CloudKit)
 import Foundation
 import Observation
 
@@ -102,3 +105,4 @@ package final class CloudSyncController {
         }
     }
 }
+#endif

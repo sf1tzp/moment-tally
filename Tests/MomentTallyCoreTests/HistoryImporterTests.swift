@@ -1,3 +1,6 @@
+// Apple-only (#85): these tests exercise the app layer in MomentTallyKit,
+// which (like the SwiftUI beneath it) does not exist on Linux.
+#if canImport(MomentTallyKit)
 import Foundation
 import GRDB
 import Testing
@@ -237,3 +240,4 @@ import Testing
                  LabelDefinition(key: "same", color: "#both00")])
     }
 }
+#endif
