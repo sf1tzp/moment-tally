@@ -1199,6 +1199,9 @@ private struct CreateLabelSetsPage: View {
     @State private var invalidRows: Set<UUID> = []
     /// Failed-add counter; each bump drives one shake of the add button.
     @State private var shakes = 0
+    /// The draft's fingerprint as `open(_:)` seeded it — `autosave()`
+    /// compares against it to tell an edited draft from mere browsing.
+    @State private var openedSignature: [String] = []
 
     /// The real set behind an already-added persona, if it still exists —
     /// from the shared model, so it survives paging away and back. Added
@@ -1276,6 +1279,9 @@ private struct CreateLabelSetsPage: View {
                 }
             }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: editing?.id)
+            // Leaving the page — Next, Back, Skip Tour, or the window
+            // closing — commits an edited draft instead of dropping it.
+            .onDisappear(perform: autosave)
         }
     }
 
@@ -1457,6 +1463,7 @@ private struct CreateLabelSetsPage: View {
             }
         }
         invalidRows = []
+        openedSignature = draftSignature()
         editing = persona
     }
 
@@ -1623,7 +1630,39 @@ private struct CreateLabelSetsPage: View {
             }
             return
         }
-        let name = draftName.trimmingCharacters(in: .whitespaces)
+        save(persona, name: draftName.trimmingCharacters(in: .whitespaces),
+             rows: rows, quickRows: quickRows)
+    }
+
+    /// Click-away commit (issue #258): the save button can sit below the
+    /// form's fold, so it's natural to leave the page — Next, Back, Skip
+    /// Tour — with the draft uncommitted, and losing it then reads as a
+    /// bug. Best effort, no refusal theater: keyless rows drop, and a
+    /// blank name falls back to the persona's example (the user lands in
+    /// Settings → Tallies after the tour, where renaming is one click).
+    /// An untouched draft is browsing, not intent — that one just closes.
+    private func autosave() {
+        guard let persona = editing, draftSignature() != openedSignature else { return }
+        let rows = draftRows.filter { !$0.isBlank && !$0.missingKey }
+        let quickRows = quickDrafts.filter { !$0.isBlank && !$0.missingKey }
+        guard !(rows.isEmpty && quickRows.isEmpty) else { return }
+        var name = draftName.trimmingCharacters(in: .whitespaces)
+        if name.isEmpty {
+            name = createdSet(for: persona)?.name ?? persona.nameExample
+        }
+        save(persona, name: name, rows: rows, quickRows: quickRows)
+    }
+
+    /// What `autosave()` diffs: everything the user can edit — name, both
+    /// row lists' keys/values, and the swatches.
+    private func draftSignature() -> [String] {
+        [draftName] + (draftRows + quickDrafts).map { "\($0.key)|\($0.value)|\($0.color)" }
+    }
+
+    /// The shared commit tail behind `add` and `autosave` — rows are
+    /// already filtered, the name already resolved.
+    private func save(_ persona: Persona, name: String,
+                      rows: [DraftRow], quickRows: [DraftRow]) {
         let tags = rows.map { TagRow(key: $0.trimmedKey, value: $0.trimmedValue) }
         let quickTags = quickRows.map { TagRow(key: $0.trimmedKey, value: $0.trimmedValue) }
         // Chosen colors — a valueless row has no pair to color; the value
