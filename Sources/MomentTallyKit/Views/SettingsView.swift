@@ -538,6 +538,9 @@ package struct TagSetDetailView: View {
     @Environment(AppModel.self) private var model
     @Binding package var tagSet: TagSet
     @FocusState private var nameFocused: Bool
+    /// Key field to focus by row id — how the preview's "+" chip lands the
+    /// cursor in the mark row it just added (#260).
+    @FocusState private var focusedKeyRow: UUID?
     /// The row being drag-reordered — see RowReorder.swift.
     @State private var dragged: UUID?
 
@@ -549,7 +552,14 @@ package struct TagSetDetailView: View {
         VStack(spacing: 0) {
             // The preview leads (#179): what the edits below add up to,
             // floating over the window background above the scrolling form.
-            TagSetPreview(tagSet: tagSet)
+            TagSetPreview(tagSet: $tagSet) {
+                // The bare preview's "+" chip (#260): start the first
+                // mark right here — new row, cursor in its key field.
+                let row = TagRow()
+                tagSet.tags.append(row)
+                // Next runloop turn, once the row's field exists to take it.
+                Task { @MainActor in focusedKeyRow = row.id }
+            }
             editorForm
         }
     }
@@ -597,6 +607,7 @@ package struct TagSetDetailView: View {
                             .multilineTextAlignment(.leading)
                             .autocorrectionDisabled()
                             .frame(width: LabelEditorStyle.keyFieldWidth)
+                            .focused($focusedKeyRow, equals: tag.id)
                         Text(":").foregroundStyle(.secondary)
                         TextField("value", text: $tag.value, prompt: Text("value"))
                             .textFieldStyle(.roundedBorder)
@@ -656,15 +667,9 @@ package struct TagSetDetailView: View {
             // Last deliberately: the card's look is cosmetic next to the
             // labels and quick labels that define what the set *does*.
             Section("Launcher card") {
+                // The gradient toggle rides with the card preview above
+                // (#260) — here it sat a whole form away from its effect.
                 SymbolPicker(selection: $tagSet.symbolName)
-                // Per-card since #226 — one gradient per grid read fine, a
-                // whole grid of neighbouring hues did not. Unset means on.
-                Toggle("Color gradient", isOn: Binding(
-                    get: { tagSet.gradient ?? true },
-                    set: { tagSet.gradient = $0 }))
-                Text("The card (and the menu's quick-start tile) takes the moment-tally.com tile gradient derived from its color. Off keeps a flat fill. Saved on this Mac.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

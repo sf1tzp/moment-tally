@@ -12,18 +12,38 @@ import MomentTallyCore
 /// walkthrough's Quick Marks page shows, since in the real popover they
 /// only appear on hover.
 package struct TagSetPreview: View {
-    package let tagSet: TagSet
+    @Binding package var tagSet: TagSet
+    /// Invoked by the bare preview's "+" chip — the editor appends a mark
+    /// row and focuses it (#260). Nil hides the chip.
+    package var onAddMark: (() -> Void)?
 
-    package init(tagSet: TagSet) {
-        self.tagSet = tagSet
+    package init(tagSet: Binding<TagSet>, onAddMark: (() -> Void)? = nil) {
+        self._tagSet = tagSet
+        self.onAddMark = onAddMark
     }
 
     package var body: some View {
         HStack(alignment: .center, spacing: 32) {
             Spacer(minLength: 0)
-            TagSetCard(set: tagSet, isPreview: true)
-                .frame(width: 150)
-            QuickStartRowPreview(set: tagSet)
+            VStack(spacing: 10) {
+                TagSetCard(set: tagSet, isPreview: true)
+                // The gradient is this card's own effect, so its switch
+                // lives with the preview it changes (#260), not down the
+                // form near nothing it touches. Per-card since #226 —
+                // one gradient per grid read fine, a whole grid of
+                // neighbouring hues did not. Unset means on.
+                Toggle("Gradient", isOn: Binding(
+                    get: { tagSet.gradient ?? true },
+                    set: { tagSet.gradient = $0 }))
+                    .font(.caption)
+                    // The switch look it had in the grouped Form — out
+                    // here the default resolves to a checkbox on macOS.
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .help("The card (and the menu's quick-start tile) takes the moment-tally.com tile gradient derived from its color. Off keeps a flat fill. Saved on this Mac.")
+            }
+            .frame(width: 150)
+            QuickStartRowPreview(set: tagSet, onAddMark: onAddMark)
                 .frame(maxWidth: 280)
             Spacer(minLength: 0)
         }
@@ -40,12 +60,20 @@ package struct TagSetPreview: View {
 private struct QuickStartRowPreview: View {
     @Environment(AppModel.self) private var model
     let set: TagSet
+    var onAddMark: (() -> Void)?
 
     var body: some View {
+        let tags = set.tags.filter { !$0.key.isEmpty }
+        let quicks = model.quickLabels(for: set)
+        // With no marks and no quick marks the row would be just its name
+        // in an accent outline — a dead ringer for a focused text field
+        // (#260). A grey "+" chip stands where the pills will go: the
+        // layout matches a populated row, and clicking it starts the
+        // first mark in the editor below.
+        let bare = tags.isEmpty && quicks.isEmpty
         VStack(alignment: .leading, spacing: 2) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(set.name.isEmpty ? "Untitled" : set.name)
-                let tags = set.tags.filter { !$0.key.isEmpty }
                 if !tags.isEmpty {
                     FlowLayout(spacing: 4) {
                         ForEach(tags) { tag in
@@ -53,13 +81,25 @@ private struct QuickStartRowPreview: View {
                                     color: model.tagColor(for: tag.key, value: tag.value))
                         }
                     }
+                } else if bare, let onAddMark {
+                    Button(action: onAddMark) {
+                        // TagPill's metrics in placeholder grey.
+                        Text("+")
+                            .font(.caption2)
+                            .lineLimit(1)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(.quaternary))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Add Mark")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
 
-            let quicks = model.quickLabels(for: set)
             if !quicks.isEmpty {
                 FlowLayout(spacing: 4) {
                     ForEach(quicks) { quick in
