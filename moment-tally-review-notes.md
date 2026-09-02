@@ -12,6 +12,6 @@ EXTERNAL SERVICES: None beyond Apple's own CloudKit. iCloud sync (new in 1.2.0) 
 
 REGIONAL: The app functions identically in all regions — no regional content, no region-gated features, no server-side variation; only App Store pricing tiers differ by region.
 
-REGULATED INDUSTRIES / THIRD-PARTY MATERIAL: Not applicable. The app operates in no regulated industry and contains no protected third-party material; all code and assets are our own or properly licensed open source.
+REGULATED INDUSTRIES / THIRD-PARTY MATERIAL: Not applicable. The app operates in no regulated industry and contains no protected third-party material; all code and assets are our own or properly licensed.
 
 A screen recording demonstrating the typical user flow from first launch, captured on a physical Mac running the latest macOS, was provided with the September 2026 review reply and is attached here for reference.

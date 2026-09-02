@@ -102,7 +102,7 @@ tiers.
 
 Not applicable. The app operates in no regulated industry and
 contains no protected third-party material; all code and assets are
-our own or properly licensed open source.
+our own or properly licensed.
 
 ---
 
