@@ -24,12 +24,11 @@ Thank you for the review. Answers to each item below; the screen
 recording is attached.
 
 Some background, since this account is new to App Review: Moment
-Tally is a maturing app making its first App Store submission.
-It has been publicly distributed for macOS as open source (AGPL-3.0)
-via Homebrew and notarized GitHub releases
-(https://github.com/sf1tzp/moment-tally), with a product site at
-https://moment-tally.com. This submission brings the same app to the
-Mac App Store.
+Tally is an evolving project making its first App Store submission.
+It has been publicly distributed for macOS as open source (AGPL-3.0) via
+Homebrew and notarized GitHub releases (https://github.com/sf1tzp/moment-tally),
+with a product site at https://moment-tally.com. This submission brings
+the same app to the Mac App Store.
 
 **1. Screen recording**
 

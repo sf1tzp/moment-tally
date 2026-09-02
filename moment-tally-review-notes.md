@@ -1,4 +1,4 @@
-Thanks for reviewing Moment Tally — the first App Store submission from this account, but a mature product: publicly distributed for macOS as open source (AGPL-3.0) via Homebrew and notarized GitHub releases (github.com/sf1tzp/moment-tally), with a product site at moment-tally.com.
+Thanks for reviewing Moment Tally — the first App Store submission from this account, but an evolving project: publicly distributed for macOS as open source (AGPL-3.0) via Homebrew and notarized GitHub releases (github.com/sf1tzp/moment-tally), with a product site at moment-tally.com.
 
 WHERE THE APP LIVES: Moment Tally is a menu-bar-only app. After launch there is no Dock icon or window — look for the timer icon on the right side of the macOS menu bar. Click it to start and stop timers; choose "Open Moment Tally" in that menu to open the full window (Log, Calendar, History, and the Tally launcher).
 
