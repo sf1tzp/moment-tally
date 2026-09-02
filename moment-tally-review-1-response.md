@@ -20,90 +20,90 @@ a space. No Prometheus framing front-of-house.
 
 ## Reply text
 
-> Thank you for the review. Answers to each item below; the screen
-> recording is attached.
->
-> Some background, since this account is new to App Review: Moment
-> Tally is a mature app making its first App Store submission, not a
-> new product. It has been publicly distributed for macOS as open
-> source (AGPL-3.0) via Homebrew and notarized GitHub releases
-> (https://github.com/sf1tzp/moment-tally), with a product site at
-> https://moment-tally.com. This submission brings the same app to the
-> Mac App Store.
->
-> **1. Screen recording**
->
-> The attached recording was captured on a physical Mac running the
-> latest macOS. It begins with launching the submitted build from
-> Applications and shows the typical user flow: the app appears as a
-> menu-bar icon (it is a menu-bar-only app — no Dock icon), the
-> first-launch interactive Tour, creating a Tally, running and
-> stopping timers, editing an entry, and the Log, Calendar, History,
-> and Mark Review views, ending with the optional iCloud sync toggle
-> in Settings.
->
-> The app has no account system — no registration, login, or account
-> deletion flows exist. It has no user-generated content that is
-> shared with or visible to other users; all data is private time
-> entries stored on the user's own device (and optionally in their
-> own iCloud private database), so content reporting and blocking
-> mechanisms do not apply.
->
-> **2. Purpose and target audience**
->
-> Moment Tally is a menu-bar time tracker for individuals —
-> freelancers tracking billable hours, and anyone who wants an honest
-> record of where their time goes (studying, practice, hobbies,
-> habits). The problem it solves: most time trackers force time into
-> one rigid hierarchy of projects and categories. In Moment Tally,
-> every span of time carries simple key: value marks (client: acme,
-> recipe: sourdough), so users can slice their history along any axis
-> they invent, run overlapping timers the way real days actually
-> overlap, and review their days with calendars, charts, and stats
-> built from what actually happened.
->
-> **3. Setup and access instructions**
->
-> No login credentials or sample files are required — every feature
-> works immediately, offline, with local data. After launch, look for
-> the timer icon on the right side of the macOS menu bar (there is no
-> Dock icon or window at first). Click it to start and stop timers;
-> choose "Open Moment Tally" in that menu for the full window (Log,
-> Calendar, History, Tally launcher). On first launch the app offers
-> an interactive Tour that walks through every feature with realistic
-> sample data — the fastest way to exercise the app. iCloud sync is
-> optional and off by default (Settings → Sync → "Use iCloud").
->
-> **4. External services, tools, and platforms**
->
-> None, beyond Apple's own CloudKit: the optional iCloud sync uses
-> the user's private CloudKit database, end-to-end encrypted. There
-> are no third-party data providers, authentication services, payment
-> processors, analytics, or AI services, and the app never connects
-> to any server we operate — we run no backend at all.
->
-> For completeness, two screens in Settings accept a user-supplied
-> address: Settings → Sync can point at a sync server the user hosts
-> on their own hardware instead of iCloud, and Settings → Import can
-> copy history one time from a self-hosted instance of the
-> open-source Traggo tracker. These are advanced options for
-> self-hosting enthusiasts, not services the app depends on — there
-> is no hosted instance of either, they need no credentials from us,
-> and everything shown in the recording works with both left
-> unconfigured.
->
-> **5. Regional differences**
->
-> None — the app functions identically in all regions. There is no
-> regional content, no region-gated features, and no server-side
-> variation; the only per-region difference is App Store pricing
-> tiers.
->
-> **6. Regulated industries / protected third-party material**
->
-> Not applicable. The app operates in no regulated industry and
-> contains no protected third-party material; all code and assets are
-> our own or properly licensed open source.
+Thank you for the review. Answers to each item below; the screen
+recording is attached.
+
+Some background, since this account is new to App Review: Moment
+Tally is a maturing app making its first App Store submission.
+It has been publicly distributed for macOS as open source (AGPL-3.0)
+via Homebrew and notarized GitHub releases
+(https://github.com/sf1tzp/moment-tally), with a product site at
+https://moment-tally.com. This submission brings the same app to the
+Mac App Store.
+
+**1. Screen recording**
+
+The attached recording was captured on a physical Mac running the
+latest macOS. It begins with launching the submitted build from
+Applications and shows the typical user flow: the app appears as a
+menu-bar icon (it is a menu-bar-only app — no Dock icon), the
+first-launch interactive Tour, creating a Tally, running and
+stopping timers, editing an entry, and the Log, Calendar, History,
+and Mark Review views, ending with the optional iCloud sync toggle
+in Settings.
+
+The app has no account system — no registration, login, or account
+deletion flows exist. It has no user-generated content that is
+shared with or visible to other users; all data is private time
+entries stored on the user's own device (and optionally in their
+own iCloud private database), so content reporting and blocking
+mechanisms do not apply.
+
+**2. Purpose and target audience**
+
+Moment Tally is a menu-bar time tracker for individuals —
+freelancers tracking billable hours, and anyone who wants an honest
+record of where their time goes (studying, practice, hobbies,
+habits). The problem it solves: most time trackers force time into
+one rigid hierarchy of projects and categories. In Moment Tally,
+every span of time carries simple key: value marks (client: acme,
+recipe: sourdough), so users can slice their history along any axis
+they invent, run overlapping timers the way real days actually
+overlap, and review their days with calendars, charts, and stats
+built from what actually happened.
+
+**3. Setup and access instructions**
+
+No login credentials or sample files are required — every feature
+works immediately, offline, with local data. After launch, look for
+the timer icon on the right side of the macOS menu bar (there is no
+Dock icon or window at first). Click it to start and stop timers;
+choose "Open Moment Tally" in that menu for the full window (Log,
+Calendar, History, Tally launcher). On first launch the app offers
+an interactive Tour that walks through every feature with realistic
+sample data — the fastest way to exercise the app. iCloud sync is
+optional and off by default (Settings → Sync → "Use iCloud").
+
+**4. External services, tools, and platforms**
+
+None, beyond Apple's own CloudKit: the optional iCloud sync uses
+the user's private CloudKit database, end-to-end encrypted. There
+are no third-party data providers, authentication services, payment
+processors, analytics, or AI services, and the app never connects
+to any server we operate — we run no backend at all.
+
+For completeness, two screens in Settings accept a user-supplied
+address: Settings → Sync can point at a sync server the user hosts
+on their own hardware instead of iCloud, and Settings → Import can
+copy history one time from a self-hosted instance of the
+open-source Traggo tracker. These are advanced options for
+self-hosting enthusiasts, not services the app depends on — there
+is no hosted instance of either, they need no credentials from us,
+and everything shown in the recording works with both left
+unconfigured.
+
+**5. Regional differences**
+
+None — the app functions identically in all regions. There is no
+regional content, no region-gated features, and no server-side
+variation; the only per-region difference is App Store pricing
+tiers.
+
+**6. Regulated industries / protected third-party material**
+
+Not applicable. The app operates in no regulated industry and
+contains no protected third-party material; all code and assets are
+our own or properly licensed open source.
 
 ---
 
