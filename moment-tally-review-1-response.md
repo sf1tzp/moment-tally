@@ -76,14 +76,21 @@ a space. No Prometheus framing front-of-house.
 >
 > **4. External services, tools, and platforms**
 >
-> The only external service is Apple's own CloudKit (the optional
-> iCloud sync uses the user's private CloudKit database, end-to-end
-> encrypted). There are no third-party data providers, authentication
-> services, payment processors, analytics, or AI services. Two
-> optional features connect only to infrastructure the user hosts
-> themselves (a self-hosted Moment Tally Server for sync, and a
-> one-time importer for the open-source Traggo tracker); nothing else
-> depends on them and the app is fully functional without them.
+> None, beyond Apple's own CloudKit: the optional iCloud sync uses
+> the user's private CloudKit database, end-to-end encrypted. There
+> are no third-party data providers, authentication services, payment
+> processors, analytics, or AI services, and the app never connects
+> to any server we operate — we run no backend at all.
+>
+> For completeness, two screens in Settings accept a user-supplied
+> address: Settings → Sync can point at a sync server the user hosts
+> on their own hardware instead of iCloud, and Settings → Import can
+> copy history one time from a self-hosted instance of the
+> open-source Traggo tracker. These are advanced options for
+> self-hosting enthusiasts, not services the app depends on — there
+> is no hosted instance of either, they need no credentials from us,
+> and everything shown in the recording works with both left
+> unconfigured.
 >
 > **5. Regional differences**
 >
