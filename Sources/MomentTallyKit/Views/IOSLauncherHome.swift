@@ -2,105 +2,54 @@
 import SwiftUI
 import MomentTallyCore
 
-/// The iPhone home surface (#124): the menu-bar popover's job — running
-/// timers, quick start, ad-hoc blank timer — done with touch idioms, not a
-/// port of the popover chrome. The card grid is the popover's Launcher grid
-/// re-columned for compact width; hover affordances become always-visible
-/// controls (stop button on running rows, persistent stop scrim on running
-/// cards) or long-press (quick-label chips).
-package struct IOSLauncherHome: View {
+/// The launcher surface, container-agnostic (#126): running timers, the
+/// blank-timer row, and the quick-start card grid, re-columned to whatever
+/// width it's given. The iPhone home wraps it in a NavigationStack with a
+/// toolbar; the iPad split root embeds it as the leading column with
+/// section buttons below. Owns the scroll, the column math, the shared
+/// edit-session sheet, and pull-to-refresh.
+struct LauncherSurface: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openAppSection) private var openAppSection
-    @State private var showReorder = false
 
     private static let minCardWidth: CGFloat = 150
     private static let spacing: CGFloat = 12
 
-    package init() {}
-
-    package var body: some View {
-        NavigationStack {
-            GeometryReader { geo in
-                let content = geo.size.width - Self.spacing * 2
-                let columns = max(1, Int((content + Self.spacing)
-                                         / (Self.minCardWidth + Self.spacing)))
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        runningSection
-                        quickStartSection(columns: columns)
-                        if let error = model.errorMessage {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
-                    }
-                    .padding(Self.spacing)
-                }
-            }
-            .navigationTitle("Moment Tally")
-            .toolbar {
-                // Palm Springs when the build carries the injected fonts —
-                // same degrade-to-system rule as everywhere else.
-                if let script = Brand.script(26) {
-                    ToolbarItem(placement: .principal) {
-                        Text("Moment Tally").font(script)
+    var body: some View {
+        GeometryReader { geo in
+            let content = geo.size.width - Self.spacing * 2
+            let columns = max(1, Int((content + Self.spacing)
+                                     / (Self.minCardWidth + Self.spacing)))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    runningSection
+                    quickStartSection(columns: columns)
+                    if let error = model.errorMessage {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            showReorder = true
-                        } label: {
-                            Label("Reorder Tallies", systemImage: "arrow.up.arrow.down")
-                        }
-                        .disabled(model.tagSets.count < 2)
-                        Divider()
-                        Button {
-                            openAppSection(.tagSets)
-                        } label: {
-                            Label("Tallies", systemImage: "square.grid.2x2")
-                        }
-                        Button {
-                            openAppSection(.review)
-                        } label: {
-                            Label("Review", systemImage: "checklist")
-                        }
-                        Button {
-                            openAppSection(.help)
-                        } label: {
-                            Label("Help", systemImage: "questionmark.circle")
-                        }
-                        Button {
-                            openAppSection(.settings)
-                        } label: {
-                            Label("Settings", systemImage: "gear")
-                        }
-                    } label: {
-                        Label("More", systemImage: "ellipsis.circle")
-                    }
-                }
+                .padding(Self.spacing)
             }
-            .sheet(isPresented: $showReorder) {
-                IOSReorderSheet()
-            }
-            // The one shared edit session, as a sheet: tap a running row to
-            // open it; dismissing by swipe commits, like the popover closing
-            // (#70's "drafts must survive teardown" lesson — commits go
-            // through the model's one funnel either way).
-            .sheet(isPresented: Binding(
-                get: { model.editSession != nil },
-                set: { shown in
-                    if !shown, model.editSession != nil {
-                        Task { await model.finishEditing() }
-                    }
-                }
-            )) {
-                IOSSpanEditorSheet()
-                    .presentationDetents([.medium, .large])
-            }
-            .task { await model.refresh() }
-            .refreshable { await model.refresh() }
         }
+        // The one shared edit session, as a sheet: tap a running row to
+        // open it; dismissing by swipe commits, like the popover closing
+        // (#70's "drafts must survive teardown" lesson — commits go
+        // through the model's one funnel either way).
+        .sheet(isPresented: Binding(
+            get: { model.editSession != nil },
+            set: { shown in
+                if !shown, model.editSession != nil {
+                    Task { await model.finishEditing() }
+                }
+            }
+        )) {
+            IOSSpanEditorSheet()
+                .presentationDetents([.medium, .large])
+        }
+        .task { await model.refresh() }
+        .refreshable { await model.refresh() }
     }
 
     // MARK: Running
@@ -210,6 +159,69 @@ package struct IOSLauncherHome: View {
                     }
                 }
             }
+        }
+    }
+}
+
+/// The iPhone home (#124): `LauncherSurface` under a navigation title, with
+/// the section routes in a trailing menu — the compact-width counterpart of
+/// the iPad split root's buttons-below-the-launcher (#126).
+package struct IOSLauncherHome: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.openAppSection) private var openAppSection
+    @State private var showReorder = false
+
+    package init() {}
+
+    package var body: some View {
+        NavigationStack {
+            LauncherSurface()
+                .navigationTitle("Moment Tally")
+                .toolbar {
+                    // Palm Springs when the build carries the injected fonts —
+                    // same degrade-to-system rule as everywhere else.
+                    if let script = Brand.script(26) {
+                        ToolbarItem(placement: .principal) {
+                            Text("Moment Tally").font(script)
+                        }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            Button {
+                                showReorder = true
+                            } label: {
+                                Label("Reorder Tallies", systemImage: "arrow.up.arrow.down")
+                            }
+                            .disabled(model.tagSets.count < 2)
+                            Divider()
+                            Button {
+                                openAppSection(.tagSets)
+                            } label: {
+                                Label("Tallies", systemImage: "square.grid.2x2")
+                            }
+                            Button {
+                                openAppSection(.review)
+                            } label: {
+                                Label("Review", systemImage: "checklist")
+                            }
+                            Button {
+                                openAppSection(.help)
+                            } label: {
+                                Label("Help", systemImage: "questionmark.circle")
+                            }
+                            Button {
+                                openAppSection(.settings)
+                            } label: {
+                                Label("Settings", systemImage: "gear")
+                            }
+                        } label: {
+                            Label("More", systemImage: "ellipsis.circle")
+                        }
+                    }
+                }
+                .sheet(isPresented: $showReorder) {
+                    IOSReorderSheet()
+                }
         }
     }
 }

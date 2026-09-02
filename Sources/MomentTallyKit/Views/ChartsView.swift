@@ -170,18 +170,16 @@ package struct HistoryChartsView: View {
                     // second compares another breakdown of the same window; until
                     // one is picked (or it has no data) a placeholder ring holds
                     // its place.
-                    if isCompact {
-                        VStack(alignment: .leading, spacing: 16) {
-                            donutColumn(selection: $history.chartGrouping, includeNone: false)
-                            Divider()
-                            donutColumn(selection: $history.chartGrouping2, includeNone: true)
-                        }
-                    } else {
-                        HStack(alignment: .top, spacing: 20) {
-                            donutColumn(selection: $history.chartGrouping, includeNone: false)
-                            Divider()
-                            donutColumn(selection: $history.chartGrouping2, includeNone: true)
-                        }
+                    // AnyLayout keeps one child tree across the compact ⇄
+                    // regular flip, so iPad Split View resizes animate the
+                    // rearrangement instead of rebuilding it (#126).
+                    let columnsLayout = isCompact
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
+                        : AnyLayout(HStackLayout(alignment: .top, spacing: 20))
+                    columnsLayout {
+                        donutColumn(selection: $history.chartGrouping, includeNone: false)
+                        Divider()
+                        donutColumn(selection: $history.chartGrouping2, includeNone: true)
                     }
                 }
 
@@ -197,6 +195,11 @@ package struct HistoryChartsView: View {
             }
             .padding(12)
             .padding(.bottom, 12)
+            // Full-canvas iPad (#126): an unbounded content column strands
+            // the fixed-size donuts in acres of whitespace — cap and centre
+            // it instead. Phones and the Mac window never reach the cap.
+            .frame(maxWidth: 1100, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -212,17 +215,13 @@ package struct HistoryChartsView: View {
                 } else {
                     let colors = colorMap(for: totals, grouping: grouping)
                     let grand = totals.reduce(0) { $0 + $1.seconds }
-                    if isCompact {
-                        VStack(alignment: .leading, spacing: 12) {
-                            donut(totals: totals, colors: colors, grand: grand)
-                                .frame(maxWidth: .infinity)
-                            breakdownList(totals: totals, colors: colors, grand: grand)
-                        }
-                    } else {
-                        HStack(alignment: .center, spacing: 16) {
-                            donut(totals: totals, colors: colors, grand: grand)
-                            breakdownList(totals: totals, colors: colors, grand: grand)
-                        }
+                    let pairLayout = isCompact
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+                        : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
+                    pairLayout {
+                        donut(totals: totals, colors: colors, grand: grand)
+                            .frame(maxWidth: isCompact ? .infinity : nil)
+                        breakdownList(totals: totals, colors: colors, grand: grand)
                     }
                 }
             } else {

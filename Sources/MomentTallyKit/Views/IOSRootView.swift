@@ -2,14 +2,21 @@
 import SwiftUI
 import MomentTallyCore
 
-/// The iOS app's root (#124/#125): the launcher as the first tab of a
-/// TabView, with the parity views (#125) on the remaining tabs and the
-/// section sheets. Owns the `AppModel`, exactly like the Mac's
-/// `MomentTallyApp`.
+/// The iOS app's root: compact width gets the #124 TabView (launcher
+/// first, parity views on the remaining tabs); regular width gets the
+/// #126 split layout (launcher column + collapsible pane, full-canvas
+/// History). Owns the `AppModel`, exactly like the Mac's `MomentTallyApp`.
+///
+/// The regular arrangement persists per scene (#126): which pane, whether
+/// it's collapsed, and whether History owns the canvas.
 public struct MomentTallyRootView: View {
     @State private var model = AppModel()
     @State private var selection: Pane = .launcher
     @State private var sheet: SheetRoute?
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @SceneStorage("regular.sidePane") private var sidePane: RegularSidePane = .log
+    @SceneStorage("regular.paneCollapsed") private var paneCollapsed = false
+    @SceneStorage("regular.historyCanvas") private var historyCanvas = false
 
     private enum Pane: Hashable {
         case launcher, log, calendar, history
@@ -34,6 +41,32 @@ public struct MomentTallyRootView: View {
     public init() {}
 
     public var body: some View {
+        Group {
+            if horizontalSizeClass == .regular {
+                IPadSplitRoot(sidePane: $sidePane,
+                              paneCollapsed: $paneCollapsed,
+                              historyCanvas: $historyCanvas)
+            } else {
+                tabView
+            }
+        }
+        .environment(model)
+        .environment(\.openAppSection, OpenAppSectionAction { tab in
+            open(tab)
+        })
+        .sheet(item: $sheet) { route in
+            sheetContent(route)
+                .environment(model)
+                .environment(\.openAppSection, OpenAppSectionAction { tab in
+                    // A section chosen from inside a sheet (Log ＋ → Tallies,
+                    // Review → Log) lands on its tab/pane, not on top.
+                    sheet = nil
+                    open(tab)
+                })
+        }
+    }
+
+    private var tabView: some View {
         TabView(selection: $selection) {
             IOSLauncherHome()
                 .tabItem { Label("Launch", systemImage: "square.grid.2x2") }
@@ -59,20 +92,6 @@ public struct MomentTallyRootView: View {
             }
             .tabItem { Label("History", systemImage: "chart.pie") }
             .tag(Pane.history)
-        }
-        .environment(model)
-        .environment(\.openAppSection, OpenAppSectionAction { tab in
-            open(tab)
-        })
-        .sheet(item: $sheet) { route in
-            sheetContent(route)
-                .environment(model)
-                .environment(\.openAppSection, OpenAppSectionAction { tab in
-                    // A section chosen from inside a sheet (Log ＋ → Tallies,
-                    // Review → Log) lands on its tab/sheet, not on top.
-                    sheet = nil
-                    open(tab)
-                })
         }
     }
 
@@ -120,17 +139,39 @@ public struct MomentTallyRootView: View {
         }
     }
 
-    /// The portable views' navigation seam, mapped onto tabs and sheets.
+    /// The portable views' navigation seam — tabs/sheets in compact,
+    /// panes/canvas/sheets in regular.
     private func open(_ tab: SettingsTab) {
-        switch tab {
-        case .launcher: selection = .launcher
-        case .log: selection = .log
-        case .calendar: selection = .calendar
-        case .history: selection = .history
-        case .tagSets: sheet = .tagSets
-        case .review: sheet = .review
-        case .help: sheet = .help
-        case .settings: sheet = .settings
+        if horizontalSizeClass == .regular {
+            switch tab {
+            case .launcher:
+                historyCanvas = false
+            case .log:
+                historyCanvas = false
+                sidePane = .log
+                withAnimation(.snappy) { paneCollapsed = false }
+            case .calendar:
+                historyCanvas = false
+                sidePane = .calendar
+                withAnimation(.snappy) { paneCollapsed = false }
+            case .history:
+                historyCanvas = true
+            case .tagSets: sheet = .tagSets
+            case .review: sheet = .review
+            case .help: sheet = .help
+            case .settings: sheet = .settings
+            }
+        } else {
+            switch tab {
+            case .launcher: selection = .launcher
+            case .log: selection = .log
+            case .calendar: selection = .calendar
+            case .history: selection = .history
+            case .tagSets: sheet = .tagSets
+            case .review: sheet = .review
+            case .help: sheet = .help
+            case .settings: sheet = .settings
+            }
         }
     }
 
