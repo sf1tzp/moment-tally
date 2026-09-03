@@ -11,8 +11,18 @@ demo:
 
 # Regenerate ios/MomentTally.xcodeproj from ios/project.yml (the project is
 # generated, never committed). Deps: brew install xcodegen; full Xcode.
+# Exports the version pair project.yml substitutes into MARKETING_VERSION /
+# CURRENT_PROJECT_VERSION, mirroring bundle-app.sh's derivation (VERSION env
+# var overrides, as there). Regenerate after pulling before an archive, or
+# the project keeps the stale numbers.
 ios-project:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  MT_VERSION="${VERSION:-$(git describe --tags 2>/dev/null || echo 0.0.0)}"
+  export MT_VERSION="${MT_VERSION#v}"
+  export MT_BUILD="$(git rev-list --count HEAD)"
   xcodegen generate --spec ios/project.yml --project ios
+  echo "Generated ios/MomentTally.xcodeproj ($MT_VERSION, build $MT_BUILD)"
 
 # Build the iOS app for the simulator. Brand fonts inject from
 # ~/.sfi/brand-assets/fonts when present (see ios/project.yml).
@@ -58,6 +68,33 @@ ios-device device="": ios-project
     ".build/ios-dd/Build/Products/Debug-iphoneos/Moment Tally.app"
   xcrun devicectl device process launch --device "$id" \
     com.streetfortress.MomentTally
+
+# Release-archive the iOS app for App Store Connect. Safe to run anywhere
+# signing certs exist (nothing uploads); the archive lands in .build/. The
+# scheme's archive action builds Release (xcodegen's default).
+ios-archive: ios-project
+  xcodebuild archive -project ios/MomentTally.xcodeproj -scheme MomentTallyIOS \
+    -destination 'generic/platform=iOS' -derivedDataPath .build/ios-dd \
+    -archivePath .build/MomentTallyIOS.xcarchive -allowProvisioningUpdates
+
+# Archive and upload to App Store Connect / TestFlight — the publish step,
+# and the iOS counterpart of package-mas.sh (ios/ExportOptions.plist carries
+# the store settings; destination=upload makes the export the upload). Needs
+# the Xcode Apple ID session, i.e. the mini. Refuses to ship a between-tags
+# build: ASC rejects describe-suffixed marketing versions anyway, so tag
+# first (`just tag X.Y.Z`) — or VERSION=X.Y.Z to override, as in
+# bundle-app.sh.
+ios-upload:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if [[ -z "${VERSION:-}" ]] && ! git describe --tags --exact-match >/dev/null 2>&1; then
+    echo "error: HEAD isn't tagged — tag first (just tag X.Y.Z) or set VERSION=X.Y.Z" >&2
+    exit 1
+  fi
+  just ios-archive
+  xcodebuild -exportArchive -archivePath .build/MomentTallyIOS.xcarchive \
+    -exportOptionsPlist ios/ExportOptions.plist -exportPath dist/ios \
+    -allowProvisioningUpdates
 
 # --- Release assets (capture pipeline) ---
 

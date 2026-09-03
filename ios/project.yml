@@ -2,7 +2,10 @@
 # exists only because simulator/device/App Store builds require Xcode. The
 # .xcodeproj is generated, never committed:
 #
-#     xcodegen generate --spec ios/project.yml
+#     just ios-project
+#
+# (not bare `xcodegen generate`: the recipe exports MT_VERSION/MT_BUILD,
+# which the settings below substitute — a bare generate leaves them empty).
 #
 # The target is a thin shell over the local package: one @main file linking
 # MomentTallyKit's public façade. All real code lives in the package.
@@ -62,14 +65,36 @@ targets:
         # CloudKit container (CloudKitCodec.containerId).
         PRODUCT_BUNDLE_IDENTIFIER: com.streetfortress.MomentTally
         PRODUCT_NAME: Moment Tally
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: 1
+        # Both derive from git in the ios-project recipe, mirroring
+        # bundle-app.sh: MT_VERSION = `git describe --tags` (v stripped),
+        # MT_BUILD = `git rev-list --count HEAD`. Same tag → same version
+        # and build number as the Mac artifacts; ASC tracks build numbers
+        # per platform, so the shared counter never collides.
+        MARKETING_VERSION: "${MT_VERSION}"
+        CURRENT_PROJECT_VERSION: "${MT_BUILD}"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 2GY54R95TD
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Moment Tally
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        # No orientation keys means portrait-only, and ASC rejects that on
+        # iPad (ITMS-90474: multitasking needs every orientation or an
+        # explicit requires-fullscreen). Xcode-template set: iPad all four
+        # (the #126 layout handles them), iPhone skips upside-down.
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Declarative export-compliance answer (HTTPS/CloudKit only —
+        # exempt); without it every TestFlight build waits on the manual
+        # questionnaire in ASC. Twin of the key in scripts/Info.plist.in.
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         # The font build phase below reads $HOME; Xcode's script sandbox
         # would block that.
         ENABLE_USER_SCRIPT_SANDBOXING: NO

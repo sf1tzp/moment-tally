@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Consumed by `just ios-upload` (xcodebuild -exportArchive). With
+	     destination=upload the export step sends the build straight to App
+	     Store Connect — no Transporter, no altool. Unlike the Mac pipeline
+	     (package-mas.sh), signing is Xcode-automatic end to end. -->
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>upload</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>teamID</key>
+	<string>2GY54R95TD</string>
+	<!-- Defaults to true, which lets Xcode rewrite the build number to
+	     ASC's highest-plus-one — fighting the git-derived commit count from
+	     `just ios-project` that keeps Mac and iOS artifacts of one tag on
+	     the same numbers. Keep our numbers. -->
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+</dict>
+</plist>

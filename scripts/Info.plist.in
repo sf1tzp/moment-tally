@@ -31,6 +31,11 @@
 	<string>public.app-category.productivity</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Steven Fitzpatrick</string>
+	<!-- Declarative export-compliance answer (HTTPS/CloudKit only — exempt),
+	     so ASC never gates an upload on the manual questionnaire. Twin of
+	     INFOPLIST_KEY_ITSAppUsesNonExemptEncryption in ios/project.yml. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- Sparkle auto-update (#46). The feed URL is GitHub's stable
 	     "latest release asset" redirect, so the appcast rides the same
 	     release-publish step as the app archive itself. -->
