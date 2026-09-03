@@ -112,15 +112,23 @@ ditto -c -k --norsrc --keepParent "$ROOT/dist/MomentTally.app" "$ARTIFACT"
 echo "==> packaged $ARTIFACT"
 
 # --- release notes -------------------------------------------------------------
-# Commit subjects since the previous tag; edit dist/RELEASE_NOTES.md between
-# `just release --no-publish` and a manual publish for hand-written notes
-# (then re-run the appcast step too — it embeds these notes).
+# Commit subjects since the previous tag, with a hand-written intro spliced in
+# from releases/<version>.md when one is committed (write it before tagging —
+# `just tag` prompts when it's missing). Trailing "(#N)" issue/PR refs are
+# stripped from the subjects: they point at gitea, but on the GitHub release
+# they'd autolink to the mirror's unrelated numbering.
 NOTES="$ROOT/dist/RELEASE_NOTES.md"
 PREV="$(git -C "$ROOT" describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)"
+INTRO="$ROOT/releases/$VERSION.md"
 {
     echo "## Moment Tally $VERSION"
     echo
-    git -C "$ROOT" log --format='- %s' "${PREV:+$PREV..}$TAG"
+    if [[ -s "$INTRO" ]]; then
+        cat "$INTRO"
+        echo
+    fi
+    git -C "$ROOT" log --format='- %s' "${PREV:+$PREV..}$TAG" \
+        | sed -E 's/( \(#[0-9]+\))+$//'
 } > "$NOTES"
 
 # --- appcast (#46) -------------------------------------------------------------
