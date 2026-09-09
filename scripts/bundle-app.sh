@@ -132,10 +132,8 @@ if [[ "$VARIANT" == mas ]]; then
                SUEnableInstallerLauncherService; do
         /usr/libexec/PlistBuddy -c "Delete :$key" "$APP/Contents/Info.plist"
     done
-    # Export-compliance declaration: nothing beyond exempt HTTPS, declared in
-    # the binary so App Store Connect skips the per-build questionnaire.
-    /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" \
-        "$APP/Contents/Info.plist"
+    # (Export compliance needs nothing here anymore: Info.plist.in declares
+    # ITSAppUsesNonExemptEncryption for every variant since #262.)
     # The store icon: App Store Connect extracts icons only from a compiled
     # asset catalog (CFBundleIconName + Assets.car) — the bare .icns that
     # serves the direct channel uploads fine but renders as the generic
