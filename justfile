@@ -143,12 +143,30 @@ assess:
   spctl --assess --type execute --verbose dist/MomentTally.app
 
 
+# Release-notes gate for `tag`: releases/<version>.md is the hand-written
+# intro release.sh splices above the commit list. Missing file → ask; carrying
+# on is fine (notes are then just the commit list), while declining touches
+# the empty file — an untracked file release.sh's clean-tree preflight refuses,
+# so a forgotten intro can't slip through half-remembered — and aborts before
+# the tag exists. Write the intro, commit, and re-run.
+_ensure_release_notes version:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  v="{{version}}"; v="${v#v}"
+  intro="releases/$v.md"
+  [[ -s "$intro" ]] && exit 0
+  read -rp "$intro is missing — tag anyway with plain commit-list notes? [y/N] " ans
+  [[ "$ans" =~ ^[Yy] ]] && exit 0
+  touch "$intro"
+  echo "created empty $intro — write the intro, commit, and re-run just tag" >&2
+  exit 1
+
 # Tag HEAD for release and push the tag. Accepts "1.2.3" or "v1.2.3" — any
 # leading v is stripped before re-adding, so "vv1.2.3" can't happen. The final
 # tag must match release.sh's preflight regex (vX.Y.Z, no prerelease/build).
 # Fetches first (pruning tags deleted on the remote) and refuses to tag unless
 # HEAD is exactly origin/main, so a stale checkout can't ship a release.
-tag version:
+tag version: (_ensure_release_notes version)
   #!/usr/bin/env bash
   set -euo pipefail
   v="{{version}}"
