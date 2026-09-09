@@ -403,10 +403,34 @@ package struct TagSetsSettingsView: View {
     /// with labels asks first (#106).
     private func requestDelete(_ set: TagSet) {
         if set.tags.isEmpty {
+            #if os(macOS)
+            // A fresh set's Name field is still focused when the ⌫ arrives
+            // (#265): end that edit before the array shrinks, or AppKit
+            // commits it into the deleted set's binding during teardown.
+            NSApp.keyWindow?.makeFirstResponder(nil)
+            #endif
             model.tagSets.removeAll { $0.id == set.id }
         } else {
             pendingDelete = set
         }
+    }
+
+    /// A binding to the set with this id, resolved by id on every access.
+    /// The detail view can outlive its set by a beat — a focused text field
+    /// commits its edit during teardown after a delete (#265) — so a binding
+    /// through an index captured at body time traps (or, worse, lands the
+    /// write on whichever set slid into that index). Late reads fall back to
+    /// the body-time snapshot; late writes are dropped.
+    private func tagSetBinding(for set: TagSet) -> Binding<TagSet> {
+        let model = model
+        return Binding(
+            get: { model.tagSets.first { $0.id == set.id } ?? set },
+            set: { updated in
+                if let index = model.tagSets.firstIndex(where: { $0.id == set.id }) {
+                    model.tagSets[index] = updated
+                }
+            }
+        )
     }
 
     private func consumePendingSelection() {
@@ -461,8 +485,8 @@ package struct TagSetsSettingsView: View {
             .navigationTitle("Tallies")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: TagSet.ID.self) { id in
-                if let index = model.tagSets.firstIndex(where: { $0.id == id }) {
-                    TagSetDetailView(tagSet: $model.tagSets[index])
+                if let set = model.tagSets.first(where: { $0.id == id }) {
+                    TagSetDetailView(tagSet: tagSetBinding(for: set))
                 }
             }
             .toolbar {
@@ -518,8 +542,8 @@ package struct TagSetsSettingsView: View {
             }
             .frame(width: 160)
 
-            if let index = model.tagSets.firstIndex(where: { $0.id == selection }) {
-                TagSetDetailView(tagSet: $model.tagSets[index])
+            if let set = model.tagSets.first(where: { $0.id == selection }) {
+                TagSetDetailView(tagSet: tagSetBinding(for: set))
             } else {
                 VStack {
                     Spacer()
