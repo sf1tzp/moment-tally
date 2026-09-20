@@ -1,13 +1,17 @@
 ---
 name: verify
-description: Build, launch, and drive Moment Tally to verify changes against the live traggo.lofi server. Auto-invoke only on macbook-air; on any other machine (check `hostname`) run only when the user explicitly asks to verify.
+description: Build, launch, and verify Moment Tally changes — the Mac app AX-driven against the live traggo.lofi server, the iOS app in the simulator. Auto-invoke only on macbook-air; on any other machine (check `hostname`) run only when the user explicitly asks to verify.
 ---
 
 # Verifying Moment Tally
 
-> **Machine gate:** only invoke this skill unprompted on macbook-air. On other
-> machines (e.g. macmini) the build/launch/AX-drive cycle is too resource-heavy
-> to run by default — skip verification there unless the user explicitly asks.
+> **Machine gate:** only invoke this skill unprompted on macbook-air. Per the
+> machine split (2026-09-12), the air is the iteration machine — Mac verify
+> and iOS simulator work both live there — while macmini is Steven's main
+> workstation for other projects and the verification/publishing end: don't
+> start build/launch/drive cycles there unless he explicitly asks (device
+> loads and interactive checks on the mini are usually his call, via screen
+> sharing or a plugged-in device).
 
 ## Build & launch
 
@@ -53,3 +57,31 @@ asset batches); add new AX learnings there, not here.
   "%{http_code}" https://traggo.lofi/`). Mutations hit real user data — create
   your own test timespan (quick-start a tag set, stop it) and delete it when
   done.
+
+## iOS (simulator)
+
+Simulator builds are unsigned — any machine with the iOS runtime works; the
+machine gate above still decides where this runs unprompted. Demo mode is the
+default verification target here too (`SIMCTL_CHILD_MOMENTTALLY_DEMO=1` keeps
+the sim build off the Keychain and the sync path).
+
+```bash
+xcrun simctl boot "iPhone 17 Pro" && open -a Simulator
+SIMCTL_CHILD_MOMENTTALLY_DEMO=1 just ios-run       # build + install + launch
+just ios-test                                      # CoreTests, sim destination
+xcrun simctl io booted screenshot /tmp/shot.png    # evidence
+xcrun simctl ui booted appearance dark             # theme flips (light|dark)
+```
+
+- **Both size classes, always:** the root branches on `horizontalSizeClass`
+  (IOSRootView) — compact gets the TabView, regular gets IPadSplitRoot. A UI
+  change isn't verified until it's been seen on an iPhone sim *and* an iPad
+  sim. The built .app runs on any booted simulator regardless of the build
+  destination's device name, so boot the iPad and re-run `just ios-run` —
+  no rebuild flags needed.
+- **No AX story on iOS:** System Events doesn't reach into the simulator, so
+  verification is visual — screenshot per state, or hands-on in Simulator.app.
+- **Physical devices are mini-only** (`just ios-device`; signing + Xcode
+  Apple ID session live there). It takes the first plugged-in device — one
+  cable at a time is fine. Device loads are an explicit-ask step, never part
+  of unprompted verification.

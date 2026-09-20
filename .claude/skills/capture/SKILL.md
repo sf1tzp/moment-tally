@@ -6,7 +6,10 @@ description: Produce the canonical demo-mode screenshot/recording batch for the 
 # Capturing release assets
 
 > **Machine gate:** same as verify — this is a build/launch/AX-drive cycle,
-> so run it unprompted only on macbook-air (check `hostname`).
+> so run it unprompted only on macbook-air (check `hostname`); macmini is the
+> main workstation for other projects, explicit ask only there.
+> `shots.yaml` is Mac-app-only so far — iOS captures (simulator, `simctl io`)
+> aren't part of the canonical batch yet.
 
 The contract is `captures/shots.yaml`: one entry per asset with the scene it
 must show and the renditions that ship. Read it first — it, not this file, is
