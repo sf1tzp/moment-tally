@@ -70,12 +70,47 @@ package struct StagedChange: Identifiable {
     /// so a rename can't update one and strand the other (#177).
     package func applied(to row: TagRow, toKey: String) -> TagRow {
         var row = row
-        if normalizeKey(row.key) == fromKey,
-           fromValue == nil || row.value == fromValue {
+        if matches(row) {
             row.key = toKey
             if let toValue { row.value = toValue }
         }
         return row
+    }
+
+    /// Whether this change rewrites `row` — the source-scope test shared by
+    /// every rewrite rule below (the span-id subset is applied by the caller).
+    package func matches(_ row: TagRow) -> Bool {
+        normalizeKey(row.key) == fromKey && (fromValue == nil || row.value == fromValue)
+    }
+
+    /// A whole list of marks with this change applied, or nil when the
+    /// rewrite would put a second value under a key the list already carries
+    /// (#229): a move (or key rename) onto a key it holds with a different
+    /// value. "One mark per key" is the working assumption everywhere marks
+    /// are counted, and neither silent answer is right — double-marking
+    /// changes how the time counts in History, and dropping the incumbent
+    /// mark loses data — so the caller skips that span (or set) and says so.
+    /// Exact duplicates the rewrite produces (the list already carried the
+    /// target mark) collapse to one, keeping the first occurrence's place.
+    /// `exclusiveKeys: false` is for quick labels, where several values under
+    /// one key are the point: only the duplicate collapse applies.
+    package func applied(to rows: [TagRow], toKey: String,
+                         exclusiveKeys: Bool = true) -> [TagRow]? {
+        let rewritten = rows.map { applied(to: $0, toKey: toKey) }
+        if exclusiveKeys, toKey != fromKey {
+            let incumbents = rows.filter { !matches($0) && normalizeKey($0.key) == toKey }
+            for (row, new) in zip(rows, rewritten) where matches(row) {
+                if incumbents.contains(where: { $0.value != new.value }) { return nil }
+            }
+        }
+        var seen = Set<String>()
+        return rewritten.filter { seen.insert("\(normalizeKey($0.key))\u{1F}\($0.value)").inserted }
+    }
+
+    /// The same rule for a span's marks.
+    package func applied(to labels: [SpanLabel], toKey: String) -> [SpanLabel]? {
+        applied(to: labels.map { TagRow(key: $0.key, value: $0.value) }, toKey: toKey)?
+            .map { SpanLabel(key: $0.key, value: $0.value) }
     }
 }
 
@@ -134,6 +169,12 @@ package final class TagReviewModel {
     package var renameDone = 0
     package var renameTotal = 0
     package var renameFailures = 0
+    /// Spans a change left alone because the move would have doubled a key
+    /// they already carry (#229) — not failures: the change still counts as
+    /// applied, and these keep their old mark for the user to resolve.
+    package var renameSkipped = 0
+    /// What the last batch skipped, for the pane; cleared by the next apply.
+    package var skipNotice: String?
     @ObservationIgnored private var cancelRequested = false
     @ObservationIgnored private var cancelBatch = false
     /// Invalidates in-flight scans when the range changes mid-fetch.
@@ -159,6 +200,7 @@ package final class TagReviewModel {
         scannedCount = 0
         staged = []
         errorMessage = nil
+        skipNotice = nil
     }
 
     // MARK: Scanning
@@ -262,6 +304,14 @@ package final class TagReviewModel {
         staged.removeAll { $0.id == id }
     }
 
+    /// The spans `change` would skip rather than rewrite (#229): those
+    /// already carrying its target key with another value. Shown beside the
+    /// staged change so the skip is predicted, never a surprise.
+    package func collisions(for change: StagedChange) -> [TimeSpan] {
+        let toKey = effectiveTargetKey(of: change)
+        return spans(for: change).filter { change.applied(to: $0.labels, toKey: toKey) == nil }
+    }
+
     /// The matches a staged change may touch: running spans are excluded —
     /// rewriting a timespan that's still ticking proved flaky (its identity
     /// shifts under the list mid-drag), and the popover already edits the
@@ -286,9 +336,11 @@ package final class TagReviewModel {
         guard !isApplying, !staged.isEmpty else { return }
         isApplying = true
         cancelBatch = false
+        skipNotice = nil
         defer { isApplying = false }
         let batch = staged
         var keep: [StagedChange] = []
+        var skipped: [(count: Int, toKey: String)] = []
         // Key renames that have applied so far: later changes in the batch
         // fold them into their keys, because the spans they name have already
         // been respelled on the server. A rename that *failed* is deliberately
@@ -314,8 +366,14 @@ package final class TagReviewModel {
             } else {
                 keep.append(effective)
             }
+            if renameSkipped > 0 {
+                skipped.append((renameSkipped, normalizeKey(effective.toKey)))
+            }
         }
         staged = keep
+        skipNotice = skipped.isEmpty ? nil : skipped.map { count, toKey in
+            "\(count) \(count == 1 ? "moment" : "moments") kept \(count == 1 ? "its" : "their") existing “\(toKey)” mark and \(count == 1 ? "was" : "were") not moved."
+        }.joined(separator: " ")
     }
 
     /// Stop the batch: the in-flight rewrite halts and everything not fully
@@ -327,6 +385,7 @@ package final class TagReviewModel {
 
     /// Apply one change; false when it should stay staged (failures/cancel).
     private func apply(_ change: StagedChange) async -> Bool {
+        renameSkipped = 0
         let toKey = normalizeKey(change.toKey)
         guard !toKey.isEmpty else { return false }
         // The server rejects unknown keys: make sure the target definition
@@ -343,14 +402,7 @@ package final class TagReviewModel {
                 return false
             }
         }
-        await rewrite(spans(for: change)) { tags in
-            tags.map { tag in
-                tag.key == change.fromKey
-                    && (change.fromValue == nil || tag.value == change.fromValue)
-                    ? SpanLabel(key: toKey, value: change.toValue ?? tag.value)
-                    : tag
-            }
-        }
+        await rewrite(spans(for: change)) { change.applied(to: $0, toKey: toKey) }
         // Whole-value (and whole-key) changes update local tag sets, quick
         // labels, and per-value color overrides too, or quick-starting a
         // set (or clicking a quick chip) would recreate the old spelling and
@@ -366,32 +418,42 @@ package final class TagReviewModel {
     }
 
     private func updateTagSets(for change: StagedChange, toKey: String) {
+        // A set that would end up with two values under the target key
+        // stays as it is, like the spans it would start (#229).
         app.tagSets = app.tagSets.map { set in
             var set = set
-            set.tags = set.tags.map { change.applied(to: $0, toKey: toKey) }
+            set.tags = change.applied(to: set.tags, toKey: toKey) ?? set.tags
             return set
         }
         app.quickLabels = app.quickLabels.mapValues { rows in
-            rows.map { change.applied(to: $0, toKey: toKey) }
+            change.applied(to: rows, toKey: toKey, exclusiveKeys: false) ?? rows
         }
     }
 
     /// The rewrite engine: N × updateTimeSpan, one span at a time — traggo has
     /// no bulk rename. Not transactional; failures are counted and skipped.
+    /// A nil from `transform` is a span the change declines to touch (#229):
+    /// counted as skipped, never written.
     private func rewrite(_ matches: [TimeSpan],
-                         _ transform: ([SpanLabel]) -> [SpanLabel]) async {
+                         _ transform: ([SpanLabel]) -> [SpanLabel]?) async {
         renameDone = 0
         renameTotal = matches.count
         renameFailures = 0
+        renameSkipped = 0
         cancelRequested = false
         guard let backend = app.api, !matches.isEmpty else { return }
         for span in matches {
             if cancelRequested { break }
+            guard let labels = transform(span.labels) else {
+                renameSkipped += 1
+                renameDone += 1
+                continue
+            }
             do {
                 // A nil end leaves running spans running.
                 let updated = try await backend.updateTimeSpan(
                     id: span.id, start: span.start, end: span.end,
-                    labels: transform(span.labels), note: span.note)
+                    labels: labels, note: span.note)
                 if let index = spans.firstIndex(where: { $0.id == updated.id }) {
                     spans[index] = updated
                 }

@@ -80,6 +80,13 @@ package struct TagReviewView: View {
                     .lineLimit(2)
                     .padding(6)
             }
+            if let notice = review.skipNotice {
+                Text(notice)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .padding(6)
+            }
 
             if review.keyStats.isEmpty {
                 emptyState
@@ -459,9 +466,19 @@ package struct TagReviewView: View {
         let total = model.review.movableMatches(key: value.fromKey,
                                                 value: value.fromValue).count
         let countText = value.spanIDs == nil ? "\(count)" : "\(count) of \(total)"
+        let toKey = model.review.effectiveTargetKey(of: value)
+        let collisions = model.review.collisions(for: value).count
         return HStack(spacing: 6) {
-            prose(for: value, count: countText,
-                  toKey: model.review.effectiveTargetKey(of: value))
+            prose(for: value, count: countText, toKey: toKey)
+            if collisions > 0 {
+                // Predict the skip (#229): these already carry the target
+                // key with another value, and the move leaves them alone.
+                Text("\(collisions) already marked “\(toKey)” — skipped")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+                    .help("\(collisions) of these moments already carry a different “\(toKey)” mark. Approving leaves them as they are rather than giving them two “\(toKey)” marks.")
+            }
             if value.toValue != nil {
                 TextField("value", text: Binding(
                     get: { change.wrappedValue.toValue ?? "" },

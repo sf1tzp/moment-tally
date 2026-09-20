@@ -230,4 +230,93 @@ import Testing
         #expect(migrated == untouched)
     }
 }
+
+/// The list-level rewrite rule (#229): a move onto a key the marks already
+/// carry with another value is declined (nil) rather than doubling the key;
+/// exact duplicates collapse; quick labels keep their many-values-per-key.
+@Suite struct StagedChangeCollisionTests {
+
+    private func labels(_ pairs: [(String, String)]) -> [SpanLabel] {
+        pairs.map { SpanLabel(key: $0.0, value: $0.1) }
+    }
+
+    private let move = StagedChange(fromKey: "deliverable", fromValue: "style-guide",
+                                    toKey: "project", toValue: nil, spanIDs: nil)
+
+    @Test func moveOntoAKeyHeldWithAnotherValueIsDeclined() {
+        let span = labels([("project", "rebrand"), ("deliverable", "style-guide")])
+        #expect(move.applied(to: span, toKey: "project") == nil)
+    }
+
+    @Test func moveOntoAKeyHeldWithTheSameValueCollapses() {
+        let span = labels([("project", "rebrand"), ("deliverable", "rebrand")])
+        let change = StagedChange(fromKey: "deliverable", fromValue: "rebrand",
+                                  toKey: "project", toValue: nil, spanIDs: nil)
+        #expect(change.applied(to: span, toKey: "project") == labels([("project", "rebrand")]))
+    }
+
+    @Test func moveWithATargetValueMatchingTheIncumbentCollapses() {
+        let span = labels([("project", "rebrand"), ("deliverable", "style-guide")])
+        let change = StagedChange(fromKey: "deliverable", fromValue: "style-guide",
+                                  toKey: "project", toValue: "rebrand", spanIDs: nil)
+        #expect(change.applied(to: span, toKey: "project") == labels([("project", "rebrand")]))
+    }
+
+    @Test func moveOntoAnAbsentKeyRewrites() {
+        let span = labels([("client", "acme"), ("deliverable", "style-guide")])
+        #expect(move.applied(to: span, toKey: "project")
+                == labels([("client", "acme"), ("project", "style-guide")]))
+    }
+
+    @Test func keyRenameOntoAHeldKeyIsDeclined() {
+        let rename = StagedChange(fromKey: "deliverable", fromValue: nil,
+                                  toKey: "project", toValue: nil, spanIDs: nil)
+        let span = labels([("project", "rebrand"), ("deliverable", "style-guide")])
+        #expect(rename.applied(to: span, toKey: "project") == nil)
+    }
+
+    @Test func keyRenameCarriesExistingMultiMarks() {
+        // A span that already held two values under the source key keeps
+        // both — the rename didn't create that state.
+        let rename = StagedChange(fromKey: "deliverable", fromValue: nil,
+                                  toKey: "project", toValue: nil, spanIDs: nil)
+        let span = labels([("deliverable", "a"), ("deliverable", "b")])
+        #expect(rename.applied(to: span, toKey: "project") == labels([("project", "a"), ("project", "b")]))
+    }
+
+    @Test func valueRenameWithinAKeyNeverCollides() {
+        let rename = StagedChange(fromKey: "project", fromValue: "rebrand",
+                                  toKey: "project", toValue: "brand-refresh", spanIDs: nil)
+        let span = labels([("project", "rebrand"), ("project", "other")])
+        #expect(rename.applied(to: span, toKey: "project")
+                == labels([("project", "brand-refresh"), ("project", "other")]))
+        let duplicate = labels([("project", "rebrand"), ("project", "brand-refresh")])
+        #expect(rename.applied(to: duplicate, toKey: "project") == labels([("project", "brand-refresh")]))
+    }
+
+    @Test func untouchedMarksPassThrough() {
+        let span = labels([("client", "acme"), ("project", "rebrand")])
+        #expect(move.applied(to: span, toKey: "project") == span)
+    }
+
+    @Test func setRowsFollowTheSameRule() {
+        let rows = [TagRow(key: "project", value: "rebrand"),
+                    TagRow(key: "deliverable", value: "style-guide")]
+        #expect(move.applied(to: rows, toKey: "project") == nil)
+        let clean = [TagRow(key: "deliverable", value: "style-guide")]
+        let rewritten = move.applied(to: clean, toKey: "project")
+        #expect(rewritten?.map(\.key) == ["project"])
+        #expect(rewritten?.first?.id == clean[0].id)
+    }
+
+    @Test func quickLabelsKeepManyValuesPerKey() {
+        let rows = [TagRow(key: "project", value: "rebrand"),
+                    TagRow(key: "deliverable", value: "style-guide")]
+        let rewritten = move.applied(to: rows, toKey: "project", exclusiveKeys: false)
+        #expect(rewritten?.map { "\($0.key)=\($0.value)" } == ["project=rebrand", "project=style-guide"])
+        let duplicate = [TagRow(key: "project", value: "style-guide"),
+                         TagRow(key: "deliverable", value: "style-guide")]
+        #expect(move.applied(to: duplicate, toKey: "project", exclusiveKeys: false)?.count == 1)
+    }
+}
 #endif
