@@ -449,4 +449,88 @@ private final class CloudDevice {
         }
     }
 }
+
+/// The fleet switch (#241), end to end: two Macs that converged through a
+/// self-hosted server both enable iCloud. Each holds the same spans under
+/// its own row ids; the server ids they share become the record names, so
+/// the second upload conflicts into the first and merges — the dataset
+/// stays the same size on both machines.
+@Suite @MainActor struct CloudKitFleetSwitchTests {
+
+    private static let serverURL = "https://sync.example"
+
+    /// A store that converged through the self-hosted server: every span
+    /// carries its server id in sync_map and is clean.
+    private func convergedStore(notes: [String]) async throws -> LocalBackend {
+        let store = try LocalBackend(DatabaseQueue())
+        try store.connectSyncServer(url: Self.serverURL,
+                                    user: User(id: 1, name: "steven", admin: false))
+        try await store.createLabelDefinition(key: "recipe", color: "#ff9500")
+        for (serverId, note) in notes.enumerated() {
+            let span = try await store.startTimeSpan(
+                start: Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(serverId)),
+                labels: [SpanLabel(key: "recipe", value: "sourdough")], note: note)
+            _ = try await store.stopTimeSpan(
+                id: span.id, end: Date(timeIntervalSince1970: 1_700_003_600 + TimeInterval(serverId)))
+            try await store.dbQueue.write { db in
+                try SyncMapRow(entity: SyncEntity.span.rawValue, localId: String(span.id),
+                               serverId: 100 + serverId).insert(db)
+                try db.execute(sql: "UPDATE time_span SET dirty = 0 WHERE id = ?",
+                               arguments: [span.id])
+            }
+        }
+        try store.disconnectSyncServer()
+        return store
+    }
+
+    private func spanRowCount(_ device: CloudDevice) throws -> Int {
+        try device.store.dbQueue.read { db in try TimeSpanRow.fetchCount(db) }
+    }
+
+    @Test func twoConvergedMacsDoNotDuplicateSpans() async throws {
+        let container = FakeCloudContainer()
+        let notes = ["loaf", "rolls", "bagels"]
+        let air = try CloudDevice(container: container,
+                                  store: try await convergedStore(notes: notes))
+        let mini = try CloudDevice(container: container,
+                                   store: try await convergedStore(notes: notes))
+
+        try await air.sync()
+        try await mini.sync()
+        try await air.sync()
+        try await mini.sync()
+
+        // Row counts, not the note-keyed lens: a duplicated span shares
+        // its note and would collapse into one entry there.
+        #expect(try spanRowCount(air) == notes.count)
+        #expect(try spanRowCount(mini) == notes.count)
+        #expect(try air.spans.keys.sorted() == notes.sorted())
+        #expect(try air.spans.mapValues(\.uuid) == mini.spans.mapValues(\.uuid))
+        #expect(try air.dirtyRowCount == 0)
+        #expect(try mini.dirtyRowCount == 0)
+        #expect(air.problems.isEmpty && mini.problems.isEmpty)
+    }
+
+    @Test func spansOnlyOneMacHoldsStillCrossOver() async throws {
+        let container = FakeCloudContainer()
+        let air = try CloudDevice(container: container,
+                                  store: try await convergedStore(notes: ["loaf", "rolls"]))
+        let mini = try CloudDevice(container: container,
+                                   store: try await convergedStore(notes: ["loaf"]))
+        // A span the mini made after leaving the server: no server id.
+        _ = try await mini.store.startTimeSpan(
+            start: Date(timeIntervalSince1970: 1_700_100_000), labels: [], note: "focaccia")
+
+        try await air.sync()
+        try await mini.sync()
+        try await air.sync()
+        try await mini.sync()
+
+        #expect(try spanRowCount(air) == 3)
+        #expect(try spanRowCount(mini) == 3)
+        #expect(try air.spans.keys.sorted() == ["focaccia", "loaf", "rolls"])
+        #expect(try mini.spans.keys.sorted() == ["focaccia", "loaf", "rolls"])
+        #expect(try air.spans["loaf"]?.uuid == mini.spans["loaf"]?.uuid)
+    }
+}
 #endif
