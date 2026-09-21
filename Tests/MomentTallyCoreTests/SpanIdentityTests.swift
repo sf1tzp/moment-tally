@@ -6,7 +6,8 @@ import Testing
 /// The self-hosted → iCloud identity bridge (#241): spans that converged
 /// through a self-hosted server adopt a record name derived from their
 /// server id, so every Mac of the fleet uploads the same record instead of
-/// its own copy.
+/// its own copy. Since #272 the adoption runs once, in the v10 migration
+/// that retires the self-hosted connection.
 @Suite struct SpanIdentityTests {
 
     // MARK: The derivation is a fixed contract
@@ -55,37 +56,44 @@ import Testing
         #expect(SpanIdentity.cloudUUID(serverURL: "https://sync.example:8080", serverId: 42) != canonical)
     }
 
-    // MARK: Adoption at the transport switch
+    // MARK: Adoption in the retirement migration (v10)
 
     private static let serverURL = "https://sync.example"
-    private static let user = User(id: 1, name: "steven", admin: false)
 
-    /// A store that converged through the self-hosted server: `mapped`
-    /// spans carry a sync_map row (their id on the server), the rest were
-    /// never pushed.
-    private func serverBackend(mapped: [Int], unmapped: Int,
-                               url: String = serverURL) async throws -> LocalBackend {
-        let backend = try LocalBackend(DatabaseQueue(), legacyDefaults: nil)
-        try backend.connectSyncServer(url: url, user: Self.user)
-        for serverId in mapped {
-            let span = try await backend.startTimeSpan(
-                start: Date(timeIntervalSince1970: TimeInterval(serverId)), labels: [], note: "")
-            try await backend.dbQueue.write { db in
-                try SyncMapRow(entity: SyncEntity.span.rawValue, localId: String(span.id),
-                               serverId: serverId).insert(db)
-                try db.execute(sql: "UPDATE time_span SET dirty = 0 WHERE id = ?",
-                               arguments: [span.id])
+    /// A pre-v10 store that converged through the self-hosted server, as
+    /// the migration finds it: `mapped` spans carry a sync_map row (their
+    /// id on the server) and are clean, the rest were never pushed. Built
+    /// against the v9 schema; opening it as a `LocalBackend` runs v10.
+    private func serverDatabase(mapped: [Int], unmapped: Int, url: String = serverURL,
+                                active: Bool = true) throws -> DatabaseQueue {
+        let dbQueue = try DatabaseQueue()
+        try LocalBackend.migrator(legacyDefaults: nil).migrate(dbQueue, upTo: "v9-ck-environment")
+        try dbQueue.write { db in
+            try db.execute(sql: """
+                INSERT INTO sync_server (id, url, user_id, user_name, active, transport)
+                VALUES (1, ?, 1, 'steven', ?, 'server')
+                """, arguments: [url, active])
+            for serverId in mapped {
+                try db.execute(
+                    sql: "INSERT INTO time_span (start, note, dirty, uuid) VALUES (?, '', 0, ?)",
+                    arguments: [Date(timeIntervalSince1970: TimeInterval(serverId)),
+                                UUID().uuidString])
+                try db.execute(
+                    sql: "INSERT INTO sync_map (entity, local_id, server_id) VALUES ('span', ?, ?)",
+                    arguments: [String(db.lastInsertedRowID), serverId])
+            }
+            for i in 0..<unmapped {
+                try db.execute(
+                    sql: "INSERT INTO time_span (start, note, dirty, uuid) VALUES (?, '', 1, ?)",
+                    arguments: [Date(timeIntervalSince1970: 1_000 + TimeInterval(i)),
+                                UUID().uuidString])
             }
         }
-        for i in 0..<unmapped {
-            _ = try await backend.startTimeSpan(
-                start: Date(timeIntervalSince1970: 1_000 + TimeInterval(i)), labels: [], note: "")
-        }
-        return backend
+        return dbQueue
     }
 
-    private func uuidsByStart(_ backend: LocalBackend) async throws -> [Int: String] {
-        try await backend.dbQueue.read { db in
+    private func uuidsByStart(_ dbQueue: DatabaseQueue) throws -> [Int: String] {
+        try dbQueue.read { db in
             let rows = try Row.fetchAll(db, sql: "SELECT start, uuid FROM time_span")
             return Dictionary(uniqueKeysWithValues: rows.map {
                 (Int(($0["start"] as Date).timeIntervalSince1970), $0["uuid"] as String)
@@ -93,16 +101,16 @@ import Testing
         }
     }
 
-    @Test func twoMacsThatSharedAServerAgreeOnSpanIdentity() async throws {
-        let air = try await serverBackend(mapped: [7, 8], unmapped: 1)
-        let mini = try await serverBackend(mapped: [7, 8], unmapped: 1)
-        let before = try await uuidsByStart(air)
+    @Test func twoMacsThatSharedAServerAgreeOnSpanIdentity() throws {
+        let air = try serverDatabase(mapped: [7, 8], unmapped: 1)
+        let mini = try serverDatabase(mapped: [7, 8], unmapped: 1)
+        let before = try uuidsByStart(air)
 
-        try air.connectCloudKit(accountLabel: "iCloud")
-        try mini.connectCloudKit(accountLabel: "iCloud")
+        _ = try LocalBackend(air, legacyDefaults: nil)
+        _ = try LocalBackend(mini, legacyDefaults: nil)
 
-        let airUUIDs = try await uuidsByStart(air)
-        let miniUUIDs = try await uuidsByStart(mini)
+        let airUUIDs = try uuidsByStart(air)
+        let miniUUIDs = try uuidsByStart(mini)
         #expect(airUUIDs[7] == miniUUIDs[7])
         #expect(airUUIDs[8] == miniUUIDs[8])
         #expect(airUUIDs[7] != airUUIDs[8])
@@ -113,55 +121,84 @@ import Testing
         #expect(airUUIDs[1_000] != miniUUIDs[1_000])
     }
 
-    @Test func adoptionSurvivesADisconnectFirst() async throws {
-        // The documented path: turn off the server, then enable iCloud.
-        let backend = try await serverBackend(mapped: [7], unmapped: 0)
-        try backend.disconnectSyncServer()
-        try backend.connectCloudKit(accountLabel: "iCloud")
-        let uuids = try await uuidsByStart(backend)
-        #expect(uuids[7] == SpanIdentity.cloudUUID(serverURL: Self.serverURL, serverId: 7))
+    @Test func adoptionCoversAServerDisconnectedBeforeTheUpgrade() throws {
+        // The row survives a disconnect (inactive), and so does sync_map —
+        // the identity is still there to adopt.
+        let dbQueue = try serverDatabase(mapped: [7], unmapped: 0, active: false)
+        _ = try LocalBackend(dbQueue, legacyDefaults: nil)
+        #expect(try uuidsByStart(dbQueue)[7]
+                == SpanIdentity.cloudUUID(serverURL: Self.serverURL, serverId: 7))
     }
 
-    @Test func switchStillStartsOver() async throws {
-        let backend = try await serverBackend(mapped: [7], unmapped: 1)
-        try backend.connectCloudKit(accountLabel: "iCloud")
-        let (maps, dirty, row) = try await backend.dbQueue.read { db in
-            (try SyncMapRow.fetchCount(db),
-             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM time_span WHERE dirty = 1")!,
+    @Test func retirementLeavesSyncOffAndTheFirstICloudConnectStartsOver() async throws {
+        let dbQueue = try serverDatabase(mapped: [7], unmapped: 1)
+        let backend = try LocalBackend(dbQueue, legacyDefaults: nil)
+        let (maps, row) = try await dbQueue.read { db in
+            (try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM sync_map")!,
              try SyncServerRow.fetchOne(db))
         }
         #expect(maps == 0)
+        #expect(row == nil)
+
+        try backend.connectCloudKit(accountLabel: "iCloud")
+        let (dirty, connected) = try await dbQueue.read { db in
+            (try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM time_span WHERE dirty = 1")!,
+             try SyncServerRow.fetchOne(db))
+        }
         #expect(dirty == 2)
-        #expect(row?.transport == SyncTransport.cloudKit.rawValue)
+        #expect(connected?.transport == SyncTransport.cloudKit.rawValue)
+        // Identity adopted by the migration survives the connect.
+        #expect(try uuidsByStart(dbQueue)[7]
+                == SpanIdentity.cloudUUID(serverURL: Self.serverURL, serverId: 7))
     }
 
-    @Test func differentServersYieldDifferentIdentities() async throws {
-        let a = try await serverBackend(mapped: [7], unmapped: 0, url: "https://a.example")
-        let b = try await serverBackend(mapped: [7], unmapped: 0, url: "https://b.example")
-        try a.connectCloudKit(accountLabel: "iCloud")
-        try b.connectCloudKit(accountLabel: "iCloud")
-        #expect(try await uuidsByStart(a)[7] != uuidsByStart(b)[7])
+    @Test func differentServersYieldDifferentIdentities() throws {
+        let a = try serverDatabase(mapped: [7], unmapped: 0, url: "https://a.example")
+        let b = try serverDatabase(mapped: [7], unmapped: 0, url: "https://b.example")
+        _ = try LocalBackend(a, legacyDefaults: nil)
+        _ = try LocalBackend(b, legacyDefaults: nil)
+        #expect(try uuidsByStart(a)[7] != uuidsByStart(b)[7])
+    }
+
+    @Test func aStoreAlreadyOnICloudIsUntouched() async throws {
+        let dbQueue = try DatabaseQueue()
+        try LocalBackend.migrator(legacyDefaults: nil).migrate(dbQueue, upTo: "v9-ck-environment")
+        try await dbQueue.write { db in
+            try db.execute(sql: """
+                INSERT INTO sync_server (id, url, user_id, user_name, transport, ck_state)
+                VALUES (1, 'icloud', 0, 'iCloud', 'cloudkit', x'00')
+                """)
+            try db.execute(
+                sql: "INSERT INTO time_span (start, note, dirty, uuid) VALUES (?, '', 0, ?)",
+                arguments: [Date(timeIntervalSince1970: 5), UUID().uuidString])
+        }
+        let before = try uuidsByStart(dbQueue)
+        _ = try LocalBackend(dbQueue, legacyDefaults: nil)
+        let row = try await dbQueue.read { db in try SyncServerRow.fetchOne(db) }
+        #expect(row?.transport == SyncTransport.cloudKit.rawValue)
+        #expect(row?.ckState != nil)
+        #expect(try uuidsByStart(dbQueue) == before)
     }
 
     @Test func reconnectingToCloudKitLeavesIdentityAlone() async throws {
         let backend = try LocalBackend(DatabaseQueue(), legacyDefaults: nil)
         _ = try await backend.startTimeSpan(start: Date(timeIntervalSince1970: 5), labels: [], note: "")
         try backend.connectCloudKit(accountLabel: "iCloud")
-        let before = try await uuidsByStart(backend)
-        try backend.disconnectSyncServer()
+        let before = try uuidsByStart(backend.dbQueue)
+        try backend.disconnectSync()
         try backend.connectCloudKit(accountLabel: "iCloud")
-        #expect(try await uuidsByStart(backend) == before)
+        #expect(try uuidsByStart(backend.dbQueue) == before)
     }
 
-    @Test func aNameAlreadyTakenIsNotStolen() async throws {
-        let backend = try await serverBackend(mapped: [7], unmapped: 1)
+    @Test func aNameAlreadyTakenIsNotStolen() throws {
+        let dbQueue = try serverDatabase(mapped: [7], unmapped: 1)
         let taken = SpanIdentity.cloudUUID(serverURL: Self.serverURL, serverId: 7)
-        try await backend.dbQueue.write { db in
+        try dbQueue.write { db in
             try db.execute(sql: "UPDATE time_span SET uuid = ? WHERE start = ?",
                            arguments: [taken, Date(timeIntervalSince1970: 1_000)])
         }
-        try backend.connectCloudKit(accountLabel: "iCloud")
-        let uuids = try await uuidsByStart(backend)
+        _ = try LocalBackend(dbQueue, legacyDefaults: nil)
+        let uuids = try uuidsByStart(dbQueue)
         #expect(uuids[1_000] == taken)
         #expect(uuids[7] != taken)
         #expect(Set(uuids.values).count == 2)

@@ -6,8 +6,8 @@ import Foundation
 
 // MARK: - The CloudKit surface the transport drives (#121)
 //
-// CKSyncEngine inverts control relative to SyncServerAPI: instead of the
-// engine calling pull/push methods, the *system* engine calls a delegate —
+// CKSyncEngine inverts control relative to a request/response API: instead
+// of the app calling pull/push methods, the *system* engine calls a delegate —
 // "give me the next batch of records to send", "here is what a fetch
 // returned" — and owns the pending-change set, the change tokens, and the
 // retry/backoff schedule inside an opaque state serialization.
@@ -23,8 +23,7 @@ import Foundation
 //
 // Production wires a thin adapter translating real CKSyncEngine callbacks
 // into these values — mechanical, no logic, the only code CI can't reach.
-// Tests wire the fake CK layer, which plays both the engine and the server
-// (the FakeSyncServer pattern, repeated).
+// Tests wire the fake CK layer, which plays both the engine and the server.
 
 // MARK: Pending work (the engine's queue)
 
@@ -86,7 +85,8 @@ package enum CloudSaveFailure {
     case zoneNotFound
     /// The record was deleted on the server after this save was based on
     /// it. The local edit still wins locally — re-queue as a fresh create
-    /// (the SyncEngine "deleted there since the pull" precedent).
+    /// ("deleted there since the pull" — a dirty local edit outlives a
+    /// remote deletion).
     case unknownItem
 }
 

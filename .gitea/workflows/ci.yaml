@@ -1,32 +1,19 @@
-# Gitea Actions CI for Moment Tally — the internal half of server distribution
-# (#48): check the Go server, build infra/Dockerfile, and push to the
-# built-in registry so staging can pull it. Public release (GHCR image + OCI
-# chart) is deliberately NOT here — #75 wires that into scripts/release.sh
-# off the vX.Y.Z tag.
-#
-# Prerequisites (repo/org Settings > Actions > Secrets):
-#   REGISTRY_TOKEN  Gitea PAT with write:packages scope, for pushing images
-#                   to the built-in registry (gitea.zen.lofi) — same secret
-#                   the other repos' workflows use.
+# Gitea Actions CI for Moment Tally: the Swift core suite on every push.
 #
 # The Swift side runs in the official swift image (the runners themselves
 # have no toolchain): off-Mac the manifest drops the app layers and
 # MomentTallyTests, so a plain `swift test` covers MomentTallyCore, the
-# CLI, and MomentTallyCoreTests — including the self-hosted sync engine
-# round-trips (#85). What still needs a Mac: MomentTallyTests (the app
-# module) and the CloudKit-backed core tests, which gate themselves out
-# off-Apple via canImport.
+# CLI, and MomentTallyCoreTests. What still needs a Mac: MomentTallyTests
+# (the app module) and the CloudKit-backed core tests, which gate
+# themselves out off-Apple via canImport.
+#
+# The Go server and its image build used to live here too; the self-hosted
+# transport was retired in #272 (the tree is intact at the v1.2.2 tag).
 
 name: CI
 
 on:
   push:
-
-env:
-  REGISTRY: gitea.zen.lofi
-  # Not derived from gitea.repository: the image is named for the component,
-  # not the repo (and registry names are lowercase).
-  IMAGE: gitea.zen.lofi/sfi/moment-tally-server
 
 jobs:
   swift-core-check:
@@ -46,68 +33,3 @@ jobs:
       - name: Test (core + CLI + MomentTallyCoreTests)
         run: swift test
 
-  server-check:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: server/go.mod
-          cache-dependency-path: server/go.sum
-
-      - name: Generate (gqlgen output is gitignored)
-        run: |
-          export PATH="$(go env GOPATH)/bin:$PATH"
-          make download-tools generate
-
-      - name: Lint
-        run: |
-          export PATH="$(go env GOPATH)/bin:$PATH"
-          make lint
-
-      - name: Test
-        run: make test
-
-  build-and-push:
-    # Mirrors primetime-website: not gated on server-check, so a failing
-    # check still leaves an image around to debug with.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          # Full history + tags so git describe stamps a real version into
-          # the binary (it reports 'develop' otherwise).
-          fetch-depth: 0
-
-      - name: Log in to Gitea registry
-        run: |
-          echo "${{ secrets.REGISTRY_TOKEN }}" | \
-            docker login "${{ env.REGISTRY }}" \
-              --username "${{ gitea.actor }}" \
-              --password-stdin
-
-      - name: Build and push
-        env:
-          GITEA_SHA: ${{ gitea.sha }}
-          GITEA_REF: ${{ gitea.ref }}
-        run: |
-          set -euo pipefail
-          SHORT="${GITEA_SHA:0:7}"
-          docker build -f infra/Dockerfile \
-            --build-arg VERSION="$(git describe --tags --always)" \
-            --build-arg COMMIT="$SHORT" \
-            --build-arg DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -t "$IMAGE:$SHORT" .
-          docker push "$IMAGE:$SHORT"
-          # Pushing a vX.Y.Z tag also publishes under that name — the tag the
-          # compose example and the Helm chart's appVersion default reference
-          # (#48's release-alignment rule).
-          case "$GITEA_REF" in
-            refs/tags/v*)
-              docker tag "$IMAGE:$SHORT" "$IMAGE:${GITEA_REF#refs/tags/}"
-              docker push "$IMAGE:${GITEA_REF#refs/tags/}"
-              ;;
-          esac

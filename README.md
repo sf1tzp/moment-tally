@@ -5,10 +5,12 @@
 <p align="center"><strong>Mark the moments of your day and see where the effort goes</strong></p>
 
 > [!IMPORTANT]
-> **PrimeTime is now Moment Tally.** Thank you to our early testers and users.
-> The rename moved the brew tap and the in-app update feed, so 0.8.x installs
-> won't see this release — install fresh under the new name below. Apologies
-> for any inconvenience.
+> **Moment Tally Server is going away in 2.0.** Moment Tally is an exploration
+> of good UX design, and 2.0 brings it to iPhone and iPad (and iPhone Duo).
+> Delivering that experience well means keeping the app simple, so
+> the self-hosted sync option is being removed: from 2.0 on, sync goes through
+> iCloud only. 1.2.2 is the last release that includes the server. Thank you
+> to everyone who ran one!
 
 Moment Tally is a macOS menu-bar time tracker that marks and divides your time exactly how you want. Attach `key: value` marks to every moment — inspired by Prometheus metrics — and your time becomes queryable data, not entries filed into one rigid hierarchy. Start a timer in one keystroke, run several at once, then see where the day actually went. Offline-first: no account, no server, no network required.
 
@@ -31,7 +33,7 @@ Requires macOS 14 (Sonoma) or later on Apple silicon.
 - **Mark and divide time exactly how you want** — flexible `key: value` marks (`repo: app`, `type: review`, `team: platform`) make your time queryable across any axis you invent, without deciding a hierarchy up front.
 - **Multi-task in the modern era** — multiple concurrent timers, flexible after-the-fact editing, and note-taking, because real work overlaps, gets interrupted, and needs correcting.
 - **Visualize your workday** — see where the day actually went in calendar and chart views built from your own marks.
-- **Own your data** — everything lives in a local SQLite store on your Mac. Sync is optional and goes through a server you host.
+- **Own your data** — everything lives in a local SQLite store on your Mac. Sync is optional and goes through your own iCloud account, end-to-end encrypted.
 
 ## Scriptable from the terminal
 
@@ -86,11 +88,9 @@ swift build
 
 Look for the timer in the menu bar. Launch without `--demo` to start tracking for real.
 
-## Sync with Moment Tally Server — optional
+## Sync with iCloud — optional
 
-Moment Tally is local-first: the app is fully functional offline, and the local store stays the source of truth. When you want your history on more than one Mac — or shared across a team — run [Moment Tally Server](server/): a headless GraphQL backend, derived from [traggo/server](https://github.com/traggo/server) and evolved into the Moment Tally v1 API (mark vocabulary, per-value colors, server-side tallies). It ships as a single container backed by SQLite.
-
-Connect in **Settings → Sync**: enter your server URL, sign in, and your local history uploads and stays in sync from then on.
+Moment Tally is local-first: the app is fully functional offline, and the local store stays the source of truth. When you want your history on more than one device, turn on iCloud sync in **Settings → Sync**. There is no account to set up — the iCloud account your Mac is signed into is the account — and the data is end-to-end encrypted, so neither Apple nor Street Fortress can read it. Moments, mark keys and colors, tallies, and the synced settings follow you to every device you use Moment Tally on.
 
 ## Import from Traggo
 
@@ -116,14 +116,10 @@ Installed builds are sandboxed and keep everything inside their container
 instead — remove `~/Library/Containers/com.streetfortress.MomentTally` to
 reset one of those.
 
-## Provenance
-
-The `server/` tree is derived from [traggo/server](https://github.com/traggo/server); its provenance and licensing are documented in [server/README.md](server/README.md).
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) — in particular the contribution terms (DCO sign-off plus a relicensing grant) that keep Moment Tally's dual-channel distribution possible.
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE). The `server/` tree is derived from [traggo/server](https://github.com/traggo/server) and combines GPL-3.0 code with AGPL-3.0-or-later additions — see [NOTICE](NOTICE) and [server/NOTICE](server/NOTICE) for the structure. App-store builds are distributed under separate terms by the copyright holder ([NOTICE](NOTICE)).
+[AGPL-3.0-or-later](LICENSE). App-store builds are distributed under separate terms by the copyright holder ([NOTICE](NOTICE)). Releases through 1.2.2 also carried a `server/` tree derived from [traggo/server](https://github.com/traggo/server); its licensing structure is recorded with it in the git history at the `v1.2.2` tag.

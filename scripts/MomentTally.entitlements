@@ -9,9 +9,9 @@
 	     nothing speculative. -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<!-- Outgoing connections: sync with a self-hosted Moment Tally Server
-	     (SyncEngine), the one-shot Traggo import (#30), and Sparkle's appcast
-	     check + update download (#46). Nothing listens, so no network.server. -->
+	<!-- Outgoing connections: the one-shot Traggo import (#30) and Sparkle's
+	     appcast check + update download (#46). (CloudKit has its own
+	     entitlement.) Nothing listens, so no network.server. -->
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<!-- Powerbox: the JSON export (#57) writes to wherever the user picks in

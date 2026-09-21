@@ -57,18 +57,17 @@ package extension LocalBackend {
 
     // MARK: Connection lifecycle
 
-    /// Establish (or re-activate) the CloudKit connection. Mirrors
-    /// `connectSyncServer`: reconnecting to CloudKit resumes with mappings
-    /// and clean/dirty state intact; switching from a self-hosted server
-    /// starts over — its bookkeeping is wiped and every row goes dirty so
-    /// the full local dataset uploads. Before that wipe, spans the server
-    /// knew adopt an identity derived from their server id (#241), so the
-    /// other Macs of a fleet that converged through that server upload the
-    /// same record names rather than duplicating every span.
+    /// Establish (or re-activate) the CloudKit connection. Reconnecting
+    /// resumes with mappings and clean/dirty state intact; a first connect
+    /// starts over — every row goes dirty so the full local dataset uploads
+    /// (and merges with whatever the account's other devices already put
+    /// there). Spans that once converged through a self-hosted server
+    /// already carry their fleet-wide identity: the v10 migration re-keyed
+    /// them (#241), so each Mac uploads the same record names.
     func connectCloudKit(accountLabel: String, environment: String? = nil) throws {
         try dbQueue.write { db in
-            let existing = try SyncServerRow.fetchOne(db)
-            if var existing, existing.transport == SyncTransport.cloudKit.rawValue {
+            if var existing = try SyncServerRow.fetchOne(db),
+               existing.transport == SyncTransport.cloudKit.rawValue {
                 existing.active = true
                 existing.userName = accountLabel
                 try existing.update(db)
@@ -77,10 +76,6 @@ package extension LocalBackend {
                 }
                 return
             }
-            if let existing, existing.transport == SyncTransport.server.rawValue {
-                try Self.adoptSelfHostedSpanIdentity(serverURL: existing.url, db)
-            }
-            try SyncMapRow.deleteAll(db)
             try SyncTombstoneRow.deleteAll(db)
             try CloudRecordMapRow.deleteAll(db)
             try CloudRecordCacheRow.deleteAll(db)
@@ -92,30 +87,6 @@ package extension LocalBackend {
             row.transport = SyncTransport.cloudKit.rawValue
             row.ckEnvironment = environment
             try row.insert(db)
-        }
-    }
-
-    /// Re-key every span the self-hosted server at `serverURL` knows onto
-    /// `SpanIdentity.cloudUUID` (#241) — the mapping is about to be wiped,
-    /// and this is the last moment the fleet-wide identity is still
-    /// available. Spans the server never saw (pushed nowhere, or created
-    /// after the disconnect) keep their own UUID: no other Mac holds them.
-    /// Safe to run any number of times: the derivation is deterministic,
-    /// and a name another row already carries is left alone rather than
-    /// tripping the unique index (it can't happen through the app's own
-    /// transitions, but a connect must never fail on bookkeeping).
-    internal static func adoptSelfHostedSpanIdentity(serverURL: String, _ db: Database) throws {
-        let mapped = try SyncMapRow
-            .filter(Column("entity") == SyncEntity.span.rawValue)
-            .fetchAll(db)
-        for row in mapped {
-            guard let spanId = Int64(row.localId) else { continue }
-            let uuid = SpanIdentity.cloudUUID(serverURL: serverURL, serverId: row.serverId)
-            try db.execute(sql: """
-                UPDATE time_span SET uuid = ?
-                WHERE id = ?
-                  AND NOT EXISTS (SELECT 1 FROM time_span WHERE uuid = ? AND id != ?)
-                """, arguments: [uuid, spanId, uuid, spanId])
         }
     }
 
@@ -242,9 +213,8 @@ package extension LocalBackend {
 
     /// Definitions for label keys that dirty spans or value colors reference
     /// but no definition covers — invented with the default color, *born
-    /// dirty* so they upload alongside the records that need them. (The
-    /// self-hosted engine creates these because its server rejects unknown
-    /// keys; CloudKit wouldn't reject, but the other devices still need the
+    /// dirty* so they upload alongside the records that need them. (CloudKit
+    /// wouldn't reject an unknown key, but the other devices still need the
     /// definition record to color the label.)
     func ensureCloudDefinitions(defaultColor: String) async throws {
         try await dbQueue.write { db in

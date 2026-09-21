@@ -6,11 +6,10 @@ import Foundation
 
 // MARK: - The CloudKit transport (#121)
 //
-// The CKSyncEngine delegate flow against the SyncStore merge primitives —
-// the CloudKit sibling of the app target's SyncEngine, with the control
-// flow inverted to match the transport: instead of pull-snapshots-then-push,
-// the engine calls back for batches and delivers per-record outcomes as
-// events. Written entirely against the CloudKitSurface protocols, so the
+// The CKSyncEngine delegate flow against the store's merge primitives.
+// The control flow follows the transport: instead of pull-snapshots-then-
+// push, the engine calls back for batches and delivers per-record outcomes
+// as events. Written entirely against the CloudKitSurface protocols, so the
 // same code runs in production (behind the thin CKSyncEngine adapter) and
 // in CI (behind the fake CK layer).
 //
@@ -27,8 +26,8 @@ package final class CloudKitTransport: CloudSyncEngineDelegate {
     package weak var engine: (any CloudSyncEngineControl)?
 
     /// The two preference values live in UserDefaults via AppModel, not in
-    /// the store — bridged by closures exactly like SyncEngine's.
-    /// `applyPreferences` must not re-mark the preferences dirty.
+    /// the store — bridged by closures. `applyPreferences` must not re-mark
+    /// the preferences dirty (AppModel suppresses its observers).
     package var readPreferences: () -> (colorByValue: Bool, menuLabelSetLimit: Int) = { (true, 5) }
     package var applyPreferences: (_ colorByValue: Bool, _ menuLabelSetLimit: Int) -> Void = { _, _ in }
     /// Non-fatal trouble the flow works around but a human should hear
@@ -122,13 +121,13 @@ package final class CloudKitTransport: CloudSyncEngineDelegate {
             case .signIn:
                 break   // connecting is a user decision, made in Settings
             case .signOut:
-                try store.disconnectSyncServer()
+                try store.disconnectSync()
             case .switchAccounts:
                 // Another account's zone is foreign ground: drop every
                 // record-level assumption and stop syncing until the user
                 // reconnects under the new account.
                 try await store.resetCloudKitBookkeeping()
-                try store.disconnectSyncServer()
+                try store.disconnectSync()
             }
 
         case .fetchedRecordZoneChanges(let modifications, let deletions):

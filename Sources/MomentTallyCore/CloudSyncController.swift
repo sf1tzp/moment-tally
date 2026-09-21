@@ -4,14 +4,17 @@
 import Foundation
 import Observation
 
-/// The CloudKit counterpart of SyncEngine's trigger shell: observable
-/// status for the Settings surface, the periodic background cadence, the
-/// debounced kick after local writes, and single-flight syncNow with one
-/// queued rerun — wrapped around CloudKitTransport instead of the
-/// self-hosted reconciliation. Deliberately the same shape as SyncEngine,
-/// so the two transports feel identical to AppModel and Settings; the
-/// plumbing is small enough that sharing it would couple more than it
-/// saves.
+/// What a sync run is doing, for the Settings surface.
+package enum SyncStatus: Equatable {
+    case idle
+    case syncing
+    case error(String)
+}
+
+/// The trigger shell around CloudKitTransport: observable status for the
+/// Settings surface, the periodic background cadence, the debounced kick
+/// after local writes, and single-flight syncNow with one queued rerun.
+/// (The shape is inherited from the retired self-hosted engine, #272.)
 ///
 /// Owns the engine (the real adapter, or the tests' fake) strongly — the
 /// transport's back-reference and the engine's delegate reference are both
@@ -46,7 +49,7 @@ package final class CloudSyncController {
         transport.engine = engine
     }
 
-    // MARK: Triggers (SyncEngine's, verbatim in shape)
+    // MARK: Triggers
 
     /// The steady background cadence — with automatic sync off on the
     /// engine, this is also what stands in for push-driven sync in v1.

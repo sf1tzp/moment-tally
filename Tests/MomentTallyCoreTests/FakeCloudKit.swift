@@ -7,8 +7,8 @@ import Foundation
 
 // MARK: - The fake CK layer (#121)
 //
-// The FakeSyncServer idea repeated for CloudKit: `FakeCloudContainer` plays
-// the server (one per test, shared by every device) and `FakeCloudEngine`
+// An in-process CloudKit: `FakeCloudContainer` plays the server (one per
+// test, shared by every device) and `FakeCloudEngine`
 // plays CKSyncEngine for one device — pending queue, change-token cursor,
 // opaque state serialization, and the delegate flow, delivered through the
 // same `CloudSyncEngineControl`/`CloudSyncEngineDelegate` surface the real

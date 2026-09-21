@@ -8,7 +8,7 @@ import GRDB
 // with the final words. `LabelDefinition` persists directly (it *is* its row);
 // `TimeSpan` doesn't, because its labels live in a child table, so a pair of
 // row types bridges it. Row types are internal (not private) so the sync
-// store surface (SyncStore.swift) shares them.
+// store surfaces (SyncStore.swift, CloudKitSyncStore.swift) share them.
 
 extension LabelDefinition: FetchableRecord, PersistableRecord {
     package static var databaseTableName: String { "label_definition" }
@@ -457,8 +457,10 @@ package final class LocalBackend: Backend {
             }
             try db.create(indexOn: "time_span", columns: ["uuid"], options: .unique)
             try db.alter(table: "sync_server") { t in
+                // "server" was the self-hosted transport, retired in v10;
+                // the literal stays so the migration reads as it shipped.
                 t.add(column: "transport", .text).notNull()
-                    .defaults(to: SyncTransport.server.rawValue)
+                    .defaults(to: "server")
                 t.add(column: "ck_state", .blob)
             }
             try db.create(table: "ck_record_map") { t in
@@ -504,7 +506,61 @@ package final class LocalBackend: Backend {
             }
         }
 
+        // The self-hosted transport is gone (#272): CloudKit is the only
+        // sync. A store that was connected to a Moment Tally server (or
+        // had been, and never switched) has nothing left to read that
+        // bookkeeping, so this retires it — after the one thing it is
+        // still good for. Spans that converged through a server hold the
+        // same logical span under different UUIDs on each Mac (the v7
+        // backfill minted per store); their shared identity is the id the
+        // server assigned, which sync_map still holds. Re-keying every
+        // mapped span onto a UUID derived from (server URL, server id)
+        // — #241's bridge, formerly run at the iCloud switch — makes every
+        // Mac of the fleet upload the same record name when it turns on
+        // iCloud, instead of a copy each. Then the connection row and its
+        // maps go: the app sees "sync off", and turning iCloud on takes
+        // the fresh-connect path (everything dirty, full upload). A store
+        // already on CloudKit is untouched. The tables and the dead
+        // columns stay in the schema — migrations are append-only.
+        migrator.registerMigration("v10-retire-self-hosted") { db in
+            try retireSelfHostedSync(db)
+        }
+
         return migrator
+    }
+
+    /// The body of v10 (see the migration): adopt the fleet-wide span
+    /// identity, then drop the self-hosted connection and its bookkeeping.
+    /// A no-op unless the store's sync row describes a self-hosted server.
+    static func retireSelfHostedSync(_ db: Database) throws {
+        guard let row = try Row.fetchOne(
+            db, sql: "SELECT url FROM sync_server WHERE transport = 'server'") else { return }
+        try adoptSelfHostedSpanIdentity(serverURL: row["url"], db)
+        try db.execute(sql: "DELETE FROM sync_map")
+        try db.execute(sql: "DELETE FROM sync_tombstone")
+        try db.execute(sql: "DELETE FROM sync_server")
+    }
+
+    /// Re-key every span the self-hosted server at `serverURL` knew onto
+    /// `SpanIdentity.cloudUUID` (#241). Spans the server never saw (pushed
+    /// nowhere, or created after a disconnect) keep their own UUID: no
+    /// other Mac holds them. Deterministic, so safe to run any number of
+    /// times; a name another row already carries is left alone rather
+    /// than tripping the unique index (unreachable through the app's own
+    /// transitions, but a migration must never fail on bookkeeping).
+    static func adoptSelfHostedSpanIdentity(serverURL: String, _ db: Database) throws {
+        let mapped = try Row.fetchAll(
+            db, sql: "SELECT local_id, server_id FROM sync_map WHERE entity = ?",
+            arguments: [SyncEntity.span.rawValue])
+        for map in mapped {
+            guard let spanId = Int64(map["local_id"] as String) else { continue }
+            let uuid = SpanIdentity.cloudUUID(serverURL: serverURL, serverId: map["server_id"])
+            try db.execute(sql: """
+                UPDATE time_span SET uuid = ?
+                WHERE id = ?
+                  AND NOT EXISTS (SELECT 1 FROM time_span WHERE uuid = ? AND id != ?)
+                """, arguments: [uuid, spanId, uuid, spanId])
+        }
     }
 
     // MARK: Backend — session
@@ -600,11 +656,8 @@ package final class LocalBackend: Backend {
             guard let row = try TimeSpanRow.fetchOne(db, key: Int64(id)) else {
                 throw Error(message: "No such timespan: \(id)")
             }
-            // If the span is known to the sync server, remember the deletion
-            // until it's pushed; the mapping row itself is retired with it.
-            // Each transport has its own "known to the server" marker: a
-            // sync_map row (self-hosted) or a ck_record_cache row (CloudKit).
-            try Self.tombstoneIfMapped(entity: .span, localId: String(id), db)
+            // If CloudKit knows the span (a ck_record_cache row), remember
+            // the deletion until it's pushed.
             try Self.tombstoneIfCloudKnown(entity: .span, recordName: row.uuid, db)
             _ = try TimeSpanRow.deleteOne(db, key: Int64(id))
             // time_span_label rows follow via ON DELETE CASCADE.
@@ -669,7 +722,7 @@ package final class LocalBackend: Backend {
     /// whole list (the semantics the UserDefaults JSON blob had), but rows
     /// are updated in place so sync metadata survives — only sets that
     /// actually changed go dirty, and a set that disappears leaves a
-    /// tombstone if the sync server knows it. Members are rewritten
+    /// tombstone if CloudKit knows it. Members are rewritten
     /// wholesale (they carry no metadata of their own).
     package func saveTagSets(_ sets: [TagSet]) throws {
         try dbQueue.write { db in
@@ -723,7 +776,6 @@ package final class LocalBackend: Backend {
             }
 
             for row in existing where !kept.contains(row.id) {
-                try Self.tombstoneIfMapped(entity: .labelSet, localId: row.id, db)
                 try Self.tombstoneIfCloudKnown(entity: .labelSet, recordName: row.id, db)
                 _ = try row.delete(db)   // members cascade
             }
@@ -787,7 +839,7 @@ package final class LocalBackend: Backend {
 
     /// Snapshot save with per-row diffing, like `saveTagSets`: unchanged
     /// overrides keep their sync metadata, removed ones leave a tombstone
-    /// when a sync server is connected (value colors have no id mapping —
+    /// when sync is on (value colors have no id mapping —
     /// their key␟value pair *is* the identity on both sides).
     package func saveValueColors(_ colors: [String: String]) throws {
         try dbQueue.write { db in
@@ -907,8 +959,8 @@ package final class LocalBackend: Backend {
                     row.start = span.start
                     row.end = span.end
                     row.note = span.note
-                    // Imported data is local data: it still has to reach the
-                    // sync server, so imports dirty the row like any edit.
+                    // Imported data is local data: it still has to reach
+                    // iCloud, so imports dirty the row like any edit.
                     row.dirty = true
                     row.modifiedAt = Date()
                     try row.update(db)

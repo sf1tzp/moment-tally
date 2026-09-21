@@ -11,12 +11,12 @@ import UIKit
 /// drives the UI; `@Observable` so SwiftUI views re-render when it changes.
 ///
 /// Storage model (#33): the local SQLite store is the *only* backend — every
-/// read and write goes through it, no server required. Connecting a sync
-/// server doesn't switch backends; it attaches a `SyncEngine` that
-/// reconciles the same store with the server in the background, which is
-/// what turns tag sets, colors, and preferences from per-Mac into per-user.
-/// The old live-traggo mode is gone; `TraggoClient` survives only as the
-/// importer's source.
+/// read and write goes through it, no server required. Turning on iCloud
+/// sync doesn't switch backends; it attaches a `CloudSyncController` that
+/// reconciles the same store with CloudKit in the background, which is
+/// what turns tag sets, colors, and preferences from per-device into
+/// per-user. The old live-traggo mode is gone; `TraggoClient` survives only
+/// as the importer's source. (The self-hosted sync server went in #272.)
 @MainActor
 @Observable
 package final class AppModel {
@@ -39,8 +39,7 @@ package final class AppModel {
 
     // MARK: Persisted configuration
 
-    /// The traggo server URL — import-only now: the one-shot importer's
-    /// source. (The sync server's URL lives in the store's sync_server row.)
+    /// The traggo server URL — the one-shot importer's source.
     package var serverURL: String {
         didSet { defaults.set(serverURL, forKey: Keys.serverURL) }
     }
@@ -93,7 +92,7 @@ package final class AppModel {
 
     /// Per-`key: value` color overrides (hex strings), keyed by
     /// `ValueColorKey.join` — first-class rows in the local store, and
-    /// per-user (not per-Mac) once a sync server is connected.
+    /// per-user (not per-Mac) once iCloud sync is on.
     package var valueColors: [String: String] {
         didSet { persistValueColors() }
     }
@@ -209,10 +208,11 @@ package final class AppModel {
         static let gradientLauncherCards = "gradientLauncherCards"
         static let showQuickLabelKeys = "showQuickLabelKeys"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
-        /// Keychain accounts: the sync server's device token, and the legacy
-        /// traggo token the importer still reuses.
-        static let syncToken = "sync-token"
+        /// Keychain accounts: the traggo token the importer reuses, and the
+        /// retired sync server's device token (#272) — deleted at launch so
+        /// no credential outlives the transport.
         static let traggoToken = "token"
+        static let retiredSyncToken = "sync-token"
     }
 
     // MARK: Lifecycle
@@ -248,6 +248,7 @@ package final class AppModel {
         quickLabels = [:]
 
         activateStore()
+        if !demo { Keychain.delete(account: Keys.retiredSyncToken) }
         startSyncIfConfigured()
         startTicking()
         startObservingStoreChanges()
@@ -319,13 +320,10 @@ package final class AppModel {
         }
     }
 
-    // MARK: Sync server (#33)
+    // MARK: iCloud sync (#121)
 
-    /// The engine reconciling the store with a connected sync server; nil
-    /// when no server is connected (or in demo mode — a demo never syncs).
-    package var syncEngine: SyncEngine?
-    /// Its CloudKit sibling (#121); at most one of the two is non-nil —
-    /// transports are mutually exclusive per device in v1.
+    /// The controller reconciling the store with CloudKit; nil when iCloud
+    /// sync is off (or in demo mode — a demo never syncs).
     package var cloudSync: CloudSyncController?
     /// The connection row, mirrored from the store for Settings to display.
     package var syncServer: SyncServerRow?
@@ -333,81 +331,33 @@ package final class AppModel {
     package var syncConnectError: String?
 
     /// Re-attach the engine for a connection that survives a relaunch: an
-    /// active sync_server row in the store, plus its credential — the
-    /// device token in the Keychain (self-hosted) or the iCloud session the
-    /// OS maintains (CloudKit).
+    /// active sync_server row in the store, plus the iCloud session the OS
+    /// maintains.
     private func startSyncIfConfigured() {
         guard !isDemo, let store = localStore else { return }
         syncServer = try? store.syncServer()
-        guard let row = syncServer, row.active else { return }
-        if row.transport == SyncTransport.cloudKit.rawValue {
-            // A build without the entitlement (dev cert) must not touch
-            // CloudKit; the connection row stays for an entitled relaunch.
-            guard BuildEntitlements.cloudKitAvailable else { return }
-            // The environment guard: a build signed for the other container
-            // environment resets the bookkeeping (and its engine state), so
-            // the full dataset uploads there instead of trivially "syncing"
-            // against records that only exist in the old environment.
-            if let environment = BuildEntitlements.cloudKitEnvironment,
-               (try? store.ensureCloudKitEnvironment(environment)) == true {
-                syncServer = try? store.syncServer()
-            }
-            startCloudSync(state: syncServer?.ckState)
-            cloudSync?.kick(after: 1)
-            return
-        }
-        guard let token = Keychain.get(account: Keys.syncToken),
-              let url = URL(string: row.url) else { return }
-        startSyncEngine(client: MomentTallyClient(baseURL: url, token: token))
-        syncEngine?.kick(after: 1)
-    }
-
-    /// Mint a device token on the sync server, remember the connection, and
-    /// run the first reconciliation. The password is used once and never
-    /// stored; the token goes to the Keychain.
-    package func connectSyncServer(url: String, username: String, password: String) async {
-        guard !isDemo, let store = localStore, !isConnectingSync else { return }
-        var normalized = url.trimmingCharacters(in: .whitespaces)
-        while normalized.hasSuffix("/") { normalized.removeLast() }
-        guard let serverURL = URL(string: normalized), serverURL.scheme != nil else {
-            syncConnectError = "Invalid server URL"
-            return
-        }
-        isConnectingSync = true
-        defer { isConnectingSync = false }
-        do {
-            var client = MomentTallyClient(baseURL: serverURL, token: nil)
-            let result = try await client.login(username: username,
-                                                password: password,
-                                                deviceName: deviceName)
-            Keychain.set(result.token, account: Keys.syncToken)
-            try store.connectSyncServer(url: normalized, user: result.user)
+        guard let row = syncServer, row.active,
+              row.transport == SyncTransport.cloudKit.rawValue else { return }
+        // A build without the entitlement (dev cert) must not touch
+        // CloudKit; the connection row stays for an entitled relaunch.
+        guard BuildEntitlements.cloudKitAvailable else { return }
+        // The environment guard: a build signed for the other container
+        // environment resets the bookkeeping (and its engine state), so
+        // the full dataset uploads there instead of trivially "syncing"
+        // against records that only exist in the old environment.
+        if let environment = BuildEntitlements.cloudKitEnvironment,
+           (try? store.ensureCloudKitEnvironment(environment)) == true {
             syncServer = try? store.syncServer()
-            client.token = result.token
-            syncConnectError = nil
-            startSyncEngine(client: client)
-            await syncEngine?.syncNow()
-        } catch {
-            syncConnectError = error.localizedDescription
         }
-    }
-
-    /// Stop syncing. Local data, server-id mappings, and clean/dirty state
-    /// all stay, so reconnecting to the same server resumes instead of
-    /// duplicating.
-    package func disconnectSyncServer() {
-        syncEngine?.stop()
-        syncEngine = nil
-        try? localStore?.disconnectSyncServer()
-        Keychain.delete(account: Keys.syncToken)
-        syncServer = try? localStore?.syncServer()
+        startCloudSync(state: syncServer?.ckState)
+        cloudSync?.kick(after: 1)
     }
 
     /// Turn on iCloud sync (#121). No credentials of ours — the OS session
     /// is the account; the only precondition is being signed into iCloud.
-    /// Connecting wipes any self-hosted bookkeeping and re-dirties every
-    /// row, so the full local dataset uploads (and merges with whatever the
-    /// account's other devices already put there).
+    /// A first connect re-dirties every row, so the full local dataset
+    /// uploads (and merges with whatever the account's other devices
+    /// already put there).
     package func connectCloudKit() async {
         guard !isDemo, let store = localStore, !isConnectingSync,
               BuildEntitlements.cloudKitAvailable else { return }
@@ -431,24 +381,13 @@ package final class AppModel {
         }
     }
 
-    /// Stop iCloud sync. Mirrors `disconnectSyncServer`: data, record
-    /// mappings, and clean/dirty state stay, so turning it back on resumes
-    /// instead of re-uploading the world.
+    /// Stop iCloud sync. Data, record mappings, and clean/dirty state stay,
+    /// so turning it back on resumes instead of re-uploading the world.
     package func disconnectCloudKit() {
         cloudSync?.stop()
         cloudSync = nil
-        try? localStore?.disconnectSyncServer()
+        try? localStore?.disconnectSync()
         syncServer = try? localStore?.syncServer()
-    }
-
-    private func startSyncEngine(client: MomentTallyClient) {
-        guard let store = localStore else { return }
-        let engine = SyncEngine(store: store, server: client)
-        engine.readPreferences = syncReadPreferences
-        engine.applyPreferences = syncApplyPreferences
-        engine.onLocalChange = syncDidChangeLocalData
-        engine.startPeriodicSync()
-        syncEngine = engine
     }
 
     private func startCloudSync(state: Data?) {
@@ -465,7 +404,7 @@ package final class AppModel {
         cloudSync = controller
     }
 
-    // The store-reconciliation bridges, shared verbatim by both transports.
+    // The store-reconciliation bridges.
 
     private var syncReadPreferences: () -> (colorByValue: Bool, menuLabelSetLimit: Int) {
         { [weak self] in (self?.colorTagsByValue ?? true, self?.menuTagSetLimit ?? 5) }
@@ -510,15 +449,14 @@ package final class AppModel {
     }
 
     /// A local mutation happened — reconcile soon. Called by every write
-    /// path here and in the sibling models; harmlessly does nothing when no
-    /// transport is connected (at most one of the two ever is).
+    /// path here and in the sibling models; harmlessly does nothing when
+    /// iCloud sync is off.
     package func syncSoon() {
-        syncEngine?.kick()
         cloudSync?.kick()
     }
 
     /// One of the two synced preferences changed by hand: stamp it dirty in
-    /// the store (a no-op until a server is connected) and reconcile soon.
+    /// the store (a no-op until sync is on) and reconcile soon.
     private func preferenceChanged() {
         guard !isRestoringState else { return }
         try? localStore?.markPreferencesDirty()
@@ -635,7 +573,7 @@ package final class AppModel {
             importSummary = summary
             // Imported data is live state: running traggo timers now tick in
             // the popover, and key colors reach every tag chip — and it has
-            // to reach a connected sync server like any other local write.
+            // to reach iCloud like any other local write.
             await refresh()
             await history.reloadIfLoaded()
             syncSoon()
@@ -837,7 +775,7 @@ package final class AppModel {
     /// absorbed into the span, which is the point: "I never meant to stop".
     /// The fields are parameters (not read off the span) so the editor can
     /// reopen with its drafts riding along — Re-Open writes what the panel
-    /// shows, minus the end. The cleared end reaches a connected sync server
+    /// shows, minus the end. The cleared end reaches iCloud
     /// as an ordinary dirty-span push. Returns the now-running span, nil on
     /// failure, so the caller can move straight into editing it.
     @discardableResult

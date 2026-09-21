@@ -4,7 +4,7 @@ import Testing
 @testable import MomentTallyCore
 
 /// The v7 identity migration: existing spans are backfilled with distinct
-/// UUIDs, new spans mint their own, and the sync_server row learns its
+/// UUIDs, new spans mint their own, and the sync_server row carries its
 /// transport discriminator.
 @Suite struct CloudKitIdentityMigrationTests {
 
@@ -64,12 +64,11 @@ import Testing
         #expect(work.saves.contains(uuids[0]))
     }
 
-    @Test func syncServerRowDefaultsToServerTransport() throws {
+    @Test func connectingCloudKitStampsTheTransport() throws {
         let backend = try LocalBackend(DatabaseQueue(), legacyDefaults: nil)
-        try backend.connectSyncServer(url: "https://sync.example",
-                                      user: User(id: 1, name: "steven", admin: false))
+        try backend.connectCloudKit(accountLabel: "iCloud")
         let row = try backend.syncServer()
-        #expect(row?.transport == SyncTransport.server.rawValue)
+        #expect(row?.transport == SyncTransport.cloudKit.rawValue)
         #expect(row?.ckState == nil)
     }
 }

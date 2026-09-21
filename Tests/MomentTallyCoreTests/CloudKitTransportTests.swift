@@ -8,8 +8,7 @@ import Testing
 @testable import MomentTallyCore
 
 /// One device: an in-memory store connected to CloudKit, a fake engine on
-/// the shared container, and the real transport wired between them — the
-/// CK sibling of SyncEngineTests' store+FakeSyncServer pairing.
+/// the shared container, and the real transport wired between them.
 @MainActor
 private final class CloudDevice {
     let store: LocalBackend
@@ -451,36 +450,44 @@ private final class CloudDevice {
 }
 
 /// The fleet switch (#241), end to end: two Macs that converged through a
-/// self-hosted server both enable iCloud. Each holds the same spans under
-/// its own row ids; the server ids they share become the record names, so
-/// the second upload conflicts into the first and merges — the dataset
-/// stays the same size on both machines.
+/// self-hosted server upgrade to a build without it (the v10 migration
+/// adopts the server-derived identity) and both enable iCloud. Each holds
+/// the same spans under its own row ids; the server ids they shared became
+/// the record names, so the second upload conflicts into the first and
+/// merges — the dataset stays the same size on both machines.
 @Suite @MainActor struct CloudKitFleetSwitchTests {
 
     private static let serverURL = "https://sync.example"
 
-    /// A store that converged through the self-hosted server: every span
-    /// carries its server id in sync_map and is clean.
-    private func convergedStore(notes: [String]) async throws -> LocalBackend {
-        let store = try LocalBackend(DatabaseQueue())
-        try store.connectSyncServer(url: Self.serverURL,
-                                    user: User(id: 1, name: "steven", admin: false))
-        try await store.createLabelDefinition(key: "recipe", color: "#ff9500")
-        for (serverId, note) in notes.enumerated() {
-            let span = try await store.startTimeSpan(
-                start: Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(serverId)),
-                labels: [SpanLabel(key: "recipe", value: "sourdough")], note: note)
-            _ = try await store.stopTimeSpan(
-                id: span.id, end: Date(timeIntervalSince1970: 1_700_003_600 + TimeInterval(serverId)))
-            try await store.dbQueue.write { db in
-                try SyncMapRow(entity: SyncEntity.span.rawValue, localId: String(span.id),
-                               serverId: 100 + serverId).insert(db)
-                try db.execute(sql: "UPDATE time_span SET dirty = 0 WHERE id = ?",
-                               arguments: [span.id])
+    /// A store that converged through the self-hosted server before the
+    /// upgrade: every span carries its server id in sync_map and is clean.
+    /// Built against the v9 schema, then opened — which runs v10.
+    private func convergedStore(notes: [String]) throws -> LocalBackend {
+        let dbQueue = try DatabaseQueue()
+        try LocalBackend.migrator(legacyDefaults: nil).migrate(dbQueue, upTo: "v9-ck-environment")
+        try dbQueue.write { db in
+            try db.execute(sql: """
+                INSERT INTO sync_server (id, url, user_id, user_name, active, transport)
+                VALUES (1, ?, 1, 'steven', 1, 'server')
+                """, arguments: [Self.serverURL])
+            try db.execute(
+                sql: "INSERT INTO label_definition (key, color, dirty) VALUES ('recipe', '#ff9500', 0)")
+            for (serverId, note) in notes.enumerated() {
+                try db.execute(sql: """
+                    INSERT INTO time_span (start, end, note, dirty, uuid) VALUES (?, ?, ?, 0, ?)
+                    """, arguments: [Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(serverId)),
+                                     Date(timeIntervalSince1970: 1_700_003_600 + TimeInterval(serverId)),
+                                     note, UUID().uuidString])
+                let spanId = db.lastInsertedRowID
+                try db.execute(
+                    sql: "INSERT INTO time_span_label (span_id, key, value) VALUES (?, 'recipe', 'sourdough')",
+                    arguments: [spanId])
+                try db.execute(
+                    sql: "INSERT INTO sync_map (entity, local_id, server_id) VALUES ('span', ?, ?)",
+                    arguments: [String(spanId), 100 + serverId])
             }
         }
-        try store.disconnectSyncServer()
-        return store
+        return try LocalBackend(dbQueue, legacyDefaults: nil)
     }
 
     private func spanRowCount(_ device: CloudDevice) throws -> Int {
@@ -490,10 +497,8 @@ private final class CloudDevice {
     @Test func twoConvergedMacsDoNotDuplicateSpans() async throws {
         let container = FakeCloudContainer()
         let notes = ["loaf", "rolls", "bagels"]
-        let air = try CloudDevice(container: container,
-                                  store: try await convergedStore(notes: notes))
-        let mini = try CloudDevice(container: container,
-                                   store: try await convergedStore(notes: notes))
+        let air = try CloudDevice(container: container, store: try convergedStore(notes: notes))
+        let mini = try CloudDevice(container: container, store: try convergedStore(notes: notes))
 
         try await air.sync()
         try await mini.sync()
@@ -514,9 +519,9 @@ private final class CloudDevice {
     @Test func spansOnlyOneMacHoldsStillCrossOver() async throws {
         let container = FakeCloudContainer()
         let air = try CloudDevice(container: container,
-                                  store: try await convergedStore(notes: ["loaf", "rolls"]))
+                                  store: try convergedStore(notes: ["loaf", "rolls"]))
         let mini = try CloudDevice(container: container,
-                                   store: try await convergedStore(notes: ["loaf"]))
+                                   store: try convergedStore(notes: ["loaf"]))
         // A span the mini made after leaving the server: no server id.
         _ = try await mini.store.startTimeSpan(
             start: Date(timeIntervalSince1970: 1_700_100_000), labels: [], note: "focaccia")

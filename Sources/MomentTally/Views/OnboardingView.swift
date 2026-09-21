@@ -2,8 +2,8 @@ import SwiftUI
 import MomentTallyCore
 import MomentTallyKit
 
-/// The first-run sequence (issue #93): Welcome (optionally connect a sync
-/// server or import from Traggo) → interactive walkthrough of the mark model
+/// The first-run sequence (issue #93): Welcome (optionally turn on iCloud
+/// sync or import from Traggo) → interactive walkthrough of the mark model
 /// (skippable), whose final pages create the user's first tallies → land
 /// in the Tallies tab. Hosted by `OnboardingWindowManager`; the walkthrough
 /// step itself lives in `WalkthroughView` with `WalkthroughModel` as its
@@ -165,13 +165,10 @@ private struct WelcomeStep: View {
 private struct SyncConnectCard: View {
     @Environment(AppModel.self) private var model
     @State private var expanded = false
-    @State private var url = ""
-    @State private var username = ""
-    @State private var password = ""
 
     var body: some View {
-        WelcomeActionCard(title: Text("Connecting to a Moment Tally Server?"),
-                          subtitle: "Sync moments, marks, and colors across your Macs.",
+        WelcomeActionCard(title: Text("Using Moment Tally on more than one device?"),
+                          subtitle: "Sync moments, marks, and colors through iCloud — end-to-end encrypted.",
                           expanded: $expanded) {
             if let icon = Brand.appIcon {
                 Image(nsImage: icon)
@@ -189,39 +186,29 @@ private struct SyncConnectCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            if let server = model.syncServer {
-                Label("Connected to \(server.url)", systemImage: "checkmark.circle.fill")
+            if model.cloudSync != nil {
+                Label("iCloud sync is on", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.callout)
+            } else if !BuildEntitlements.cloudKitAvailable {
+                Text("iCloud sync isn't available in this build.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             } else {
-                Group {
-                    TextField("Server URL", text: $url)
-                        .autocorrectionDisabled()
-                    TextField("Username", text: $username)
-                        .autocorrectionDisabled()
-                    SecureField("Password", text: $password)
-                        .onSubmit(connect)
-                    HStack {
-                        if model.isConnectingSync { ProgressView().controlSize(.small) }
-                        Spacer()
-                        Button("Connect", action: connect)
-                            .disabled(url.isEmpty || username.isEmpty || password.isEmpty
-                                || model.isConnectingSync)
-                    }
+                HStack {
+                    Text("No account setup: the iCloud account this Mac is signed into is the account.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if model.isConnectingSync { ProgressView().controlSize(.small) }
+                    Spacer()
+                    Button("Use iCloud") { Task { await model.connectCloudKit() } }
+                        .disabled(model.isConnectingSync)
                 }
                 .disabled(model.isDemo)
                 if let error = model.syncConnectError {
                     Text(error).font(.caption).foregroundStyle(.red).lineLimit(3)
                 }
             }
-        }
-    }
-
-    private func connect() {
-        guard !url.isEmpty, !username.isEmpty, !password.isEmpty else { return }
-        Task {
-            await model.connectSyncServer(url: url, username: username, password: password)
-            password = ""   // never keep the password around
         }
     }
 }

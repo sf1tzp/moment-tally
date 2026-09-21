@@ -6,8 +6,8 @@ it belongs here.
 
 What lives here: the domain types (`TimeSpan`, `SpanLabel`,
 `LabelDefinition`, `TagSet`), the GRDB-backed local store
-(`LocalBackend`), sync in all its forms (`SyncEngine`, `CloudKitTransport`,
-`CloudSyncController`, the CK record codec), demo mode + seeding, export,
+(`LocalBackend`), iCloud sync (`CloudKitTransport`, `CloudSyncController`,
+the CK record codec), demo mode + seeding, export,
 and the cross-process store-change notification the CLI posts.
 
 Rules of the module:

@@ -16,7 +16,7 @@ import Foundation
 //
 // The engine runs with automatic sync off. The transport's whole design is
 // a *driven* flow — fetch, derive work, send, all inside one syncNow —
-// with the SyncEngine-style trigger machinery (periodic, debounced kick)
+// with CloudSyncController's trigger machinery (periodic, debounced kick)
 // deciding when runs happen. Letting CKSyncEngine schedule its own syncs
 // would deliver events outside any run. The cost is no push-driven sync in
 // v1; the periodic cadence covers it, exactly as it does for the

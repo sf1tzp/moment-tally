@@ -20,9 +20,6 @@ package struct GeneralSettingsView<PlatformSections: View>: View {
     private let platformSections: PlatformSections
     @State private var username = ""
     @State private var password = ""
-    @State private var syncURL = ""
-    @State private var syncUsername = ""
-    @State private var syncPassword = ""
     @State private var exportError: String?
     @State private var exportedTo: String?
     @State private var exportDocument: JSONExportDocument?
@@ -45,7 +42,7 @@ package struct GeneralSettingsView<PlatformSections: View>: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Everything lives in a local database — no server, no account needed. Connect a sync server below to share your data across Macs.")
+                    Text("Everything lives in a local database — no server, no account needed. Turn on iCloud sync below to share your data across your devices.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -93,13 +90,9 @@ package struct GeneralSettingsView<PlatformSections: View>: View {
 
     // MARK: Sync (#33 self-hosted, #121 iCloud)
 
-    /// The two mutually exclusive sync transports: status once one is
-    /// connected, the chooser when none is. Wording stays product-neutral
-    /// ("sync server") for the self-hosted side — the app's own rename
-    /// is #34.
+    /// iCloud sync: status once it's on, the switch when it's off.
     @ViewBuilder
     private var syncSection: some View {
-        @Bindable var model = model
         Section("Sync") {
             if let cloud = model.cloudSync {
                 LabeledContent("Service", value: "iCloud")
@@ -124,61 +117,17 @@ package struct GeneralSettingsView<PlatformSections: View>: View {
                 Text("Everything syncs through your iCloud account: moments, mark keys and colors, tallies, and the settings below. End-to-end encrypted — neither Apple nor Street Fortress can read your data.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else if let engine = model.syncEngine, let server = model.syncServer {
-                LabeledContent("Server", value: server.url)
-                LabeledContent("Account", value: server.userName)
-                LabeledContent("Status") {
-                    syncStatusLabel(engine.status, lastSyncedAt: engine.lastSyncedAt,
-                                    offlineText: "Offline — changes will sync when the server is reachable")
-                }
-                if case .error(let message) = engine.status {
-                    Text(message)
+            } else if BuildEntitlements.cloudKitAvailable {
+                HStack {
+                    Text("Sync across your devices with iCloud — no account setup, end-to-end encrypted. Everything keeps working offline; changes sync in the background.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                }
-                HStack {
-                    Button("Sync now") { Task { await engine.syncNow() } }
-                        .disabled(engine.status == .syncing)
                     Spacer()
-                    Button("Disconnect", role: .destructive) {
-                        model.disconnectSyncServer()
-                    }
-                }
-                Text("Everything syncs: moments, mark keys and colors, tallies, and the settings below. Edits made offline catch up on the next sync.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                if BuildEntitlements.cloudKitAvailable {
-                    HStack {
-                        Text("Sync across your devices with iCloud — no account setup, end-to-end encrypted.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Use iCloud") { Task { await model.connectCloudKit() } }
-                            .disabled(model.isConnectingSync)
-                    }
-                    Divider()
-                }
-                Text("Optional: connect a self-hosted sync server to share moments, tallies, and colors across your Macs. Everything keeps working offline; changes sync in the background.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                TextField("Server URL", text: $syncURL)
-                    .autocorrectionDisabled()
-                TextField("Username", text: $syncUsername)
-                    .autocorrectionDisabled()
-                SecureField("Password", text: $syncPassword)
-                    .onSubmit(connect)
-                TextField("Device name", text: $model.deviceName)
-                    .help("How this Mac appears in the server's device list, so you can revoke it later.")
-                HStack {
                     if model.isConnectingSync {
                         ProgressView().controlSize(.small)
                     }
-                    Spacer()
-                    Button("Connect", action: connect)
-                        .disabled(syncURL.isEmpty || syncUsername.isEmpty
-                            || syncPassword.isEmpty || model.isConnectingSync)
+                    Button("Use iCloud") { Task { await model.connectCloudKit() } }
+                        .disabled(model.isConnectingSync)
                 }
                 if let error = model.syncConnectError {
                     Text(error)
@@ -186,6 +135,10 @@ package struct GeneralSettingsView<PlatformSections: View>: View {
                         .foregroundStyle(.red)
                         .lineLimit(3)
                 }
+            } else {
+                Text("iCloud sync isn't available in this build.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -213,15 +166,6 @@ package struct GeneralSettingsView<PlatformSections: View>: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return "Synced \(formatter.localizedString(for: date, relativeTo: Date()))"
-    }
-
-    private func connect() {
-        guard !syncURL.isEmpty, !syncUsername.isEmpty, !syncPassword.isEmpty else { return }
-        Task {
-            await model.connectSyncServer(url: syncURL, username: syncUsername,
-                                          password: syncPassword)
-            syncPassword = ""   // never keep the password around
-        }
     }
 
     @ViewBuilder
@@ -797,8 +741,8 @@ package struct TagSetDetailView: View {
     }
 
     /// Key and value colors both live in the local database (and follow the
-    /// user across Macs once a sync server is connected), so the story is
-    /// just "per pair" vs "per key".
+    /// user across devices once iCloud sync is on), so the story is just
+    /// "per pair" vs "per key".
     private var colorCaption: String {
         model.colorTagsByValue
             ? "Colors are saved per key: value pair and override the key’s color. Right-click a swatch to go back to the key color."

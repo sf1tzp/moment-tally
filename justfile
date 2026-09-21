@@ -203,21 +203,3 @@ bundle-mas:
 # replaces notarization on this channel, so the pkg uploads as-is.
 package-mas app_id="Apple Distribution" pkg_id="3rd Party Mac Developer Installer": bundle-mas
   scripts/package-mas.sh dist/mas/MomentTally.app "{{app_id}}" "{{pkg_id}}"
-
-# --- Server distribution (#75) ---
-
-# Server image + Helm chart off the same vX.Y.Z tag: docker/nerdctl build →
-# helm package → push to GHCR (public) and the internal gitea registry (#48).
-# Runs anywhere with docker-or-nerdctl + helm + gh — no Mac needed. The GHCR
-# side normally rides CI (.github/workflows/release-server.yml, triggered by
-# the mirrored tag); this is the by-hand fallback and the internal-registry
-# path. Pass --no-publish to build without pushing, --no-internal to skip gitea.
-release-server *flags:
-  scripts/release-server.sh {{flags}}
-
-# The whole release off the tag on HEAD: app (Mac-bound) then server image +
-# chart. Mac-only — and it needs docker/nerdctl + helm there too; on Apple
-# Silicon the image cross-builds to linux/amd64 (see release-server.sh).
-# NB `just release release-server` does NOT do this: release's variadic
-# {{flags}} would swallow "release-server" as an argument.
-release-all: release release-server

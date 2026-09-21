@@ -1,7 +1,0 @@
-# Build-context filter for infra/Dockerfile (BuildKit reads the
-# <Dockerfile>.dockerignore next to the Dockerfile). Only server/ is needed.
-*
-!server
-server/build
-server/data
-server/generated

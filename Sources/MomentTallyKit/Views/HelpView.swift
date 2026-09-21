@@ -202,10 +202,10 @@ private struct HelpSection: Identifiable {
             too: drag them into place in any editor to control how a moment's pills \
             read.
 
-            Everything above lives on this Mac by default. Connect a **sync server** \
-            (see Settings) and it becomes yours-across-machines instead: moments, \
+            Everything above lives on this Mac by default. Turn on **iCloud sync** \
+            (see Settings) and it becomes yours-across-devices instead: moments, \
             key and value colors, tallies, and the two settings below all follow \
-            your account to every connected Mac.
+            your iCloud account to every Mac, iPhone, and iPad you use it on.
             """),
         HelpSection(
             title: "Choosing good marks",

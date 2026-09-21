@@ -21,10 +21,6 @@
 # stamps the tag into CFBundleShortVersionString and the commit count into
 # CFBundleVersion; the Help tab renders both.
 #
-# The server image + Helm chart ship separately off the same tag via
-# scripts/release-server.sh (`just release-server`; #75) — same versioning,
-# independent execution (that side needs docker/helm, not a Mac).
-#
 # The Mac App Store variant (#115) ships through its own, shorter path:
 # `just package-mas` (scripts/package-mas.sh) builds the Sparkle-free,
 # CLI-free bundle and the signed .pkg, uploaded via Transporter. App Review

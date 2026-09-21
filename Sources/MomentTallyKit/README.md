@@ -24,7 +24,7 @@ What lives here:
   `#if os(iOS)`): the TabView root, the touch launcher home, the span
   editor sheet. The iOS *shell* (`ios/App/`) is ~20 lines; the iOS app is
   implemented here.
-- The service layer both apps share: sync/import clients, `Keychain`,
+- The service layer both apps share: the Traggo import client, `Keychain`,
   `BuildEntitlements`, `LogFilter`.
 
 Rules of the module:

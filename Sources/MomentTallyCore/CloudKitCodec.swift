@@ -60,14 +60,12 @@ package enum CloudKitSchema {
 
 // MARK: - Record payloads
 //
-// What one CloudKit record holds, as plain values — the CK-transport
-// siblings of the Remote* shapes in SyncServerAPI.swift. The differences
-// are exactly the transport differences: identity is a client-minted UUID
-// string (or the natural key itself) instead of a server-assigned Int, and
-// `modifiedAt` is the *writing device's* edit clock rather than a server
-// receipt time — with no server minting timestamps, LWW compares device
-// clocks, which the existing merge semantics already tolerate (ties go to
-// the incumbent remote copy).
+// What one CloudKit record holds, as plain values. Identity is a
+// client-minted UUID string (or the natural key itself) rather than a
+// server-assigned id, and `modifiedAt` is the *writing device's* edit clock
+// rather than a server receipt time — with no server minting timestamps,
+// LWW compares device clocks, which the merge semantics tolerate (ties go
+// to the incumbent remote copy).
 
 package struct CloudSpan: Equatable {
     package let uuid: String
