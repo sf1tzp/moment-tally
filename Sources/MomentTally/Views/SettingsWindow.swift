@@ -29,8 +29,10 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
         let tabController = NSTabViewController()
         tabController.tabStyle = .toolbar
 
-        // Every section shares one window size, so the window opens the same
+        // Every section shares one floor, so the window opens the same
         // regardless of which menu shortcut was used and never clips a tab.
+        // It is the minimum, not the size (#165): the window resizes, and
+        // each pane stretches to fill whatever the user has pulled it out to.
         let size = NSSize(width: 780, height: 560)
 
         tabController.addTabViewItem(item("Launcher", symbol: "square.grid.2x2",
@@ -56,14 +58,20 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
                                           model: model, size: size))
 
         let window = NSWindow(contentViewController: tabController)
-        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.toolbarStyle = .preference          // centred, System-Settings layout
         window.titlebarSeparatorStyle = .none       // no line under the toolbar
         window.isReleasedWhenClosed = false         // we reuse the controller
         // NSWindow(contentViewController:) doesn't reliably adopt the selected
         // pane's fitting size, so pin the content size to the shared pane size.
         window.setContentSize(size)
-        window.center()
+        window.contentMinSize = size
+        // The size the user settles on comes back next launch. Demo runs
+        // skip the autosave: they open at the floor every time, so captures
+        // stay deterministic and a resize never lands in the real defaults.
+        if model.isDemo || !window.setFrameAutosaveName("SettingsWindow") {
+            window.center()
+        }
         window.delegate = self
 
         self.tabController = tabController
@@ -85,8 +93,7 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
 
     private func item(_ label: String, image: NSImage?,
                       content: some View, model: AppModel, size: NSSize) -> NSTabViewItem {
-        // Fixed frame per section so the window sizes itself to the selection
-        // rather than to whatever SwiftUI proposes.
+        // The floor is the pane's minimum; above it the pane fills the window.
         let host = NSHostingController(rootView:
             AnyView(content.environment(model)
                 .environment(MacShell.updater)
@@ -99,7 +106,15 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
                 .environment(\.replayTour) {
                     OnboardingWindowManager.shared.show(model: model, replay: true)
                 }
-                .frame(width: size.width, height: size.height)))
+                .frame(minWidth: size.width, maxWidth: .infinity,
+                       minHeight: size.height, maxHeight: .infinity)))
+        // A `.toolbar`-style tab controller resizes the window to the
+        // incoming pane's preferredContentSize on every tab switch. Left to
+        // its default sizing, the hosting controller derives that from the
+        // SwiftUI ideal — the floor — and a window the user had enlarged
+        // would snap back on each click. No sizing options, no preferred
+        // size, no snap: the pane simply takes the window it is given.
+        host.sizingOptions = []
         // In `.toolbar` style the window title follows the selected controller's
         // `title`. Give every section the same title so it stays static (an
         // unset title would show "Untitled" when switching tabs).

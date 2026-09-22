@@ -16,6 +16,11 @@ skills, so the two don't drift.
   `group 1 of group 1`; the week navigator is buttons 1-4 (prev, Today, next,
   refresh); log rows are unnamed buttons of `UI element 1 of scroll area 1`.
 - Buttons expose no names/titles — identify by `position`/`size`.
+- The window is resizable since #165 (floor 780×560 content, 780×640 with
+  the toolbar; `set size of window "Moment Tally" to {w, h}` drives it and
+  the size survives tab switches). Demo launches skip the frame autosave
+  and always open at the floor, so the capture drivers' 780-wide offsets
+  hold; a non-demo launch reopens at whatever size was last used.
 - Deleting opens a `sheet 1` with `button "Cancel"` and `button 2` (= Delete).
 
 ## Hard-won caveats

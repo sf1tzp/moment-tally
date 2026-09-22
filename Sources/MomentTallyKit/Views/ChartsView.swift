@@ -197,7 +197,8 @@ package struct HistoryChartsView: View {
             .padding(.bottom, 12)
             // Full-canvas iPad (#126): an unbounded content column strands
             // the fixed-size donuts in acres of whitespace — cap and centre
-            // it instead. Phones and the Mac window never reach the cap.
+            // it instead. Phones never reach the cap; the Mac window does
+            // once pulled wide (#165), and centres the same way.
             .frame(maxWidth: 1100, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
