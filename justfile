@@ -31,13 +31,37 @@ ios-build sim="iPhone 17 Pro": ios-project
     -destination 'platform=iOS Simulator,name={{sim}}' \
     -derivedDataPath .build/ios-dd build
 
-# Install + launch on a booted simulator (boot one with:
-# `xcrun simctl boot "iPhone 17 Pro"` or from Simulator.app). Pass
-# `--demo`-equivalent via: SIMCTL_CHILD_MOMENTTALLY_DEMO=1 just ios-run
-ios-run: ios-build
-  xcrun simctl install booted \
+# Install + launch on one simulator, booting it if needed. Named rather than
+# simctl's `booted`: with several devices up (ios-matrix) `booted` resolves
+# to an arbitrary one. Pass `--demo`-equivalent via:
+# SIMCTL_CHILD_MOMENTTALLY_DEMO=1 just ios-run
+ios-run sim="iPhone 17 Pro": ios-build
+  xcrun simctl boot "{{sim}}" 2>/dev/null || true
+  xcrun simctl install "{{sim}}" \
     ".build/ios-dd/Build/Products/Debug-iphonesimulator/Moment Tally.app"
-  xcrun simctl launch booted com.streetfortress.MomentTally
+  xcrun simctl launch "{{sim}}" com.streetfortress.MomentTally
+
+# The device layout matrix (#269), PolyPane-style: boot an iPhone, the iPad
+# mini (standing in for the unfolded iPhone Duo until Xcode ships a Duo
+# device type) and an iPad Pro, and tile one Device Hub window per device
+# across the display. MT_MATRIX="A|B|C" picks other devices. Re-run to
+# re-tile. See scripts/ios-matrix.sh for the Device Hub mechanics.
+ios-matrix:
+  scripts/ios-matrix.sh
+
+# ios-matrix, then build once and install + launch on every booted
+# simulator — the change on every size class at once.
+ios-matrix-run: ios-matrix ios-build
+  #!/usr/bin/env bash
+  set -euo pipefail
+  app=".build/ios-dd/Build/Products/Debug-iphonesimulator/Moment Tally.app"
+  for udid in $(xcrun simctl list devices booted -j | python3 -c '
+  import json, sys
+  for devs in json.load(sys.stdin)["devices"].values():
+      for d in devs: print(d["udid"])'); do
+    xcrun simctl install "$udid" "$app"
+    xcrun simctl launch "$udid" com.streetfortress.MomentTally
+  done
 
 # The core suite (MomentTallyCoreTests — everything free of the Mac
 # executable) against an iOS simulator destination.

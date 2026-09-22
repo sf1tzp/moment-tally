@@ -64,24 +64,43 @@ asset batches); add new AX learnings there, not here.
 Simulator builds are unsigned — any machine with the iOS runtime works; the
 machine gate above still decides where this runs unprompted. Demo mode is the
 default verification target here too (`SIMCTL_CHILD_MOMENTTALLY_DEMO=1` keeps
-the sim build off the Keychain and the sync path).
+the sim build off the Keychain and the sync path). Needs full Xcode (27+):
+the Command Line Tools alone can't build the package any more (no SwiftUI
+macro plugin for `@Entry`), so `xcode-select -p` must point at Xcode.app.
 
 ```bash
-xcrun simctl boot "iPhone 17 Pro" && open -a Simulator
-SIMCTL_CHILD_MOMENTTALLY_DEMO=1 just ios-run       # build + install + launch
-just ios-test                                      # CoreTests, sim destination
-xcrun simctl io booted screenshot /tmp/shot.png    # evidence
-xcrun simctl ui booted appearance dark             # theme flips (light|dark)
+SIMCTL_CHILD_MOMENTTALLY_DEMO=1 just ios-matrix-run   # the matrix: tile + build + launch everywhere
+SIMCTL_CHILD_MOMENTTALLY_DEMO=1 just ios-run          # one device (boots "iPhone 17 Pro" if needed)
+just ios-test                                         # CoreTests, sim destination
+xcrun simctl io "iPhone 17 Pro" screenshot /tmp/shot.png   # evidence, per device
+xcrun simctl ui "iPhone 17 Pro" appearance dark            # theme flips (light|dark)
 ```
 
-- **Both size classes, always:** the root branches on `horizontalSizeClass`
-  (IOSRootView) — compact gets the TabView, regular gets IPadSplitRoot. A UI
-  change isn't verified until it's been seen on an iPhone sim *and* an iPad
-  sim. The built .app runs on any booted simulator regardless of the build
-  destination's device name, so boot the iPad and re-run `just ios-run` —
-  no rebuild flags needed.
+- **The device matrix is the gate (#269):** `just ios-matrix` boots an
+  iPhone 17 Pro, an iPad mini (the stand-in for the unfolded iPhone Duo —
+  Xcode 27.0 has no Duo device type; `MT_MATRIX="A|B|C"` swaps devices in)
+  and an iPad Pro 11-inch, and tiles one Device Hub window per device across
+  the display, PolyPane-style. `ios-matrix-run` adds one build and an install
+  + launch on every booted simulator. Re-running re-tiles. The root branches
+  on `horizontalSizeClass` (IOSRootView) — compact gets the TabView, regular
+  gets IPadSplitRoot — so a UI change isn't verified until it's been seen on
+  the phone *and* both tablets; orientation flips are Controls › Rotate in
+  each window.
+- **Device Hub, not Simulator.app:** Xcode 27 replaced Simulator.app with
+  `Xcode.app/Contents/Applications/DeviceHub.app` — a tabbed window that
+  shows one device at a time (a sidebar click switches the tab), hence one
+  window per device. It has no scripting dictionary; scripts/ios-matrix.sh
+  drives its menus and sidebar through System Events (needs the terminal's
+  Accessibility grant). Headless `simctl boot` / `io screenshot` work
+  without it.
+- **Name the device in simctl calls:** with several simulators up,
+  `booted` resolves to an arbitrary one (observed: the last booted). The
+  recipes take a name; do the same in ad-hoc commands.
 - **No AX story on iOS:** System Events doesn't reach into the simulator, so
-  verification is visual — screenshot per state, or hands-on in Simulator.app.
+  verification is visual — screenshot per state, or hands-on in Device Hub.
+  For a tap when there is no other way, the Device Hub window *is* a Mac
+  window: `cliclick` at the screen point of the device's UI element works
+  (map simulator points onto the window's device frame from a screenshot).
 - **Physical devices are mini-only** (`just ios-device`; signing + Xcode
   Apple ID session live there). It takes the first plugged-in device — one
   cable at a time is fine. Device loads are an explicit-ask step, never part
