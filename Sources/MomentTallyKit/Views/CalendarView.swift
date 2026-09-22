@@ -21,6 +21,10 @@ private var separatorColor: Color {
 package struct CalendarView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openAppSection) private var openAppSection
+    /// Inside the portrait arrangement's screen-long scroll (#280) the
+    /// grid shows all 24 hours at full height and the outer scroll moves
+    /// through the day; there is no viewport of its own to anchor at 08:00.
+    @Environment(\.outerScroll) private var outerScroll
 
     private let hourHeight: CGFloat = 40
     private let gutterWidth: CGFloat = 46
@@ -36,21 +40,19 @@ package struct CalendarView: View {
             dayHeaderRow
             Divider()
 
-            GeometryReader { viewport in
-                ScrollView {
-                    HStack(alignment: .top, spacing: 0) {
-                        hourGutter
-                        ForEach(history.days, id: \.start) { day in
-                            dayColumn(day)
-                        }
+            if outerScroll != nil {
+                grid
+            } else {
+                GeometryReader { viewport in
+                    ScrollView {
+                        grid
                     }
-                    .frame(height: gridHeight)
+                    // Open on the working day, not midnight: the initial offset
+                    // that puts 08:00 at the top, expressed as the UnitPoint
+                    // fraction defaultScrollAnchor expects. (scrollTo from a task
+                    // is unreliable here — the tab transition resets the offset.)
+                    .defaultScrollAnchor(morningAnchor(viewportHeight: viewport.size.height))
                 }
-                // Open on the working day, not midnight: the initial offset
-                // that puts 08:00 at the top, expressed as the UnitPoint
-                // fraction defaultScrollAnchor expects. (scrollTo from a task
-                // is unreliable here — the tab transition resets the offset.)
-                .defaultScrollAnchor(morningAnchor(viewportHeight: viewport.size.height))
             }
 
             if let error = history.errorMessage {
@@ -66,6 +68,16 @@ package struct CalendarView: View {
     }
 
     // MARK: Chrome
+
+    private var grid: some View {
+        HStack(alignment: .top, spacing: 0) {
+            hourGutter
+            ForEach(model.history.days, id: \.start) { day in
+                dayColumn(day)
+            }
+        }
+        .frame(height: gridHeight)
+    }
 
     private var dayHeaderRow: some View {
         HStack(spacing: 0) {

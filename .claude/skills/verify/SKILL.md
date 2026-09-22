@@ -86,6 +86,14 @@ xcrun simctl ui "iPhone 17 Pro" appearance dark            # theme flips (light|
   gets IPadSplitRoot — so a UI change isn't verified until it's been seen on
   the phone *and* both tablets; orientation flips are Controls › Rotate in
   each window.
+- **Portrait iPad is its own arrangement (#280):** the split root keys
+  its axis on geometry (width < height), not size class — landscape is the
+  launcher column beside the pane, portrait is the launcher grid over the
+  pane in one screen-long scroll. Verify both orientations per tablet.
+  Device Hub has no Rotate menu item: the rotate control is the last
+  button in the device window's bottom toolbar (`cliclick` it — window
+  origin + ~366,1023 at the matrix tiling), and `simctl` can't rotate.
+  Drag-scrolls in a device window work with the usual `dd:/m:/du:` recipe.
 - **Device Hub, not Simulator.app:** Xcode 27 replaced Simulator.app with
   `Xcode.app/Contents/Applications/DeviceHub.app` — a tabbed window that
   shows one device at a time (a sidebar click switches the tab), hence one

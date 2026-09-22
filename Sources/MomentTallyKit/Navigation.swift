@@ -24,4 +24,11 @@ extension EnvironmentValues {
     /// Replay the onboarding tour — injected by shells that have one (the
     /// Mac's walkthrough window); Help hides its replay card when absent.
     @Entry package var replayTour: (() -> Void)? = nil
+
+    /// Set when the view is one section of a taller scroll an ancestor
+    /// owns (#280, the iPad portrait arrangement): the view drops its own
+    /// ScrollView, lays out at its natural height, and scrolls through
+    /// this proxy instead of one of its own. Nil — the default — is the
+    /// standalone view that scrolls itself.
+    @Entry package var outerScroll: ScrollViewProxy? = nil
 }

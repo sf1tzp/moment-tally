@@ -15,6 +15,13 @@ enum RegularSidePane: String {
 /// falls back to the #124 TabView off the size class, which is also what
 /// Slide Over / narrow Split View multitasking gets.
 ///
+/// Portrait turns the split (#280): the launcher grid full-width on top,
+/// the pane below it, in one screen-long scroll — scrolling down lets the
+/// Log take the screen. Orientation is not a size class on iPad (regular ×
+/// regular both ways), so the axis is keyed on geometry, width < height.
+/// The unfolded iPhone Duo opens in portrait, so this is what it shows
+/// first.
+///
 /// State lives above (persisted with @SceneStorage in MomentTallyRootView)
 /// so `openAppSection` routes from anywhere — including sheets — land here.
 struct IPadSplitRoot: View {
@@ -65,6 +72,17 @@ struct IPadSplitRoot: View {
     // MARK: Split canvas
 
     private var splitView: some View {
+        GeometryReader { geo in
+            if geo.size.width < geo.size.height {
+                verticalCanvas(width: geo.size.width)
+            } else {
+                horizontalCanvas
+            }
+        }
+    }
+
+    /// Landscape: the launcher column beside the collapsible pane.
+    private var horizontalCanvas: some View {
         HStack(spacing: 0) {
             launcherColumn
             if !paneCollapsed {
@@ -75,15 +93,52 @@ struct IPadSplitRoot: View {
         }
     }
 
+    /// Portrait (#280): one scroll, not two. The launcher surface lays out
+    /// at its natural height (no ScrollView of its own), the section
+    /// buttons follow it as a compact row above the pane's divider so the
+    /// pane header stays the visual boundary, and the pane's rows embed
+    /// through `outerScroll` — the Log's pinned day headers and the #130
+    /// hand-off scroll both work against this scroll. The pane collapse
+    /// has no meaning stacked, so neither chrome offers it here.
+    private func verticalCanvas(width: CGFloat) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    titleRow(collapsible: false)
+                    LauncherSurface(embeddedWidth: width)
+                    sectionButtons
+                    Divider()
+                    VStack(spacing: 0) {
+                        paneHeader(collapsible: false)
+                        Divider()
+                        paneContent
+                    }
+                    .background(.background.secondary)
+                    .environment(\.outerScroll, proxy)
+                }
+            }
+            .refreshable { await model.refresh() }
+        }
+    }
+
     private var launcherColumn: some View {
         VStack(spacing: 0) {
-            HStack {
-                if let script = Brand.script(30) {
-                    Text("Moment Tally").font(script)
-                } else {
-                    Brand.wordmark(size: 24)
-                }
-                Spacer()
+            titleRow(collapsible: true)
+            LauncherSurface()
+            Divider()
+            sectionButtons
+        }
+    }
+
+    private func titleRow(collapsible: Bool) -> some View {
+        HStack {
+            if let script = Brand.script(30) {
+                Text("Moment Tally").font(script)
+            } else {
+                Brand.wordmark(size: 24)
+            }
+            Spacer()
+            if collapsible {
                 Button {
                     withAnimation(.snappy) { paneCollapsed.toggle() }
                 } label: {
@@ -91,12 +146,9 @@ struct IPadSplitRoot: View {
                 }
                 .accessibilityLabel(paneCollapsed ? "Show pane" : "Hide pane")
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            LauncherSurface()
-            Divider()
-            sectionButtons
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 
     /// The routes a tab bar would carry, as plain buttons under the
@@ -135,15 +187,24 @@ struct IPadSplitRoot: View {
 
     private var paneView: some View {
         VStack(spacing: 0) {
-            HStack {
-                Picker("Pane", selection: $sidePane) {
-                    Text("Log").tag(RegularSidePane.log)
-                    Text("Calendar").tag(RegularSidePane.calendar)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 220)
-                Spacer()
+            paneHeader(collapsible: true)
+            Divider()
+            paneContent
+        }
+        .background(.background.secondary)
+    }
+
+    private func paneHeader(collapsible: Bool) -> some View {
+        HStack {
+            Picker("Pane", selection: $sidePane) {
+                Text("Log").tag(RegularSidePane.log)
+                Text("Calendar").tag(RegularSidePane.calendar)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 220)
+            Spacer()
+            if collapsible {
                 Button {
                     withAnimation(.snappy) { paneCollapsed = true }
                 } label: {
@@ -151,15 +212,17 @@ struct IPadSplitRoot: View {
                 }
                 .accessibilityLabel("Hide pane")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            Divider()
-            switch sidePane {
-            case .log: LogView()
-            case .calendar: CalendarView()
-            }
         }
-        .background(.background.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private var paneContent: some View {
+        switch sidePane {
+        case .log: LogView()
+        case .calendar: CalendarView()
+        }
     }
 
     // MARK: History canvas

@@ -6,6 +6,10 @@ import MomentTallyCore
 package struct LogView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openAppSection) private var openAppSection
+    /// The portrait iPad arrangement (#280) hosts the Log inside one
+    /// screen-long scroll: the rows drop their own ScrollView and the
+    /// hand-off scroll (#130) goes through the ancestor's proxy.
+    @Environment(\.outerScroll) private var outerScroll
     /// The id of the span currently expanded for editing (one at a time).
     @State private var editingID: Int?
     /// The filter field's raw text (#51); parsed fresh each render.
@@ -14,56 +18,75 @@ package struct LogView: View {
     package init() {}
 
     package var body: some View {
-        let history = model.history
-        ScrollViewReader { proxy in
-            VStack(spacing: 0) {
-                WeekNavigatorView()
-                filterField
-                Divider()
-
-                if let error = history.errorMessage {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .lineLimit(2)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 6)
-                }
-
-                if history.spans.isEmpty && !history.isLoading {
-                    emptyState
-                } else if filteredSpans.isEmpty && !history.isLoading {
-                    // The week has spans; the filter just matches none of them.
-                    noMatchState
-                } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0,
-                                   pinnedViews: .sectionHeaders) {
-                            // Newest day first, matching the newest-first span order.
-                            ForEach(daysWithSpans, id: \.day.start) { group in
-                                Section {
-                                    ForEach(group.spans) { span in
-                                        row(for: span)
-                                            .id(span.id)
-                                        Divider().padding(.leading, 12)
-                                    }
-                                } header: {
-                                    dayHeader(group.day)
-                                }
-                            }
-                        }
-                    }
+        Group {
+            if let outerScroll {
+                content(scrolledBy: outerScroll)
+            } else {
+                ScrollViewReader { proxy in
+                    content(scrolledBy: proxy)
                 }
             }
-            // The Calendar redirects here instead of editing in place (#130):
-            // onAppear covers the tab switch, onChange the already-visible
-            // case, and the isLoading edge a hand-off that moved the week
-            // first (#69) — the span only arrives when its reload lands.
-            .onAppear { consumePendingEdit(proxy) }
-            .onChange(of: model.history.pendingLogEditID) { consumePendingEdit(proxy) }
-            .onChange(of: model.history.isLoading) { consumePendingEdit(proxy) }
         }
-        .task { await history.loadIfNeeded() }
+        .task { await model.history.loadIfNeeded() }
+    }
+
+    private func content(scrolledBy proxy: ScrollViewProxy) -> some View {
+        let history = model.history
+        return VStack(spacing: 0) {
+            WeekNavigatorView()
+            filterField
+            Divider()
+
+            if let error = history.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
+            }
+
+            if history.spans.isEmpty && !history.isLoading {
+                emptyState
+            } else if filteredSpans.isEmpty && !history.isLoading {
+                // The week has spans; the filter just matches none of them.
+                noMatchState
+            } else if outerScroll != nil {
+                rows
+            } else {
+                ScrollView {
+                    rows
+                }
+            }
+        }
+        // The Calendar redirects here instead of editing in place (#130):
+        // onAppear covers the tab switch, onChange the already-visible
+        // case, and the isLoading edge a hand-off that moved the week
+        // first (#69) — the span only arrives when its reload lands.
+        .onAppear { consumePendingEdit(proxy) }
+        .onChange(of: model.history.pendingLogEditID) { consumePendingEdit(proxy) }
+        .onChange(of: model.history.isLoading) { consumePendingEdit(proxy) }
+    }
+
+    /// The week's rows under pinned day headers. Pinning is relative to
+    /// whichever ScrollView encloses the stack — the Log's own, or the
+    /// portrait arrangement's outer one.
+    private var rows: some View {
+        LazyVStack(alignment: .leading, spacing: 0,
+                   pinnedViews: .sectionHeaders) {
+            // Newest day first, matching the newest-first span order.
+            ForEach(daysWithSpans, id: \.day.start) { group in
+                Section {
+                    ForEach(group.spans) { span in
+                        row(for: span)
+                            .id(span.id)
+                        Divider().padding(.leading, 12)
+                    }
+                } header: {
+                    dayHeader(group.day)
+                }
+            }
+        }
     }
 
     /// Open the span another tab handed off (#130): drop a filter that would
@@ -278,7 +301,9 @@ package struct LogView: View {
                 .foregroundStyle(.secondary)
             Spacer()
         }
-        .frame(maxWidth: .infinity)
+        // The Spacers fill a standalone Log; embedded (#280) they have
+        // nothing to fill, so the floor keeps the state from collapsing.
+        .frame(maxWidth: .infinity, minHeight: 200)
     }
 
     private var noMatchState: some View {
@@ -292,6 +317,6 @@ package struct LogView: View {
             Button("Clear Filter") { filterText = "" }
             Spacer()
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 200)
     }
 }

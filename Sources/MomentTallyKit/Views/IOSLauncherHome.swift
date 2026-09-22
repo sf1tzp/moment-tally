@@ -15,22 +15,24 @@ struct LauncherSurface: View {
     private static let minCardWidth: CGFloat = 150
     private static let spacing: CGFloat = 12
 
+    /// Non-nil embeds the surface as one section of a scroll an ancestor
+    /// owns (#280, the portrait arrangement): no ScrollView of its own,
+    /// natural height, columns from the given width — a GeometryReader
+    /// has no height to offer inside someone else's scroll. Nil is the
+    /// standalone surface that measures and scrolls itself.
+    var embeddedWidth: CGFloat? = nil
+
     var body: some View {
-        GeometryReader { geo in
-            let content = geo.size.width - Self.spacing * 2
-            let columns = max(1, Int((content + Self.spacing)
-                                     / (Self.minCardWidth + Self.spacing)))
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    runningSection
-                    quickStartSection(columns: columns)
-                    if let error = model.errorMessage {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+        Group {
+            if let width = embeddedWidth {
+                content(width: width)
+            } else {
+                GeometryReader { geo in
+                    ScrollView {
+                        content(width: geo.size.width)
                     }
                 }
-                .padding(Self.spacing)
+                .refreshable { await model.refresh() }
             }
         }
         // The one shared edit session, as a sheet: tap a running row to
@@ -49,7 +51,22 @@ struct LauncherSurface: View {
                 .presentationDetents([.medium, .large])
         }
         .task { await model.refresh() }
-        .refreshable { await model.refresh() }
+    }
+
+    private func content(width: CGFloat) -> some View {
+        let content = width - Self.spacing * 2
+        let columns = max(1, Int((content + Self.spacing)
+                                 / (Self.minCardWidth + Self.spacing)))
+        return VStack(alignment: .leading, spacing: 20) {
+            runningSection
+            quickStartSection(columns: columns)
+            if let error = model.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding(Self.spacing)
     }
 
     // MARK: Running
