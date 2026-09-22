@@ -9,9 +9,10 @@
 	     nothing speculative. -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<!-- Outgoing connections: the one-shot Traggo import (#30) and Sparkle's
-	     appcast check + update download (#46). (CloudKit has its own
-	     entitlement.) Nothing listens, so no network.server. -->
+	<!-- Outgoing connections: Sparkle's appcast check + update download
+	     (#46) — the only client left since the Traggo import went (#275).
+	     (CloudKit has its own entitlement.) Nothing listens, so no
+	     network.server. -->
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<!-- Powerbox: the JSON export (#57) writes to wherever the user picks in

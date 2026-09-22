@@ -11,10 +11,10 @@
 	     team-specific values. -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<!-- Outgoing connections: sync with a self-hosted Moment Tally Server and
-	     the one-shot Traggo import. -->
-	<key>com.apple.security.network.client</key>
-	<true/>
+	<!-- No network.client: nothing in the store build opens an outgoing
+	     connection since the sync server (#272) and the Traggo import (#275)
+	     went — CloudKit has its own entitlement, and updates are the
+	     store's. The direct variant keeps the key for Sparkle. -->
 	<!-- Powerbox: the JSON export writes to the NSSavePanel's chosen path. -->
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>

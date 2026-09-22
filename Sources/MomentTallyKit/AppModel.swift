@@ -3,9 +3,6 @@ import Foundation
 import MomentTallyCore
 import Observation
 import SwiftUI
-#if os(iOS)
-import UIKit
-#endif
 
 /// The whole app's state and behaviour. `@MainActor` because everything here
 /// drives the UI; `@Observable` so SwiftUI views re-render when it changes.
@@ -15,8 +12,9 @@ import UIKit
 /// sync doesn't switch backends; it attaches a `CloudSyncController` that
 /// reconciles the same store with CloudKit in the background, which is
 /// what turns tag sets, colors, and preferences from per-device into
-/// per-user. The old live-traggo mode is gone; `TraggoClient` survives only
-/// as the importer's source. (The self-hosted sync server went in #272.)
+/// per-user. The live-traggo mode, the self-hosted sync server (#272) and
+/// the one-shot Traggo import (#275) are all gone: nothing here talks to a
+/// server of ours any more.
 @MainActor
 @Observable
 package final class AppModel {
@@ -38,15 +36,6 @@ package final class AppModel {
     // environment beside this model. See App.swift.)
 
     // MARK: Persisted configuration
-
-    /// The traggo server URL — the one-shot importer's source.
-    package var serverURL: String {
-        didSet { defaults.set(serverURL, forKey: Keys.serverURL) }
-    }
-
-    package var deviceName: String {
-        didSet { defaults.set(deviceName, forKey: Keys.deviceName) }
-    }
 
     /// The saved tag sets, persisted in the local store.
     package var tagSets: [TagSet] {
@@ -155,11 +144,6 @@ package final class AppModel {
 
     // MARK: Private, non-observed
 
-    /// The saved traggo session token — import-only: it lets a re-import skip
-    /// the credential prompt. Not observation-ignored: the import surface's
-    /// `hasTraggoSession` reads it, and must react when a one-off login saves
-    /// one or an expired one is dropped.
-    private var token: String?
     /// The local store — the only backend. Opened at launch and kept open for
     /// the app's lifetime.
     @ObservationIgnored private var localStore: LocalBackend?
@@ -180,8 +164,8 @@ package final class AppModel {
     }
 
     /// The storage seam, for this model and its siblings (see
-    /// `HistoryModel`). Always the local store; the protocol survives
-    /// because the importer still consumes arbitrary backends.
+    /// `HistoryModel`). Always the local store; the protocol survives as
+    /// the seam the state layer is written against.
     package var api: (any Backend)? { localStore }
 
     /// Where the local database lives, for display in Settings.
@@ -196,8 +180,6 @@ package final class AppModel {
     @ObservationIgnored private var colorTasks: [String: Task<Void, Never>] = [:]
 
     private enum Keys {
-        static let serverURL = "serverURL"
-        static let deviceName = "deviceName"
         // Stored under the legacy "presets" key so existing saved sets survive.
         static let tagSets = "presets"
         static let colorTagsByValue = "colorTagsByValue"
@@ -208,10 +190,10 @@ package final class AppModel {
         static let gradientLauncherCards = "gradientLauncherCards"
         static let showQuickLabelKeys = "showQuickLabelKeys"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
-        /// Keychain accounts: the traggo token the importer reuses, and the
-        /// retired sync server's device token (#272) — deleted at launch so
-        /// no credential outlives the transport.
-        static let traggoToken = "token"
+        /// Keychain accounts of retired features — the Traggo import's
+        /// session token (#275) and the sync server's device token (#272) —
+        /// deleted at launch so no credential outlives the feature.
+        static let retiredTraggoToken = "token"
         static let retiredSyncToken = "sync-token"
     }
 
@@ -221,34 +203,21 @@ package final class AppModel {
         isDemo = demo
         let defaults = Self.makeDefaults(demo: demo)
         self.defaults = defaults
-        // The fallback doubles as the URL hint in the Traggo import forms —
-        // point at the public traggo.net, not an internal host.
-        serverURL = defaults.string(forKey: Keys.serverURL) ?? "https://traggo.net"
-        #if os(macOS)
-        deviceName = defaults.string(forKey: Keys.deviceName)
-            ?? "Menu Bar (\(Host.current().localizedName ?? "Mac"))"
-        #else
-        // No NSHost on iOS, and UIDevice.name is the generic "iPhone" since
-        // iOS 16 without an entitlement — the model name reads better.
-        deviceName = defaults.string(forKey: Keys.deviceName)
-            ?? UIDevice.current.model
-        #endif
         colorTagsByValue = defaults.object(forKey: Keys.colorTagsByValue) == nil
             ? true : defaults.bool(forKey: Keys.colorTagsByValue)  // default on
         menuTagSetLimit = defaults.object(forKey: Keys.menuTagSetLimit) == nil
             ? 5 : defaults.integer(forKey: Keys.menuTagSetLimit)  // 0 = all
         showQuickLabelKeys = defaults.bool(forKey: Keys.showQuickLabelKeys)  // default off
-        // Into a local first: `token` is observation-tracked, and a tracked
-        // property can't be *read* before the whole object is initialised.
-        // A demo never reads the real token — nothing in a demo may reach a
-        // real server.
-        token = demo ? nil : Keychain.get(account: Keys.traggoToken)
         tagSets = []          // loaded by activateStore()
         valueColors = [:]
         quickLabels = [:]
 
         activateStore()
-        if !demo { Keychain.delete(account: Keys.retiredSyncToken) }
+        // A demo never touches the Keychain — not even to clean up.
+        if !demo {
+            Keychain.delete(account: Keys.retiredTraggoToken)
+            Keychain.delete(account: Keys.retiredSyncToken)
+        }
         startSyncIfConfigured()
         startTicking()
         startObservingStoreChanges()
@@ -507,79 +476,6 @@ package final class AppModel {
             }
         }
         return result
-    }
-
-    // MARK: Import from traggo (#30)
-
-    /// Live state of the one-shot traggo import, observed by the Settings
-    /// pane. Errors are kept apart from `errorMessage` so a background
-    /// refresh can't overwrite a failed import's explanation.
-    package var isImporting = false
-    /// Spans upserted so far, for progress while the import walks pages.
-    package var importedSpanCount = 0
-    package var importSummary: ImportSummary?
-    package var importError: String?
-
-    /// Whether a traggo session is saved (in the Keychain) — the import can
-    /// reuse it instead of asking for credentials.
-    package var hasTraggoSession: Bool { token != nil }
-
-    /// One-shot import of a traggo server's full history into the local
-    /// store — `TraggoClient`'s only remaining job. Pass credentials only
-    /// when no saved session exists (or the saved one expired): a successful
-    /// one-off login keeps its token so re-runs are already signed in.
-    package func importFromTraggo(username: String = "", password: String = "") async {
-        guard !isImporting else { return }
-        guard let store = localStore else {
-            importError = "The local database isn't open."
-            return
-        }
-        guard let url = URL(string: serverURL) else {
-            importError = "Invalid server URL"
-            return
-        }
-        var client = TraggoClient(baseURL: url, token: token)
-        isImporting = true
-        importedSpanCount = 0
-        importSummary = nil
-        importError = nil
-        defer { isImporting = false }
-        do {
-            if !username.isEmpty {
-                let result = try await client.login(username: username,
-                                                    password: password,
-                                                    deviceName: deviceName)
-                token = result.token
-                Keychain.set(result.token, account: Keys.traggoToken)
-                client.token = result.token
-            } else if try await client.currentUser() == nil {
-                // The saved token is dead. Drop it — hasTraggoSession flips,
-                // so the credential fields appear next to this explanation.
-                token = nil
-                Keychain.delete(account: Keys.traggoToken)
-                importError = "The saved sign-in has expired — enter your username and password."
-                return
-            }
-            // The origin string namespaces the server's span ids in the local
-            // mapping. Use the parsed URL (trailing slash trimmed) so trivial
-            // respellings of the same server don't fork the namespace.
-            var origin = client.baseURL.absoluteString
-            while origin.hasSuffix("/") { origin.removeLast() }
-            let importer = HistoryImporter(source: client, destination: store,
-                                           origin: origin)
-            let summary = try await importer.run { count in
-                await MainActor.run { self.importedSpanCount = count }
-            }
-            importSummary = summary
-            // Imported data is live state: running traggo timers now tick in
-            // the popover, and key colors reach every tag chip — and it has
-            // to reach iCloud like any other local write.
-            await refresh()
-            await history.reloadIfLoaded()
-            syncSoon()
-        } catch {
-            importError = error.localizedDescription
-        }
     }
 
     // MARK: Export (#57)

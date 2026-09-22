@@ -140,10 +140,6 @@ package enum Brand {
             startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    /// Traggo's accent (import attribution) — Go's Gopher Blue, nudged
-    /// darker on light backgrounds where #00add8 runs out of contrast.
-    package static let traggoBlue = dynamic(light: "#0087a8", dark: "#00add8")
-
     // MARK: Launcher tile gradient (#201)
 
     /// The Studio launcher-tile recipe, ported verbatim from the website's

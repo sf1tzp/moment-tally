@@ -70,7 +70,7 @@ package struct TimeSpan: Identifiable, Equatable {
 // MARK: - Paging
 
 /// An opaque paging token. Backends serialise whatever state their own page
-/// walk needs into `rawValue` (traggo: its stable-cursor JSON); callers only
+/// walk needs into `rawValue` (the local store: its cursor JSON); callers only
 /// hand a token back to the backend that minted it.
 package struct PageToken: Equatable {
     package let rawValue: String
@@ -95,9 +95,9 @@ package struct TimeSpanPage {
 // MARK: - Backend
 
 /// The storage seam between the state layer and wherever timespans actually
-/// live. Today the only implementation is `TraggoClient` (a traggo server over
-/// GraphQL); a local store and a Moment Tally sync backend implement the same
-/// surface later.
+/// live. `LocalBackend` is the only implementation now — the traggo GraphQL
+/// client it was first written against left with the import (#275) — but
+/// the state layer stays written against the protocol.
 ///
 /// Deliberately data-only: session lifecycle (login, logout, tokens) is a
 /// per-backend concern owned by whoever constructs the backend — a local store

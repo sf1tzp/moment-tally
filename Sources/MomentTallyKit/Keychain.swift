@@ -1,9 +1,11 @@
 import Foundation
 import Security
 
-/// Minimal wrapper over the Keychain Services C API for storing small secrets
-/// (here: the Traggo device token). We deliberately store *only* the token —
-/// never the user's password.
+/// Minimal wrapper over the Keychain Services C API for storing small secrets.
+/// Nothing is stored any more — the Traggo import token (#275) and the sync
+/// server's device token (#272) were the tenants — but the wrapper stays so
+/// launch can delete those retired items, including under the legacy
+/// service identifiers older builds saved them under.
 ///
 /// Note: when running an unsigned dev build from the terminal, macOS may prompt
 /// once to allow keychain access. A signed, bundled build won't.

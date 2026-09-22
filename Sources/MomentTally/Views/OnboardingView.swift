@@ -3,14 +3,14 @@ import MomentTallyCore
 import MomentTallyKit
 
 /// The first-run sequence (issue #93): Welcome (optionally turn on iCloud
-/// sync or import from Traggo) → interactive walkthrough of the mark model
+/// sync) → interactive walkthrough of the mark model
 /// (skippable), whose final pages create the user's first tallies → land
 /// in the Tallies tab. Hosted by `OnboardingWindowManager`; the walkthrough
 /// step itself lives in `WalkthroughView` with `WalkthroughModel` as its
 /// shared dataset.
 ///
 /// A replay (issue #192) is the same sequence minus the first-run parts:
-/// no Welcome step (concepts and surfaces are the point, not connect/import),
+/// no Welcome step (concepts and surfaces are the point, not connecting),
 /// a read-only tally page, and no Tallies tab on the way out.
 struct OnboardingView: View {
     /// One shared fixed size — the window never resizes between steps.
@@ -128,7 +128,7 @@ private struct WelcomeStep: View {
                             .foregroundStyle(.secondary)
                     .padding(.top, 56)
 
-                    // The cards stay visible in demo mode, just disabled — the
+                    // The card stays visible in demo mode, just disabled — the
                     // "a demo never reaches a real server" invariant holds via
                     // disabled controls, not hidden UI.
                     VStack(spacing: 10) {
@@ -139,8 +139,7 @@ private struct WelcomeStep: View {
                                 .foregroundStyle(.secondary)
                         }
                         SyncConnectCard()
-                        TraggoImportCard()
-                        Text("Both are optional and live in Settings whenever you want them — everything works locally out of the box.")
+                        Text("Optional, and always available in Settings — everything works locally out of the box.")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
@@ -209,74 +208,6 @@ private struct SyncConnectCard: View {
                     Text(error).font(.caption).foregroundStyle(.red).lineLimit(3)
                 }
             }
-        }
-    }
-}
-
-/// Compact welcome-flavoured version of Settings' Traggo import section.
-private struct TraggoImportCard: View {
-    @Environment(AppModel.self) private var model
-    @State private var expanded = false
-    @State private var username = ""
-    @State private var password = ""
-
-    var body: some View {
-        @Bindable var model = model
-        WelcomeActionCard(title: Text("Coming from Traggo?"),
-                          subtitle: "Copy a Traggo history — time spans, tags, and colors — into the local database.",
-                          expanded: $expanded) {
-            Image(systemName: "square.and.arrow.down")
-                .font(.title3)
-                .foregroundStyle(Brand.traggoBlue)
-        } content: {
-            if model.isDemo {
-                Text("Disabled in demo mode")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Group {
-                TextField("Server URL", text: $model.serverURL)
-                    .autocorrectionDisabled()
-                if model.hasTraggoSession {
-                    Text("Using the saved Traggo sign-in.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    TextField("Username", text: $username)
-                        .autocorrectionDisabled()
-                    SecureField("Password", text: $password)
-                }
-                HStack {
-                    if model.isImporting {
-                        ProgressView().controlSize(.small)
-                        Text("Imported \(model.importedSpanCount) moments…")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Import", action: runImport)
-                        .disabled(model.isImporting
-                            || (!model.hasTraggoSession && (username.isEmpty || password.isEmpty)))
-                }
-            }
-            .disabled(model.isDemo)
-            if let summary = model.importSummary {
-                Label("Imported \(summary.spansImported) moments and \(summary.definitionsCreated + summary.definitionsRecolored) mark keys.",
-                      systemImage: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.green)
-            }
-            if let error = model.importError {
-                Text(error).font(.caption).foregroundStyle(.red).lineLimit(3)
-            }
-        }
-        .tint(Brand.traggoBlue)
-    }
-
-    private func runImport() {
-        Task {
-            await model.importFromTraggo(username: username, password: password)
-            password = ""   // never keep the password around
         }
     }
 }

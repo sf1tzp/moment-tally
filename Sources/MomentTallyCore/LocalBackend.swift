@@ -51,22 +51,6 @@ struct SpanLabelRow: Codable, FetchableRecord, PersistableRecord {
     }
 }
 
-/// Maps an imported span back to its identity at the source (`span_origin`):
-/// `origin` is the server it came from, `originId` its id there, `spanId` the
-/// local row it landed in. This is what makes the importer idempotent — a
-/// re-run finds the mapping and upserts — and it rehearses phase 6's
-/// local-id ↔ server-id bookkeeping.
-struct SpanOriginRow: Codable, FetchableRecord, PersistableRecord {
-    static let databaseTableName = "span_origin"
-    var origin: String
-    var originId: Int64
-    var spanId: Int64
-
-    enum CodingKeys: String, CodingKey {
-        case origin, originId = "origin_id", spanId = "span_id"
-    }
-}
-
 /// A per-`key: value` color override (`value_color`) — first-class here,
 /// unlike traggo where it's a client-side overlay on top of per-key colors.
 /// `dirty`/`modifiedAt` as on `TimeSpanRow`.
@@ -317,10 +301,11 @@ package final class LocalBackend: Backend {
             }
         }
 
-        // Origin-id mapping for the traggo importer (#30). A separate table
-        // rather than a column on time_span: most spans are born local and
-        // never have an origin, and phase 6's sync metadata (server id, dirty
-        // flag, tombstone) can grow out of the same shape later.
+        // Origin-id mapping for the Traggo importer (#30), which is gone
+        // (#275): the migration stays because the chain is append-only, but
+        // nothing reads or writes span_origin any more. It was a separate
+        // table rather than a column on time_span because most spans are
+        // born local, and the sync metadata below grew out of the same shape.
         migrator.registerMigration("v2-span-origin") { db in
             try db.create(table: "span_origin") { t in
                 t.column("origin", .text).notNull()        // source server URL
@@ -906,79 +891,6 @@ package final class LocalBackend: Backend {
                 try row.insert(db)
                 try Self.insert(labels: span.labels, spanId: row.id!, db)
             }
-        }
-    }
-
-    // MARK: Import (origin-mapped upserts, used by HistoryImporter)
-
-    /// Upsert label definitions by key. The imported color wins over a local
-    /// one: the source has been the store of record for these keys, and the
-    /// colors already local are mostly the auto-created default blue — see
-    /// the importer's doc comment for the full policy rationale.
-    package func importLabelDefinitions(_ definitions: [LabelDefinition]) async throws
-        -> (created: Int, recolored: Int) {
-        try await dbQueue.write { db in
-            var created = 0, recolored = 0
-            for definition in definitions {
-                if let existing = try LabelDefinition.fetchOne(db, key: definition.key) {
-                    if existing.color != definition.color {
-                        try definition.update(db)
-                        try db.execute(
-                            sql: "UPDATE label_definition SET dirty = 1, modified_at = ? WHERE key = ?",
-                            arguments: [Date(), definition.key])
-                        recolored += 1
-                    }
-                } else {
-                    try definition.insert(db)
-                    try db.execute(
-                        sql: "UPDATE label_definition SET modified_at = ? WHERE key = ?",
-                        arguments: [Date(), definition.key])
-                    created += 1
-                }
-            }
-            return (created, recolored)
-        }
-    }
-
-    /// Upsert one batch of spans from `origin`, in a single transaction. Here
-    /// `TimeSpan.id` is the span's id *at the source*, not a local rowid: a
-    /// `span_origin` mapping decides whether the span updates the local row a
-    /// previous run created or inserts (and maps) a fresh one. A nil `end`
-    /// imports the span as still running.
-    package func importSpans(_ spans: [TimeSpan], origin: String) async throws
-        -> (inserted: Int, updated: Int) {
-        try await dbQueue.write { db in
-            var inserted = 0, updated = 0
-            for span in spans {
-                let mapping = try SpanOriginRow
-                    .filter(Column("origin") == origin
-                        && Column("origin_id") == Int64(span.id))
-                    .fetchOne(db)
-                if let mapping,
-                   var row = try TimeSpanRow.fetchOne(db, key: mapping.spanId) {
-                    row.start = span.start
-                    row.end = span.end
-                    row.note = span.note
-                    // Imported data is local data: it still has to reach
-                    // iCloud, so imports dirty the row like any edit.
-                    row.dirty = true
-                    row.modifiedAt = Date()
-                    try row.update(db)
-                    try SpanLabelRow.filter(Column("span_id") == mapping.spanId).deleteAll(db)
-                    try Self.insert(labels: span.labels, spanId: mapping.spanId, db)
-                    updated += 1
-                } else {
-                    var row = TimeSpanRow(id: nil, start: span.start,
-                                          end: span.end, note: span.note,
-                                          dirty: true, modifiedAt: Date())
-                    try row.insert(db)
-                    try Self.insert(labels: span.labels, spanId: row.id!, db)
-                    try SpanOriginRow(origin: origin, originId: Int64(span.id),
-                                      spanId: row.id!).insert(db)
-                    inserted += 1
-                }
-            }
-            return (inserted, updated)
         }
     }
 

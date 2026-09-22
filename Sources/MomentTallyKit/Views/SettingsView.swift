@@ -18,8 +18,6 @@ import UIKit
 package struct GeneralSettingsView<PlatformSections: View>: View {
     @Environment(AppModel.self) private var model
     private let platformSections: PlatformSections
-    @State private var username = ""
-    @State private var password = ""
     @State private var exportError: String?
     @State private var exportedTo: String?
     @State private var exportDocument: JSONExportDocument?
@@ -71,10 +69,9 @@ package struct GeneralSettingsView<PlatformSections: View>: View {
                         .lineLimit(3)
                 }
             }
-            // A demo must never reach a real server: no sync, no import.
+            // A demo must never reach a real server: no sync.
             if !model.isDemo {
                 syncSection
-                importSection
             }
             menuAndTagSections
         }
@@ -201,72 +198,6 @@ package struct GeneralSettingsView<PlatformSections: View>: View {
                 .foregroundStyle(.secondary)
         }
         platformSections
-    }
-
-    // MARK: Import from traggo (#30)
-
-    /// The one-shot importer's surface. Reuses the saved traggo session when
-    /// one exists; otherwise asks for a one-off sign-in whose token is kept,
-    /// so re-runs are already signed in.
-    private var importSection: some View {
-        @Bindable var model = model
-        return Section("Import from Traggo") {
-            Text("Copy a Traggo server’s full history — finished and running moments, plus mark keys and their colors — into the local database. Safe to run again: moments already imported are updated, not duplicated.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField("Server URL", text: $model.serverURL)
-            if model.hasTraggoSession {
-                Text("Using the saved Traggo sign-in.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                TextField("Username", text: $username)
-                    .autocorrectionDisabled()
-                SecureField("Password", text: $password)
-            }
-            HStack {
-                if model.isImporting {
-                    ProgressView().controlSize(.small)
-                    Text("Imported \(model.importedSpanCount) moments…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Import from Traggo…", action: runImport)
-                    .disabled(model.isImporting
-                        || (!model.hasTraggoSession && (username.isEmpty || password.isEmpty)))
-            }
-            if let summary = model.importSummary {
-                Label(summaryText(summary), systemImage: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.green)
-            }
-            if let error = model.importError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .lineLimit(3)
-            }
-        }
-    }
-
-    private func summaryText(_ summary: ImportSummary) -> String {
-        var parts = ["Imported \(summary.spansImported) moments"]
-        if summary.spansUpdated > 0 {
-            parts.append("(\(summary.spansInserted) new, \(summary.spansUpdated) updated)")
-        }
-        if summary.runningSpans > 0 {
-            parts.append("— \(summary.runningSpans) still running —")
-        }
-        parts.append("and \(summary.definitionsCreated + summary.definitionsRecolored) mark keys.")
-        return parts.joined(separator: " ")
-    }
-
-    private func runImport() {
-        Task {
-            await model.importFromTraggo(username: username, password: password)
-            password = ""   // never keep the password around
-        }
     }
 
     // MARK: Export to JSON (#57)

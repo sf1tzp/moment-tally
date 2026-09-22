@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Build, launch, and verify Moment Tally changes — the Mac app AX-driven against the live traggo.lofi server, the iOS app in the simulator. Auto-invoke only on macbook-air; on any other machine (check `hostname`) run only when the user explicitly asks to verify.
+description: Build, launch, and verify Moment Tally changes — the Mac app AX-driven in demo mode, the iOS app in the simulator. Auto-invoke only on macbook-air; on any other machine (check `hostname`) run only when the user explicitly asks to verify.
 ---
 
 # Verifying Moment Tally
@@ -53,10 +53,11 @@ asset batches); add new AX learnings there, not here.
 
 ## Verification-specific caveats
 
-- The server is `https://traggo.lofi` (fast check: `curl -sk -o /dev/null -w
-  "%{http_code}" https://traggo.lofi/`). Mutations hit real user data — create
-  your own test timespan (quick-start a tag set, stop it) and delete it when
-  done.
+- There is no server any more (the sync server went in #272, the Traggo
+  import in #275): the local store is the only backend, and iCloud is the
+  only transport. A non-demo launch runs against the real local database —
+  create your own test timespan (quick-start a tag set, stop it) and delete
+  it when done.
 
 ## iOS (simulator)
 

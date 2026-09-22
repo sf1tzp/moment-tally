@@ -92,10 +92,6 @@ Look for the timer in the menu bar. Launch without `--demo` to start tracking fo
 
 Moment Tally is local-first: the app is fully functional offline, and the local store stays the source of truth. When you want your history on more than one device, turn on iCloud sync in **Settings → Sync**. There is no account to set up — the iCloud account your Mac is signed into is the account — and the data is end-to-end encrypted, so neither Apple nor Street Fortress can read it. Moments, mark keys and colors, tallies, and the synced settings follow you to every device you use Moment Tally on.
 
-## Import from Traggo
-
-Coming from Traggo? **Settings → Import from Traggo** copies a Traggo server's full history — finished and running timespans, plus tag keys and their colors — into the local database. Safe to run again: already-imported timespans are updated, not duplicated.
-
 ## Development
 
 A `justfile` is included for the edit-build-run loop:
