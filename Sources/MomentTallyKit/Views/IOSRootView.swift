@@ -4,19 +4,19 @@ import MomentTallyCore
 
 /// The iOS app's root: compact width gets the #124 TabView (launcher
 /// first, parity views on the remaining tabs); regular width gets the
-/// #126 split layout (launcher column + collapsible pane, full-canvas
-/// History). Owns the `AppModel`, exactly like the Mac's `MomentTallyApp`.
+/// #126 split layout (launcher column + collapsible Log pane, with
+/// Calendar and History as full-canvas sections). Owns the `AppModel`,
+/// exactly like the Mac's `MomentTallyApp`.
 ///
-/// The regular arrangement persists per scene (#126): which pane, whether
-/// it's collapsed, and whether History owns the canvas.
+/// The regular arrangement persists per scene (#126): what the canvas
+/// shows and whether the Log pane is collapsed.
 public struct MomentTallyRootView: View {
     @State private var model = AppModel()
     @State private var selection: Pane = .launcher
     @State private var sheet: SheetRoute?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @SceneStorage("regular.sidePane") private var sidePane: RegularSidePane = .log
     @SceneStorage("regular.paneCollapsed") private var paneCollapsed = false
-    @SceneStorage("regular.historyCanvas") private var historyCanvas = false
+    @SceneStorage("regular.canvas") private var canvas: RegularCanvas = .launcher
 
     private enum Pane: Hashable {
         case launcher, log, calendar, history
@@ -43,9 +43,7 @@ public struct MomentTallyRootView: View {
     public var body: some View {
         Group {
             if horizontalSizeClass == .regular {
-                IPadSplitRoot(sidePane: $sidePane,
-                              paneCollapsed: $paneCollapsed,
-                              historyCanvas: $historyCanvas)
+                IPadSplitRoot(canvas: $canvas, paneCollapsed: $paneCollapsed)
             } else {
                 tabView
             }
@@ -145,17 +143,14 @@ public struct MomentTallyRootView: View {
         if horizontalSizeClass == .regular {
             switch tab {
             case .launcher:
-                historyCanvas = false
+                canvas = .launcher
             case .log:
-                historyCanvas = false
-                sidePane = .log
+                canvas = .launcher
                 withAnimation(.snappy) { paneCollapsed = false }
             case .calendar:
-                historyCanvas = false
-                sidePane = .calendar
-                withAnimation(.snappy) { paneCollapsed = false }
+                canvas = .calendar
             case .history:
-                historyCanvas = true
+                canvas = .history
             case .tagSets: sheet = .tagSets
             case .review: sheet = .review
             case .help: sheet = .help

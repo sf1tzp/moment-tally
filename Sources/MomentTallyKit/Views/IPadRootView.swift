@@ -2,16 +2,24 @@
 import SwiftUI
 import MomentTallyCore
 
-/// The regular-width side pane's content choices (#126). Raw-string so the
+/// What the regular-width canvas shows (#126, #286). Raw-string so the
 /// selection persists via @SceneStorage.
-enum RegularSidePane: String {
-    case log, calendar
+enum RegularCanvas: String {
+    /// The split: launcher column beside (or, in portrait, above) the Log.
+    case launcher
+    /// Full-canvas sections: the surfaces that read a whole window's worth
+    /// of time and want the width — a 7-column week, a row of donuts.
+    case calendar, history
 }
 
 /// The regular-width root (#126, per the settled #116 shape): the launcher
 /// as a column with the section buttons *below* it (not a tab bar),
-/// adjacent to a collapsible Log-or-Calendar pane; History takes the whole
-/// canvas when selected. Compact width never sees this view — the app root
+/// adjacent to a collapsible Log pane — the "at work" screen: start a
+/// tally, see today's moments. Calendar and History are canvas sections
+/// (#286 promoted Calendar out of the pane: a week grid squeezed into a
+/// 340–520pt pane could never carry the day/week/month modes). The views
+/// themselves are the portable ones every root shares; this file only
+/// decides the arrangement. Compact width never sees it — the app root
 /// falls back to the #124 TabView off the size class, which is also what
 /// Slide Over / narrow Split View multitasking gets.
 ///
@@ -27,35 +35,35 @@ enum RegularSidePane: String {
 struct IPadSplitRoot: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openAppSection) private var openAppSection
-    @Binding var sidePane: RegularSidePane
+    @Binding var canvas: RegularCanvas
     @Binding var paneCollapsed: Bool
-    @Binding var historyCanvas: Bool
     @State private var showReorder = false
 
     var body: some View {
         Group {
-            if historyCanvas {
-                historyView
-            } else {
-                splitView
+            switch canvas {
+            case .launcher: splitView
+            case .calendar: canvasView("Calendar") { CalendarView() }
+            case .history: canvasView("History") { HistoryChartsView() }
             }
         }
         .sheet(isPresented: $showReorder) {
             IOSReorderSheet()
         }
-        // Pane-switching hardware-keyboard shortcuts (#126/#59): ⌘1 the
-        // launcher canvas, ⌘2/⌘3 the Log/Calendar pane, ⌘4 History.
-        // Zero-opacity buttons rather than .hidden() — hidden views drop
-        // out of the responder path, transparent ones keep their shortcut.
+        // Section hardware-keyboard shortcuts (#126/#59): ⌘1 the launcher
+        // split, ⌘2 the Log pane, ⌘3 Calendar, ⌘4 History — the compact
+        // tab order. Zero-opacity buttons rather than .hidden() — hidden
+        // views drop out of the responder path, transparent ones keep
+        // their shortcut.
         .overlay {
             Group {
-                Button("") { historyCanvas = false }
+                Button("") { canvas = .launcher }
                     .keyboardShortcut("1", modifiers: .command)
-                Button("") { showPane(.log) }
+                Button("") { showLog() }
                     .keyboardShortcut("2", modifiers: .command)
-                Button("") { showPane(.calendar) }
+                Button("") { canvas = .calendar }
                     .keyboardShortcut("3", modifiers: .command)
-                Button("") { historyCanvas = true }
+                Button("") { canvas = .history }
                     .keyboardShortcut("4", modifiers: .command)
             }
             .opacity(0)
@@ -63,9 +71,8 @@ struct IPadSplitRoot: View {
         }
     }
 
-    private func showPane(_ pane: RegularSidePane) {
-        historyCanvas = false
-        sidePane = pane
+    private func showLog() {
+        canvas = .launcher
         withAnimation(.snappy) { paneCollapsed = false }
     }
 
@@ -96,8 +103,8 @@ struct IPadSplitRoot: View {
     /// Portrait (#280): one scroll, not two. The launcher surface lays out
     /// at its natural height (no ScrollView of its own), the section
     /// buttons follow it as a compact row above the pane's divider so the
-    /// pane header stays the visual boundary, and the pane's rows embed
-    /// through `outerScroll` — the Log's pinned day headers and the #130
+    /// pane header stays the visual boundary, and the Log's rows embed
+    /// through `outerScroll` — its pinned day headers and the #130
     /// hand-off scroll both work against this scroll. The pane collapse
     /// has no meaning stacked, so neither chrome offers it here.
     private func verticalCanvas(width: CGFloat) -> some View {
@@ -155,7 +162,8 @@ struct IPadSplitRoot: View {
     /// launcher — the #116 planning decision for the iPad shape.
     private var sectionButtons: some View {
         HStack(spacing: 4) {
-            sectionButton("History", icon: "chart.pie") { historyCanvas = true }
+            sectionButton("Calendar", icon: "calendar") { canvas = .calendar }
+            sectionButton("History", icon: "chart.pie") { canvas = .history }
             sectionButton("Tallies", icon: "square.grid.2x2") { openAppSection(.tagSets) }
             sectionButton("Review", icon: "checklist") { openAppSection(.review) }
             sectionButton("Reorder", icon: "arrow.up.arrow.down") { showReorder = true }
@@ -183,7 +191,7 @@ struct IPadSplitRoot: View {
         .foregroundStyle(.secondary)
     }
 
-    // MARK: Side pane
+    // MARK: Log pane
 
     private var paneView: some View {
         VStack(spacing: 0) {
@@ -196,13 +204,8 @@ struct IPadSplitRoot: View {
 
     private func paneHeader(collapsible: Bool) -> some View {
         HStack {
-            Picker("Pane", selection: $sidePane) {
-                Text("Log").tag(RegularSidePane.log)
-                Text("Calendar").tag(RegularSidePane.calendar)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 220)
+            Text("Log")
+                .font(.headline)
             Spacer()
             if collapsible {
                 Button {
@@ -217,26 +220,24 @@ struct IPadSplitRoot: View {
         .padding(.vertical, 8)
     }
 
-    @ViewBuilder
     private var paneContent: some View {
-        switch sidePane {
-        case .log: LogView()
-        case .calendar: CalendarView()
-        }
+        LogView()
     }
 
-    // MARK: History canvas
+    // MARK: Canvas sections
 
-    /// Full-screen History (#126): the charts get the whole canvas.
-    private var historyView: some View {
+    /// A full-screen section (#126): the view gets the whole canvas under
+    /// an inline title, with the way back to the launcher leading.
+    private func canvasView<Content: View>(_ title: String,
+                                           @ViewBuilder content: () -> Content) -> some View {
         NavigationStack {
-            HistoryChartsView()
-                .navigationTitle("History")
+            content()
+                .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
-                            historyCanvas = false
+                            canvas = .launcher
                         } label: {
                             Label("Launcher", systemImage: "chevron.left")
                                 .labelStyle(.titleAndIcon)
