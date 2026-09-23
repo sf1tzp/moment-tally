@@ -197,7 +197,19 @@ package struct GeneralSettingsView<PlatformSections: View>: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        calendarSection
         platformSections
+    }
+
+    /// The Calendar's month cards (#304): the top tally set's icon per day.
+    private var calendarSection: some View {
+        @Bindable var history = model.history
+        return Section("Calendar") {
+            Toggle("Top day icons", isOn: $history.calendarSetup.showDayIcons)
+            Text("Each day card in the month view carries the icon of the tally that took the most time that day. Turn off if a month reads cluttered.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: Export to JSON (#57)

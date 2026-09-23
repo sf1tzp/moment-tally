@@ -52,6 +52,49 @@ package enum CalendarLayout {
         return days
     }
 
+    /// The first days of every month from `first` through `last` (both
+    /// month starts, inclusive) — the month scroll's sections (#304).
+    package static func months(from first: Date, through last: Date,
+                               calendar: Calendar = .current) -> [Date] {
+        guard let start = calendar.dateInterval(of: .month, for: first)?.start,
+              let end = calendar.dateInterval(of: .month, for: last)?.start,
+              start <= end else { return [] }
+        var months: [Date] = []
+        var cursor = start
+        while cursor <= end {
+            months.append(cursor)
+            guard let next = calendar.date(byAdding: .month, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return months
+    }
+
+    /// The tally set with the most clipped seconds in `day` — the day card's
+    /// icon (#304). A span counts for the first set in `sets` that reads it
+    /// as its own (`TagSet.matches`, the Launcher's running rule); spans no
+    /// set claims count for nothing. Nil when no set has any time. Ties go
+    /// to the earlier set in `sets` (the Launcher's order).
+    package static func topSet(spans: [TimeSpan], day: DateInterval, sets: [TagSet],
+                               quicks: (TagSet) -> [TagRow], now: Date = Date()) -> TagSet? {
+        guard !sets.isEmpty else { return nil }
+        let quickLists = sets.map(quicks)
+        var seconds = [TimeInterval](repeating: 0, count: sets.count)
+        for span in spans {
+            let start = max(span.start, day.start)
+            let end = min(span.end ?? now, day.end)
+            guard end > start,
+                  let index = sets.indices.first(where: {
+                      sets[$0].matches(spanLabels: span.labels, quicks: quickLists[$0])
+                  })
+            else { continue }
+            seconds[index] += end.timeIntervalSince(start)
+        }
+        guard let best = seconds.indices.max(by: {
+            seconds[$0] != seconds[$1] ? seconds[$0] < seconds[$1] : $0 > $1
+        }), seconds[best] > 0 else { return nil }
+        return sets[best]
+    }
+
     /// One slice of a day's colour distribution: the first label of the
     /// spans behind it (the block colour's rule) and their clipped seconds.
     package struct DayGroup: Equatable {

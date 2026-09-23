@@ -7,8 +7,10 @@ import MomentTallyCore
 /// The Calendar tab (#286): one component with three modes. **Week** is
 /// the 7-column grid on a vertical time axis, moments as colored blocks
 /// (like the web UI's calendar); **Day** gives one day the whole width, so
-/// lanes and labels get room; **Month** is a grid of day blocks, each a
-/// pie of that day's tally colors with its total. A time-scale zoom
+/// lanes and labels get room; **Month** is a vertical scroll of months,
+/// each a grid of day cards filled with that day's tally colors (a pie
+/// clipped to the card) with its total and the top set's icon (#304).
+/// A time-scale zoom
 /// (pinch, the −/+ buttons, ⌘−/⌘=) changes the points per hour of the
 /// week and day grids, and the grid shows the working day by default —
 /// 07:00–22:00, widened to cover any span outside it — so the empty night
@@ -54,6 +56,16 @@ package struct CalendarView: View {
     /// it when the zoom alone would leave the page short — a working day
     /// at 40pt/h is 600pt, and a portrait iPad has 1000 to give.
     @State private var viewportHeight: CGFloat = 0
+    /// Month mode (#304): the section under the top of the month scroll,
+    /// and the ends of the range of months on screen once the scroll or
+    /// the stepping widened it.
+    @State private var scrolledMonth: Date?
+    @State private var monthRangeFirst: Date?
+    @State private var monthRangeLast: Date?
+    /// Each on-screen month section's top, in the month scroll's space.
+    @State private var monthTops: [Date: CGFloat] = [:]
+    /// False until the initial scroll to the calendar month has landed.
+    @State private var monthScrollSettled = false
 
     private let gutterWidth: CGFloat = 46
 
@@ -96,7 +108,7 @@ package struct CalendarView: View {
                 Divider()
                 timeGrid(days: [history.dayInterval])
             case .month:
-                monthGrid
+                monthScroll
             }
 
             if let error = history.errorMessage {
@@ -109,18 +121,9 @@ package struct CalendarView: View {
             }
         }
         .task { await history.loadIfNeeded() }
-        // The month fetches on entry and on every month step; a mode
-        // switch back to a still-loaded month is a no-op inside.
-        .task(id: monthLoadKey) {
-            if setup.mode == .month { await history.loadMonthIfNeeded() }
-        }
         .onChange(of: setup.mode) { _, mode in
             if mode == .month { history.alignMonthToDisplayedDay() }
         }
-    }
-
-    private var monthLoadKey: String {
-        "\(setup.mode.rawValue)-\(model.history.calendarMonth.timeIntervalSince1970)"
     }
 
     // MARK: Header
@@ -672,18 +675,24 @@ package struct CalendarView: View {
         return .gray
     }
 
-    // MARK: Month grid
+    // MARK: Month scroll
 
-    /// Whole weeks of day blocks; each block a pie of the day's first-label
-    /// colors with its total. Tap a block to open that day.
-    private var monthGrid: some View {
-        let history = model.history
-        let days = CalendarLayout.monthGridDays(month: history.calendarMonth)
-        let rows = days.count / 7
-        let weekdays = weekdayHeaders
-        return VStack(spacing: 0) {
+    /// Months as sections of day cards (`DayCard`, #304) in one vertical
+    /// scroll, oldest at the top — scroll up for earlier months. Each
+    /// month loads as its section nears the viewport; the section under
+    /// the viewport's top reports back as `calendarMonth`, so the header's
+    /// label follows the scroll, and the stepping / Today / a mode switch
+    /// scroll to their month. Tap a card to open that day.
+    ///
+    /// Section heights are computed, not measured: every section is a
+    /// placeholder of known height that draws its cards only near the
+    /// viewport (a lazy stack estimates unrealised heights, and a scroll
+    /// target across two years of estimates lands rows off). So the
+    /// initial anchor is arithmetic, and `scrollTo` is exact.
+    private var monthScroll: some View {
+        VStack(spacing: 0) {
             HStack(spacing: 0) {
-                ForEach(weekdays, id: \.self) { name in
+                ForEach(weekdayHeaders, id: \.self) { name in
                     Text(name)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
@@ -691,17 +700,159 @@ package struct CalendarView: View {
                         .padding(.vertical, 4)
                 }
             }
+            .padding(.horizontal, Self.monthInset)
             Divider()
             if outerScroll != nil {
-                monthRows(days: days, rows: rows, cellHeight: 110)
+                // Embedded in a page scroll: the calendar month alone, at
+                // a fixed card size.
+                monthSection(model.history.calendarMonth, side: 96, titled: false)
             } else {
                 GeometryReader { geo in
-                    monthRows(days: days, rows: rows,
-                              cellHeight: max(72, geo.size.height / CGFloat(rows)))
+                    let side = cardSide(in: geo.size)
+                    let months = monthRange
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                Button {
+                                    extendMonths(proxy)
+                                } label: {
+                                    Label("Earlier months", systemImage: "chevron.up")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: Self.earlierRowHeight)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                ForEach(months, id: \.self) { month in
+                                    monthSlot(month, side: side, viewportHeight: geo.size.height)
+                                        .id(month)
+                                }
+                            }
+                        }
+                        .coordinateSpace(name: "monthScroll")
+                        .defaultScrollAnchor(monthAnchor(for: model.history.calendarMonth, months: months,
+                                                         side: side, viewportHeight: geo.size.height))
+                        // Tracking starts once the first layout has
+                        // landed on the anchor: an early report must not
+                        // become the calendar month.
+                        .task {
+                            try? await Task.sleep(for: .milliseconds(100))
+                            monthScrollSettled = true
+                        }
+                        .onChange(of: monthTops) { _, tops in
+                            guard monthScrollSettled,
+                                  let current = Self.currentMonth(tops: tops),
+                                  current != scrolledMonth else { return }
+                            scrolledMonth = current
+                            model.history.setCalendarMonth(current)
+                        }
+                        .onChange(of: model.history.calendarMonth) { _, month in
+                            // A step, Today, or a day → month switch: scroll
+                            // there. A scroll-driven change is already there.
+                            if month != scrolledMonth { showMonth(month, proxy, animated: true) }
+                        }
+                    }
                 }
             }
         }
     }
+
+    /// The month sections on screen: the trailing two years through the
+    /// month after the later of this month and the calendar month — one
+    /// past, so the calendar month can sit at the top with a shorter
+    /// section below it instead of the scroll clamping on its tail — and
+    /// extended as the stepping or "Earlier months" reaches past either end.
+    private var monthRange: [Date] {
+        let calendar = Calendar.current
+        let thisMonth = calendar.dateInterval(of: .month, for: Date())?.start ?? Date()
+        let current = model.history.calendarMonth
+        let after = calendar.date(byAdding: .month, value: 1, to: max(thisMonth, current)) ?? current
+        let last = max(monthRangeLast ?? after, after)
+        let first = min(monthRangeFirst
+                        ?? calendar.date(byAdding: .month, value: -24, to: last) ?? last,
+                        current)
+        return CalendarLayout.months(from: first, through: last)
+    }
+
+    /// The month whose section holds the viewport's top edge: the lowest
+    /// section top at or above it, else the first one below (the scroll
+    /// is above every section — the "Earlier months" row).
+    private static func currentMonth(tops: [Date: CGFloat]) -> Date? {
+        let above = tops.filter { $0.value <= 8 }
+        if let current = above.max(by: { $0.value < $1.value }) { return current.key }
+        return tops.min(by: { $0.value < $1.value })?.key
+    }
+
+    /// Twelve more months above the oldest, which stays where it is.
+    private func extendMonths(_ proxy: ScrollViewProxy) {
+        guard let first = monthRange.first else { return }
+        monthRangeFirst = Calendar.current.date(byAdding: .month, value: -12, to: first)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            proxy.scrollTo(first, anchor: .top)
+        }
+    }
+
+    /// Put `month` at the top, widening the range when it lies outside.
+    /// A widened range lays out first; the scroll follows a beat later.
+    private func showMonth(_ month: Date, _ proxy: ScrollViewProxy, animated: Bool = false) {
+        var widened = false
+        if let first = monthRange.first, month < first { monthRangeFirst = month; widened = true }
+        if let last = monthRange.last, month >= last {
+            monthRangeLast = Calendar.current.date(byAdding: .month, value: 1, to: month)
+            widened = true
+        }
+        scrolledMonth = month
+        let scroll = {
+            if animated {
+                withAnimation(.snappy) { proxy.scrollTo(month, anchor: .top) }
+            } else {
+                proxy.scrollTo(month, anchor: .top)
+            }
+        }
+        if widened {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: scroll)
+        } else {
+            scroll()
+        }
+    }
+
+    /// The initial scroll position with `month` at the top, as the
+    /// fraction of the scrollable height its offset is (the time grid's
+    /// `anchor(forHour:)` arithmetic).
+    private func monthAnchor(for month: Date, months: [Date], side: CGFloat,
+                             viewportHeight: CGFloat) -> UnitPoint {
+        var offset = Self.earlierRowHeight
+        var content = Self.earlierRowHeight
+        for candidate in months {
+            let height = monthHeight(candidate, side: side)
+            if candidate < month { offset += height }
+            content += height
+        }
+        let scrollable = content - viewportHeight
+        guard scrollable > 0 else { return .top }
+        return UnitPoint(x: 0, y: min(1, offset / scrollable))
+    }
+
+    /// Cards are squares sized by the column width, capped so six rows and
+    /// the title fit the viewport — a month is never taller than the page.
+    private func cardSide(in size: CGSize) -> CGFloat {
+        let byWidth = (size.width - 2 * Self.monthInset) / 7 - Self.cardGap
+        let byHeight = (size.height - Self.monthTitleHeight) / 6 - Self.cardGap
+        return max(40, min(byWidth, byHeight))
+    }
+
+    /// A section's height: title, rows of cards with their gaps, and the
+    /// vertical padding — what `monthSection` lays out.
+    private func monthHeight(_ month: Date, side: CGFloat) -> CGFloat {
+        let rows = CGFloat(CalendarLayout.monthGridDays(month: month).count / 7)
+        return Self.monthTitleHeight + rows * (side + Self.cardGap) + Self.cardGap
+    }
+
+    private static let cardGap: CGFloat = 6
+    private static let monthInset: CGFloat = 8
+    private static let monthTitleHeight: CGFloat = 30
+    private static let earlierRowHeight: CGFloat = 32
 
     /// The calendar's weekday names in its first-weekday order.
     private var weekdayHeaders: [String] {
@@ -711,85 +862,84 @@ package struct CalendarView: View {
         return (0..<7).map { symbols[(first + $0) % 7] }
     }
 
-    private func monthRows(days: [Date], rows: Int, cellHeight: CGFloat) -> some View {
-        VStack(spacing: 0) {
+    /// A month's slot in the scroll: the computed height always, the
+    /// cards only within a page of the viewport. It reports its top so
+    /// the tracking and the realisation both work off one number.
+    private func monthSlot(_ month: Date, side: CGFloat, viewportHeight: CGFloat) -> some View {
+        let height = monthHeight(month, side: side)
+        let top = monthTops[month]
+        let near = top.map { $0 < 2 * viewportHeight && $0 + height > -viewportHeight } ?? false
+        return Color.clear
+            .frame(height: height)
+            .overlay(alignment: .top) {
+                if near {
+                    monthSection(month, side: side, titled: true)
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) {
+                $0.frame(in: .named("monthScroll")).minY
+            } action: { top in
+                monthTops[month] = top
+            }
+    }
+
+    /// One month: its title row, then whole weeks of day cards. The load
+    /// task keys on the data version so a mutation refetches in place.
+    private func monthSection(_ month: Date, side: CGFloat, titled: Bool) -> some View {
+        let history = model.history
+        let days = CalendarLayout.monthGridDays(month: month)
+        let rows = days.count / 7
+        let interval = HistoryModel.monthInterval(of: month)
+        let spans = history.monthSpans(for: month)
+        return VStack(spacing: Self.cardGap) {
+            if titled {
+                Text(month.formatted(.dateTime.month(.wide).year()))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: Self.monthTitleHeight - Self.cardGap)
+                    .padding(.horizontal, 4)
+            }
             ForEach(0..<rows, id: \.self) { row in
                 HStack(spacing: 0) {
                     ForEach(days[row * 7..<(row + 1) * 7], id: \.self) { day in
-                        monthCell(day)
+                        monthCell(day, side: side, spans: spans, inMonth: interval.contains(day))
                             .frame(maxWidth: .infinity)
-                            .frame(height: cellHeight)
                     }
                 }
-                Divider()
+                .frame(height: side)
             }
+        }
+        .padding(.horizontal, Self.monthInset)
+        .padding(.vertical, Self.cardGap)
+        .task(id: "\(month.timeIntervalSince1970)-\(history.monthDataVersion)") {
+            await history.loadMonthIfNeeded(month)
         }
     }
 
-    private func monthCell(_ dayStart: Date) -> some View {
+    private func monthCell(_ dayStart: Date, side: CGFloat, spans: [TimeSpan], inMonth: Bool) -> some View {
         let calendar = Calendar.current
         let history = model.history
         let end = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
         let day = DateInterval(start: dayStart, end: end)
-        let inMonth = history.monthInterval.contains(dayStart)
-        let isToday = day.contains(Date())
-        let groups = CalendarLayout.dayGroups(spans: history.monthSpans, day: day)
+        let groups = CalendarLayout.dayGroups(spans: spans, day: day)
         let total = groups.reduce(0) { $0 + $1.seconds }
+        let topSet = setup.showDayIcons
+            ? CalendarLayout.topSet(spans: spans, day: day, sets: model.tagSets,
+                                    quicks: { model.quickLabels(for: $0) })
+            : nil
 
         return Button {
             history.showDay(dayStart, switchingMode: true)
         } label: {
-            VStack(spacing: 4) {
-                Text(dayStart.formatted(.dateTime.day()))
-                    .font(.caption.weight(isToday ? .bold : .regular))
-                    .foregroundStyle(isToday ? Color.accentColor
-                                     : inMonth ? Color.primary : Color.secondary.opacity(0.5))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if total > 0 {
-                    dayPie(groups: groups)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    Text(formatDuration(total))
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                } else {
-                    Spacer(minLength: 0)
-                }
-            }
-            .padding(6)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Rectangle())
-            .overlay(alignment: .leading) {
-                Rectangle().fill(separatorColor).frame(width: 1)
-            }
+            DayCard(dayStart: dayStart, side: side, inMonth: inMonth,
+                    isToday: day.contains(Date()), groups: groups, total: total,
+                    topSet: topSet, color: { color(for: $0) })
         }
         .buttonStyle(.plain)
-        .opacity(inMonth ? 1 : 0.6)
         .accessibilityLabel(dayStart.formatted(.dateTime.weekday(.wide).month().day()))
         .accessibilityValue(total > 0 ? formatDuration(total) : "nothing marked")
         .help("Show this day")
-    }
-
-    /// The day's colour distribution as a pie — one sector per first-label
-    /// group, clockwise from twelve, largest first (the History donut's
-    /// convention).
-    private func dayPie(groups: [CalendarLayout.DayGroup]) -> some View {
-        let total = groups.reduce(0) { $0 + $1.seconds }
-        return Canvas { context, size in
-            let radius = min(size.width, size.height) / 2
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            var angle = Angle.degrees(-90)
-            for group in groups where total > 0 {
-                let sweep = Angle.degrees(360 * group.seconds / total)
-                var path = Path()
-                path.move(to: center)
-                path.addArc(center: center, radius: radius,
-                            startAngle: angle, endAngle: angle + sweep, clockwise: false)
-                path.closeSubpath()
-                context.fill(path, with: .color(color(for: group.label).opacity(0.9)))
-                angle += sweep
-            }
-        }
-        .aspectRatio(1, contentMode: .fit)
     }
 
     // MARK: Segment layout (lane packing)
@@ -852,6 +1002,7 @@ private struct CalendarSegment: Identifiable {
     var id: String { "\(span.id)-\(Int(interval.start.timeIntervalSince1970))" }
 }
 
+<<<<<<< HEAD
 
 /// The block's surface (#302): liquid glass tinted with the block colour
 /// where the OS has it, the flat tinted fill before that. A running span
@@ -872,6 +1023,95 @@ private struct BlockSurface: ViewModifier {
                 .background(shape.fill(color.opacity(0.9)))
                 .overlay(shape.strokeBorder(running ? Color.accentColor : color.opacity(0.4),
                                             lineWidth: running ? 1.5 : 0.5))
+=======
+/// A month-view day (#304): a rounded square *filled* with the day's colour
+/// distribution — the pie's sectors, clockwise from twelve, largest first
+/// (the History donut's convention), clipped to the card — with the day
+/// number top-leading, the total bottom-trailing, and the top tally set's
+/// icon on a glass disc in the middle. A day with nothing marked is the
+/// same card unfilled, so the grid stays regular; today wears an accent
+/// ring; days of the neighbouring months fade.
+private struct DayCard: View {
+    let dayStart: Date
+    let side: CGFloat
+    let inMonth: Bool
+    let isToday: Bool
+    let groups: [CalendarLayout.DayGroup]
+    let total: TimeInterval
+    let topSet: TagSet?
+    let color: (SpanLabel?) -> Color
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: side * 0.22, style: .continuous)
+    }
+    private var filled: Bool { total > 0 }
+    /// Caption ink: white over the colour fill, secondary on an empty card.
+    private var ink: Color { filled ? .white : .secondary }
+
+    var body: some View {
+        ZStack {
+            if filled {
+                pie.clipShape(shape)
+            } else {
+                shape.fill(.quaternary.opacity(0.6))
+                shape.strokeBorder(.quaternary, lineWidth: 1)
+            }
+            if let topSet, side >= 44 {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: side * 0.44, height: side * 0.44)
+                    .overlay {
+                        TagSetIcon(set: topSet, size: side * 0.2, weight: .semibold)
+                            .foregroundStyle(.primary)
+                    }
+                    .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            Text(dayStart.formatted(.dateTime.day()))
+                .font(.system(size: max(9, side * 0.14), weight: isToday ? .bold : .semibold))
+                .monospacedDigit()
+                .padding(.leading, side * 0.1)
+                .padding(.top, side * 0.07)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if filled, side >= 56 {
+                Text(formatDuration(total))
+                    .font(.system(size: max(8, side * 0.11), weight: .medium).monospacedDigit())
+                    .padding(.trailing, side * 0.09)
+                    .padding(.bottom, side * 0.07)
+            }
+        }
+        .foregroundStyle(ink)
+        .shadow(color: filled ? .black.opacity(0.35) : .clear, radius: 1.5, y: 0.5)
+        .overlay {
+            if isToday {
+                shape.strokeBorder(Color.accentColor, lineWidth: 2)
+            }
+        }
+        .frame(width: side, height: side)
+        .contentShape(shape)
+        .opacity(inMonth ? 1 : 0.35)
+    }
+
+    /// Sectors from the centre, with a radius past the corners so the
+    /// clip is what shapes the card.
+    private var pie: some View {
+        Canvas { context, size in
+            let radius = hypot(size.width, size.height) / 2 + 1
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            var angle = Angle.degrees(-90)
+            for group in groups where total > 0 {
+                let sweep = Angle.degrees(360 * group.seconds / total)
+                var path = Path()
+                path.move(to: center)
+                path.addArc(center: center, radius: radius,
+                            startAngle: angle, endAngle: angle + sweep, clockwise: false)
+                path.closeSubpath()
+                context.fill(path, with: .color(color(group.label).opacity(0.92)))
+                angle += sweep
+            }
+>>>>>>> 3487258 (Calendar month: pie-filled day cards, a scroll through months, the top set's icon (#304))
         }
     }
 }
