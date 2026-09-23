@@ -725,6 +725,13 @@ package final class AppModel {
         runningTimer(for: set) != nil
     }
 
+    /// The set a span reads as — the first in Launcher order whose
+    /// `matches` rule claims the span's labels — so a surface that shows
+    /// spans (the Calendar's blocks, #302) can carry the set's tile.
+    package func tagSet(for span: TimeSpan) -> TagSet? {
+        tagSets.first { $0.matches(spanLabels: span.labels, quicks: quickLabels(for: $0)) }
+    }
+
     /// The running timespan reading as this set, if any — same rule as
     /// `isRunning(_:)`. Lets a surface that shows sets (the Launcher) stop
     /// "the set's" timer by id.

@@ -16,7 +16,9 @@ import MomentTallyCore
 /// floor: the visible hours always fill the grid's viewport (#303), so a
 /// portrait iPad or a tall window never ends in a blank band.
 ///
-/// Overlapping spans share the column width via lane packing; tapping a
+/// Blocks carry the tally set's tile and the labels as chips on a glass
+/// surface over a wash of the day's colours (#302). Overlapping spans
+/// share the column width via lane packing; tapping a
 /// block jumps to the Log tab with that span open for editing (#130 — the
 /// grid is too dense for a popover); a long-press / right-click shows the
 /// block's details. Spans crossing midnight render one segment per day
@@ -468,6 +470,7 @@ package struct CalendarView: View {
     private func dayColumn(_ day: DateInterval, hours: Range<Int>) -> some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
+                columnWash(day)
                 // Hour lines + left border.
                 ForEach(Array(hours), id: \.self) { hour in
                     Rectangle()
@@ -479,8 +482,12 @@ package struct CalendarView: View {
                     .fill(separatorColor)
                     .frame(width: 1)
 
-                ForEach(segments(for: day)) { segment in
-                    block(segment, day: day, hours: hours, columnWidth: geo.size.width)
+                glassContainer {
+                    ZStack(alignment: .topLeading) {
+                        ForEach(segments(for: day)) { segment in
+                            block(segment, day: day, hours: hours, columnWidth: geo.size.width)
+                        }
+                    }
                 }
 
                 // The present moment, in today's column: a hairline with
@@ -508,6 +515,14 @@ package struct CalendarView: View {
         .frame(height: gridHeight)
     }
 
+    /// A block reads as the object the Launcher shows (#302): the matched
+    /// tally set's tile (`LauncherTileIcon`) — or a placeholder tile in the
+    /// first label's colour when no set claims the span — beside the time,
+    /// then the labels as chips (`TagPill`) where the block is wide and
+    /// tall enough, plain text otherwise, and (day mode) the note. The
+    /// surface is liquid glass tinted with the block colour on OS 26,
+    /// the flat fill before it. Everything re-flows with the zoom instead
+    /// of clipping: a sliver is just its colour.
     @ViewBuilder
     private func block(_ segment: CalendarSegment, day: DateInterval, hours: Range<Int>,
                        columnWidth: CGFloat) -> some View {
@@ -518,6 +533,11 @@ package struct CalendarView: View {
         let color = blockColor(segment.span)
         let single = setup.mode == .day
         let fontSize: CGFloat = single ? 11 : 9
+        let set = model.tagSet(for: segment.span)
+        let tileSize: CGFloat = single ? 22 : 16
+        let showsTile = height >= tileSize + 6 && laneWidth >= 64
+        let showsChips = height >= 44 && laneWidth >= (single ? 120 : 108)
+        let ink = color.contrastingTextColor
 
         Button {
             // Hand the span to the Log tab and switch over — it scrolls to
@@ -525,40 +545,46 @@ package struct CalendarView: View {
             model.history.requestLogEdit(of: segment.span)
             openAppSection(.log)
         } label: {
-            // Labels re-flow with the zoom instead of clipping: a sliver
-            // is just its color; a short block says what it is; a tall
-            // one adds when, and (day mode) the note.
-            VStack(alignment: .leading, spacing: 1) {
-                if height >= 26 {
-                    Text(segment.span.timeRangeLabel)
-                        .font(.system(size: fontSize, weight: .semibold).monospacedDigit())
+            HStack(alignment: .top, spacing: 5) {
+                if showsTile {
+                    blockTile(set: set, color: color, size: tileSize)
                 }
-                if height >= 14 {
-                    Text(tagText(segment.span))
-                        .font(.system(size: fontSize))
-                        .lineLimit(height >= 40 ? 2 : 1)
-                }
-                if single, height >= 52, !segment.span.note.isEmpty {
-                    Text(segment.span.note)
-                        .font(.system(size: fontSize))
-                        .foregroundStyle(color.contrastingTextColor.opacity(0.8))
-                        .lineLimit(2)
+                VStack(alignment: .leading, spacing: 2) {
+                    if height >= 26 {
+                        Text(segment.span.timeRangeLabel)
+                            .font(.system(size: fontSize, weight: .semibold).monospacedDigit())
+                    }
+                    if showsChips {
+                        // Chips only when the row of them fits — a squeezed
+                        // chip truncates to nothing — else the text.
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 3) {
+                                ForEach(segment.span.labels, id: \.self) { label in
+                                    TagPill(key: label.key, value: label.value,
+                                            color: model.tagColor(for: label.key, value: label.value))
+                                }
+                            }
+                            Text(tagText(segment.span))
+                                .font(.system(size: fontSize))
+                                .lineLimit(2)
+                        }
+                    } else if height >= 14 {
+                        Text(tagText(segment.span))
+                            .font(.system(size: fontSize))
+                            .lineLimit(height >= 40 ? 2 : 1)
+                    }
+                    if single, height >= (showsChips ? 68 : 52), !segment.span.note.isEmpty {
+                        Text(segment.span.note)
+                            .font(.system(size: fontSize))
+                            .foregroundStyle(ink.opacity(0.8))
+                            .lineLimit(2)
+                    }
                 }
             }
-            .foregroundStyle(color.contrastingTextColor)
-            .padding(3)
+            .foregroundStyle(ink)
+            .padding(showsTile ? 4 : 3)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(color.opacity(0.9))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 3)
-                    .strokeBorder(segment.span.isRunning
-                                  ? Color.accentColor
-                                  : color.opacity(0.4),
-                                  lineWidth: segment.span.isRunning ? 1.5 : 0.5)
-            )
+            .modifier(BlockSurface(color: color, running: segment.span.isRunning))
             .clipped()
             .contentShape(Rectangle())
         }
@@ -582,6 +608,48 @@ package struct CalendarView: View {
                 model.history.requestLogEdit(of: segment.span)
                 openAppSection(.log)
             }
+        }
+    }
+
+    /// The set's launcher tile at block scale, or the placeholder: the
+    /// same rounded square in the first label's colour with no glyph —
+    /// the shape says "a tally", the colour says which.
+    @ViewBuilder
+    private func blockTile(set: TagSet?, color: Color, size: CGFloat) -> some View {
+        if let set {
+            LauncherTileIcon(set: set, size: size)
+        } else {
+            RoundedRectangle(cornerRadius: size * 0.27)
+                .fill(color)
+                .overlay(RoundedRectangle(cornerRadius: size * 0.27)
+                    .strokeBorder(color.contrastingTextColor.opacity(0.35), lineWidth: 1))
+                .frame(width: size, height: size)
+        }
+    }
+
+    /// Glass wants something behind it to bend: a wash of the day's top
+    /// colours, faint, diagonal like the launcher tiles' gradient, and a
+    /// light from the top-leading corner. Empty days get the light alone.
+    private func columnWash(_ day: DateInterval) -> some View {
+        let groups = CalendarLayout.dayGroups(spans: model.history.spans, day: day).prefix(3)
+        let colors = groups.map { color(for: $0.label).opacity(0.14) } + [Color.clear]
+        return ZStack {
+            LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            RadialGradient(colors: [Color.white.opacity(0.07), .clear],
+                           center: .topLeading, startRadius: 0, endRadius: 600)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// One glass container per column, so neighbouring blocks' glass
+    /// resolves together (and cheaper than one effect per block).
+    @ViewBuilder
+    private func glassContainer<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        if #available(macOS 26, iOS 26, *) {
+            GlassEffectContainer(spacing: 4) { content() }
+        } else {
+            content()
         }
     }
 
@@ -782,4 +850,28 @@ private struct CalendarSegment: Identifiable {
     let lane: Int
     let laneCount: Int
     var id: String { "\(span.id)-\(Int(interval.start.timeIntervalSince1970))" }
+}
+
+
+/// The block's surface (#302): liquid glass tinted with the block colour
+/// where the OS has it, the flat tinted fill before that. A running span
+/// keeps its accent border on either.
+private struct BlockSurface: ViewModifier {
+    let color: Color
+    let running: Bool
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+        if #available(macOS 26, iOS 26, *) {
+            content
+                .glassEffect(.regular.tint(color.opacity(0.82)), in: shape)
+                .overlay(shape.strokeBorder(running ? Color.accentColor : color.contrastingTextColor.opacity(0.18),
+                                            lineWidth: running ? 1.5 : 0.5))
+        } else {
+            content
+                .background(shape.fill(color.opacity(0.9)))
+                .overlay(shape.strokeBorder(running ? Color.accentColor : color.opacity(0.4),
+                                            lineWidth: running ? 1.5 : 0.5))
+        }
+    }
 }
