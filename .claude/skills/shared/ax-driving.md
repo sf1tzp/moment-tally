@@ -296,8 +296,11 @@ skills, so the two don't drift.
   misses. Compute `y + 12` from the AXRadioGroup position, or click via AX.
   (The History "Count marks" group that taught this left with #291; the
   rule holds for any segmented control.)
-- History rows (#291): "Add breakdown" is a named button under the rows
-  (`click button "Add breakdown" of …` works); a row's remove button has
-  help "Remove breakdown" and is absent while only one row remains. The
-  first row's `pop up button 1` opens reliably via AX — good enough for
-  restoring its key; use coordinates for the rest.
+- History rows (#291): "Add breakdown" carries no AX name; it is
+  `button 1 of scroll area 1 of group 1 of group 1 of window "Moment Tally"`
+  with help "Another breakdown of the same window" (a `click` on it works).
+  A row's remove button has help "Remove breakdown" and is absent while only
+  one row remains. The first row's `pop up button 1` opens reliably via AX
+  — good enough for restoring its key; use coordinates for the rest. The
+  legend's Other row (#292) is a plain button labelled "Other, N values"
+  with value expanded/collapsed.

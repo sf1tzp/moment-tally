@@ -132,10 +132,12 @@ package struct HistoryChartsView: View {
 
     /// Rows flow into as many columns as fit a minimum row width: one on a
     /// phone, a floor-sized Mac window or a portrait iPad, two once the
-    /// canvas passes ~1060pt. Compact widths pin a single flexible column
+    /// canvas passes ~1060pt. A lone row takes the whole width instead of
+    /// the adaptive half (it has nothing to sit beside, and the width buys
+    /// it a bigger donut), and compact widths pin a single flexible column
     /// rather than trusting the adaptive item to shrink below its minimum.
     private var rowColumns: [GridItem] {
-        isCompact
+        isCompact || model.history.chartRows.count == 1
             ? [GridItem(.flexible(), alignment: .topLeading)]
             : [GridItem(.adaptive(minimum: 520), spacing: 24, alignment: .topLeading)]
     }

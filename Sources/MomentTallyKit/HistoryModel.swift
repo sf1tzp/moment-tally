@@ -521,7 +521,10 @@ package final class HistoryModel {
         return "\(outerLabel)\(pairSeparator)\(innerLabel)"
     }
 
-    /// Chart-window totals per series of a breakdown, largest first.
+    /// Chart-window totals per series of a breakdown, largest first; ties
+    /// break alphabetically, so equal series keep one order across renders
+    /// (an unstable tie flipped which of two 3h 45m values folded into Other
+    /// on every legend toggle).
     package func totals(for row: ChartBreakdown) -> [SeriesTotal] {
         var sums: [String: TimeInterval] = [:]
         let interval = chartInterval
@@ -531,7 +534,7 @@ package final class HistoryModel {
             sums[label, default: 0] += seconds
         }
         return sums.map { SeriesTotal(label: $0.key, seconds: $0.value) }
-            .sorted { $0.seconds > $1.seconds }
+            .sorted { $0.seconds != $1.seconds ? $0.seconds > $1.seconds : $0.label < $1.label }
     }
 
     /// Per-bucket, per-series totals of a breakdown across the chart window,
