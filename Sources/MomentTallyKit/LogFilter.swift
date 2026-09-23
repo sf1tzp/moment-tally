@@ -6,6 +6,12 @@ import MomentTallyCore
 /// free-text term; all tokens must match (AND). A deliberately tiny parser,
 /// kept apart from the view so the field can grow into the #52 query
 /// language instead of being replaced.
+///
+/// Around the typed text sits the structured part (#298) — the filter
+/// another surface hands the Log: `labels` a row must carry exactly, and
+/// a `window` a row must overlap. The Log shows each as a removable chip
+/// above the field; `parse` never produces them, and they survive edits
+/// to the text. Everything ANDs.
 package struct LogFilter: Equatable {
     /// One parsed `key:value` token. A bare value matches as a prefix; a
     /// quoted value (`client:"app"`) must match exactly — the escape hatch
@@ -31,13 +37,45 @@ package struct LogFilter: Equatable {
     /// Free-text tokens — each must appear as a case-insensitive substring
     /// somewhere in the span's label keys, label values, or note.
     package var terms: [String] = []
+    /// Structured label chips (#298): the span must carry every one, key
+    /// and value exact (a legend value is a whole value, not a prefix —
+    /// `editing` must not also keep `editing-review`). "(no value)" in a
+    /// legend is the empty value here.
+    package var labels: [SpanLabel] = []
+    /// Structured window chip (#298): the span must overlap it — a
+    /// Calendar day, or a run of hours inside one. Running spans extend
+    /// to `now`, so today's window keeps the running row.
+    package var window: DateInterval?
 
-    package init(pairs: [Pair] = [], terms: [String] = []) {
+    package init(pairs: [Pair] = [], terms: [String] = [],
+                 labels: [SpanLabel] = [], window: DateInterval? = nil) {
         self.pairs = pairs
         self.terms = terms
+        self.labels = labels
+        self.window = window
     }
 
-    package var isEmpty: Bool { pairs.isEmpty && terms.isEmpty }
+    package var isEmpty: Bool {
+        pairs.isEmpty && terms.isEmpty && labels.isEmpty && window == nil
+    }
+
+    /// The chips' part alone — what a hand-off sets and the chips clear.
+    package var hasStructure: Bool { !labels.isEmpty || window != nil }
+
+    /// This filter's typed part replaced by `text`'s parse, the chips kept:
+    /// how the Log composes the field with the hand-off.
+    package func withText(_ text: String) -> LogFilter {
+        var merged = LogFilter.parse(text)
+        merged.labels = labels
+        merged.window = window
+        return merged
+    }
+
+    /// Everything but the chips: the Log drops the structure when a
+    /// hand-off's span would otherwise be hidden by it.
+    package var withoutStructure: LogFilter {
+        LogFilter(pairs: pairs, terms: terms)
+    }
 
     package static func parse(_ text: String) -> LogFilter {
         var filter = LogFilter()
@@ -87,7 +125,15 @@ package struct LogFilter: Equatable {
         return tokens
     }
 
-    package func matches(_ span: TimeSpan) -> Bool {
+    package func matches(_ span: TimeSpan, now: Date = Date()) -> Bool {
+        if let window {
+            let end = span.end ?? now
+            guard span.start < window.end, end > window.start else { return false }
+        }
+        for label in labels {
+            guard span.labels.contains(where: { pairMatches(Self.exact(label), $0) })
+            else { return false }
+        }
         for pair in pairs {
             guard span.labels.contains(where: { pairMatches(pair, $0) })
             else { return false }
@@ -104,8 +150,15 @@ package struct LogFilter: Equatable {
     /// selects it, or a free-text term appears in its key or value. The Log
     /// view uses this to move matched pills to the front of a row.
     package func highlights(_ label: SpanLabel) -> Bool {
-        pairs.contains { pairMatches($0, label) }
+        labels.contains { pairMatches(Self.exact($0), label) }
+            || pairs.contains { pairMatches($0, label) }
             || terms.contains { termMatches($0, label) }
+    }
+
+    /// A chip as the exact pair it matches by — the quoted `key:"value"`
+    /// spelling of the same thing.
+    private static func exact(_ label: SpanLabel) -> Pair {
+        Pair(key: label.key, value: label.value, exact: true)
     }
 
     /// `labels` reordered so highlighted ones come first, each group keeping

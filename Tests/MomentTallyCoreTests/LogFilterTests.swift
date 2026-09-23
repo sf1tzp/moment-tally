@@ -190,5 +190,94 @@ import Testing
         #expect(LogFilter.parse("").matches(span()))
         #expect(LogFilter.parse("").matches(span(labels: [SpanLabel(key: "a", value: "b")])))
     }
+
+    // MARK: Structured chips (#298)
+
+    private func span(id: Int = 1, start: TimeInterval, end: TimeInterval?,
+                      labels: [SpanLabel] = []) -> TimeSpan {
+        TimeSpan(id: id, start: Date(timeIntervalSince1970: start),
+                 end: end.map { Date(timeIntervalSince1970: $0) },
+                 note: "", labels: labels)
+    }
+
+    @Test func labelChipsMatchExactlyAndANDTogether() {
+        // A legend value is a whole value: `editing` must not keep
+        // `editing-review` the way a typed prefix would.
+        let editing = SpanLabel(key: "type", value: "editing")
+        let filter = LogFilter(labels: [editing])
+        #expect(filter.matches(span(labels: [editing])))
+        #expect(!filter.matches(span(labels: [SpanLabel(key: "type", value: "editing-review")])))
+        #expect(!filter.matches(span(labels: [SpanLabel(key: "project", value: "editing")])))
+
+        let pair = LogFilter(labels: [editing, SpanLabel(key: "project", value: "menu-shoot")])
+        #expect(pair.matches(span(labels: [editing, SpanLabel(key: "project", value: "menu-shoot")])))
+        #expect(!pair.matches(span(labels: [editing])))
+        // "(no value)" in a legend is the empty value: only an empty value matches.
+        let blank = LogFilter(labels: [SpanLabel(key: "type", value: "")])
+        #expect(blank.matches(span(labels: [SpanLabel(key: "type", value: "")])))
+        #expect(!blank.matches(span(labels: [editing])))
+    }
+
+    @Test func windowKeepsOverlappingSpansOnly() {
+        let window = DateInterval(start: Date(timeIntervalSince1970: 1_000),
+                                  end: Date(timeIntervalSince1970: 2_000))
+        let filter = LogFilter(window: window)
+        #expect(filter.matches(span(start: 1_200, end: 1_800)))     // inside
+        #expect(filter.matches(span(start: 500, end: 1_200)))       // straddles the start
+        #expect(filter.matches(span(start: 1_800, end: 2_500)))     // straddles the end
+        #expect(filter.matches(span(start: 500, end: 2_500)))       // covers it
+        #expect(!filter.matches(span(start: 2_000, end: 2_500)))    // starts at the end
+        #expect(!filter.matches(span(start: 500, end: 1_000)))      // ends at the start
+        // A running span extends to `now`.
+        #expect(filter.matches(span(start: 500, end: nil), now: Date(timeIntervalSince1970: 1_500)))
+        #expect(!filter.matches(span(start: 500, end: nil), now: Date(timeIntervalSince1970: 800)))
+    }
+
+    @Test func chipsAndTextCompose() {
+        let chips = LogFilter(labels: [SpanLabel(key: "type", value: "editing")])
+        let composed = chips.withText("review")
+        #expect(composed.labels == chips.labels)
+        #expect(composed.terms == ["review"])
+        #expect(composed.hasStructure)
+        #expect(!composed.isEmpty)
+        // Text alone has no structure; chips alone aren't empty.
+        #expect(!LogFilter.parse("review").hasStructure)
+        #expect(!chips.isEmpty)
+        #expect(chips.withoutStructure.isEmpty)
+        #expect(LogFilter().isEmpty)
+        // And the parse never invents chips.
+        #expect(LogFilter.parse("type:editing").labels.isEmpty)
+    }
+
+    @Test func labelChipsHighlightTheirPill() {
+        let editing = SpanLabel(key: "type", value: "editing")
+        let other = SpanLabel(key: "project", value: "menu-shoot")
+        let filter = LogFilter(labels: [editing])
+        #expect(filter.highlights(editing))
+        #expect(!filter.highlights(other))
+        #expect(filter.highlightedFirst([other, editing]) == [editing, other])
+    }
+
+    // MARK: History legend → chips (#298)
+
+    @Test func seriesLabelBecomesTheRowKeyChip() {
+        let row = ChartBreakdown(key: "type")
+        #expect(HistoryModel.labels(forSeries: "editing", row: row)
+            == [SpanLabel(key: "type", value: "editing")])
+        #expect(HistoryModel.labels(forSeries: "(no value)", row: row)
+            == [SpanLabel(key: "type", value: "")])
+    }
+
+    @Test func pairLabelBecomesBothKeysChips() {
+        let row = ChartBreakdown(key: "type", across: "project")
+        let pair = HistoryModel.pairLabel(tags: [SpanLabel(key: "type", value: "editing"),
+                                                 SpanLabel(key: "project", value: "menu-shoot")],
+                                          outer: "type", inner: "project")!
+        #expect(HistoryModel.labels(forSeries: pair, row: row)
+            == [SpanLabel(key: "type", value: "editing"),
+                SpanLabel(key: "project", value: "menu-shoot")])
+        // A label with no separator isn't a pair series.
+        #expect(HistoryModel.labels(forSeries: "editing", row: row) == nil)
+    }
 }
 #endif

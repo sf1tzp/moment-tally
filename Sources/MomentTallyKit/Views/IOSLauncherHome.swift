@@ -91,15 +91,15 @@ struct LauncherSurface: View {
     /// Every start from a card or its chips (#255): collapse, start, and —
     /// when the labels still carry a value-less one (`deliverable:`) — hand
     /// the new span to the Log's row editor with that value field focused,
-    /// the #162 fill-in-the-value-per-start workflow. `requestLogEdit`
-    /// claims the session synchronously so the Log renders its expanded row
-    /// in the same pass as the section switch (#130).
+    /// the #162 fill-in-the-value-per-start workflow. `requestLog` claims
+    /// the session synchronously so the Log renders its expanded row in
+    /// the same pass as the section switch (#130).
     private func start(_ labels: [SpanLabel]) async {
         withAnimation(.snappy) { expandedID = nil }
         guard let created = await model.start(tags: labels) else { return }
         if labels.contains(where: { $0.value.isEmpty }) {
             model.wantsValueFocusOnEditorAppear = true
-            model.history.requestLogEdit(of: created)
+            model.history.requestLog(editing: created)
             openAppSection(.log)
         }
     }

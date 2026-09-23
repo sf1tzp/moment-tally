@@ -281,7 +281,11 @@ package struct CalendarView: View {
 
     // MARK: Day headers
 
-    /// "Tue 22 · 2h 25m" per column; in week mode a tap opens the day.
+    /// "Tue 22 · 2h 25m" per column; in week mode a tap opens the day, in
+    /// day mode (the day already open) it opens the Log on the day (#298),
+    /// and a visible Log button at the header's trailing edge says so —
+    /// seven week columns have no room for one, so week → day → Log is
+    /// the path there. Either way the context menu offers the Log.
     private func dayHeaderRow(days: [DateInterval], tappable: Bool) -> some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: gutterWidth, height: 1)
@@ -298,19 +302,45 @@ package struct CalendarView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 3)
                 .contentShape(Rectangle())
-                if tappable {
-                    Button {
+                Button {
+                    if tappable {
                         model.history.showDay(day.start, switchingMode: true)
-                    } label: {
-                        label
+                    } else {
+                        showInLog(day)
                     }
-                    .buttonStyle(.plain)
-                    .help("Show this day")
-                } else {
+                } label: {
                     label
+                }
+                .buttonStyle(.plain)
+                .help(tappable ? "Show this day" : "Show this day in the Log")
+                .contextMenu {
+                    Button("Show in Log", systemImage: "list.bullet.rectangle") {
+                        showInLog(day)
+                    }
+                }
+                .overlay(alignment: .trailing) {
+                    if !tappable {
+                        Button {
+                            showInLog(day)
+                        } label: {
+                            Label("Show in Log", systemImage: "list.bullet.rectangle")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .padding(.trailing, 8)
+                        .help("Show this day's moments in the Log")
+                    }
                 }
             }
         }
+    }
+
+    /// Hand a day to the Log (#298): its rows under a "Tue 22" chip, the
+    /// week moved over first when the day is outside the loaded one (a
+    /// month card can be).
+    private func showInLog(_ day: DateInterval) {
+        model.history.requestLog(filter: LogFilter(window: day))
+        openAppSection(.log)
     }
 
     // MARK: Time grid (week + day)
@@ -545,7 +575,7 @@ package struct CalendarView: View {
         Button {
             // Hand the span to the Log tab and switch over — it scrolls to
             // the row and expands it.
-            model.history.requestLogEdit(of: segment.span)
+            model.history.requestLog(editing: segment.span)
             openAppSection(.log)
         } label: {
             HStack(alignment: .top, spacing: 5) {
@@ -608,8 +638,19 @@ package struct CalendarView: View {
             }
             Divider()
             Button("Edit in Log") {
-                model.history.requestLogEdit(of: segment.span)
+                model.history.requestLog(editing: segment.span)
                 openAppSection(.log)
+            }
+            // The filtered hops (#298): the block's day, or every moment
+            // carrying the block's marks — the "what else was this" question.
+            Button("Show Day in Log", systemImage: "calendar") {
+                showInLog(day)
+            }
+            if !segment.span.labels.isEmpty {
+                Button("Show Moments with These Marks in Log", systemImage: "tag") {
+                    model.history.requestLog(filter: LogFilter(labels: segment.span.labels))
+                    openAppSection(.log)
+                }
             }
         }
     }
@@ -940,6 +981,11 @@ package struct CalendarView: View {
         .accessibilityLabel(dayStart.formatted(.dateTime.weekday(.wide).month().day()))
         .accessibilityValue(total > 0 ? formatDuration(total) : "nothing marked")
         .help("Show this day")
+        .contextMenu {
+            Button("Show in Log", systemImage: "list.bullet.rectangle") {
+                showInLog(day)
+            }
+        }
     }
 
     // MARK: Segment layout (lane packing)

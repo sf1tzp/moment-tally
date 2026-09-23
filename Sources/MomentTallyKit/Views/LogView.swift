@@ -3,6 +3,12 @@ import MomentTallyCore
 
 /// The Log tab: a day-sectioned, scrollable list of the week's moments.
 /// Clicking a row expands it into an inline `TimeSpanEditorView`.
+///
+/// The list is narrowed by one `LogFilter` (#51, #298) in two layers: the
+/// chips another surface handed over (`HistoryModel.logFilter` — a legend
+/// value from History, a day from the Calendar) and the text typed here.
+/// The chips row sits above the field, each removable, so a short list
+/// says why.
 package struct LogView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openAppSection) private var openAppSection
@@ -12,7 +18,8 @@ package struct LogView: View {
     @Environment(\.outerScroll) private var outerScroll
     /// The id of the span currently expanded for editing (one at a time).
     @State private var editingID: Int?
-    /// The filter field's raw text (#51); parsed fresh each render.
+    /// The filter field's raw text (#51); parsed fresh each render and
+    /// composed over the model's chips (#298).
     @State private var filterText = ""
 
     package init() {}
@@ -34,6 +41,7 @@ package struct LogView: View {
         let history = model.history
         return VStack(spacing: 0) {
             WeekNavigatorView()
+            filterChips
             filterField
             Divider()
 
@@ -66,6 +74,10 @@ package struct LogView: View {
         .onAppear { consumePendingEdit(proxy) }
         .onChange(of: model.history.pendingLogEditID) { consumePendingEdit(proxy) }
         .onChange(of: model.history.isLoading) { consumePendingEdit(proxy) }
+        // A hand-off (#298) replaces the chips itself; the typed text is
+        // this view's, so it is dropped here — the list shows what the
+        // sender asked for, nothing narrower.
+        .onChange(of: model.history.logHandoffCount) { filterText = "" }
     }
 
     /// The week's rows under pinned day headers. Pinning is relative to
@@ -97,8 +109,14 @@ package struct LogView: View {
         guard let id = model.history.pendingLogEditID else { return }
         guard let span = model.history.spans.first(where: { $0.id == id }) else { return }
         model.history.pendingLogEditID = nil
-        if !filter.isEmpty, !filter.matches(span) { filterText = "" }
-        // No session claim here — for a running span, `requestLogEdit(of:)`
+        // The hand-off already dropped the typed text; the chips go too if
+        // they hide the row (a hand-off that set both asked for the row
+        // inside the filter, so normally they keep it).
+        if !filter.matches(span) {
+            filterText = ""
+            if !model.history.logFilter.matches(span) { clearChips() }
+        }
+        // No session claim here — for a running span, `requestLog(editing:)`
         // claimed it back at the sender, ahead of this render.
         editingID = id
         // Scroll once the row list (and the expanded editor) has laid out.
@@ -107,16 +125,83 @@ package struct LogView: View {
         }
     }
 
-    // MARK: Filtering (#51)
+    // MARK: Filtering (#51, #298)
 
-    private var filter: LogFilter { LogFilter.parse(filterText) }
+    /// The chips with the field's text parsed over them.
+    private var filter: LogFilter { model.history.logFilter.withText(filterText) }
+
+    private func clearChips() {
+        withAnimation(.snappy) { model.history.logFilter = LogFilter() }
+    }
+
+    private func clearFilter() {
+        filterText = ""
+        clearChips()
+    }
 
     /// The week's spans narrowed by the filter field (all of them when it's
     /// empty). Client-side over the already-loaded week.
     private var filteredSpans: [TimeSpan] {
         let filter = filter
         return filter.isEmpty ? model.history.spans
-                              : model.history.spans.filter(filter.matches)
+                              : model.history.spans.filter { filter.matches($0) }
+    }
+
+    /// The hand-off's chips (#298): one per label in its tag colour, one
+    /// for the window, each with its own ×. Only rendered while there are
+    /// any, so the plain Log keeps its shape.
+    @ViewBuilder
+    private var filterChips: some View {
+        let chips = model.history.logFilter
+        if chips.hasStructure {
+            FlowLayout(spacing: 4) {
+                if let window = chips.window {
+                    FilterChip(text: Self.windowLabel(window),
+                               symbol: "calendar",
+                               color: Color.accentColor,
+                               help: "Moments overlapping this window — click × to show the whole week") {
+                        withAnimation(.snappy) { model.history.logFilter.window = nil }
+                    }
+                }
+                ForEach(chips.labels, id: \.self) { label in
+                    FilterChip(text: label.value.isEmpty ? "\(label.key): (no value)"
+                                                         : "\(label.key): \(label.value)",
+                               symbol: nil,
+                               color: model.tagColor(for: label.key, value: label.value),
+                               help: "Moments marked \(label.key): \(label.value) — click × to drop this mark from the filter") {
+                        withAnimation(.snappy) {
+                            model.history.logFilter.labels.removeAll { $0 == label }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 6)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Filter chips")
+        }
+    }
+
+    /// "Tue 22" for a whole calendar day, "Tue 22 · 13:00 – 17:00" for a
+    /// run of hours inside one, both ends dated when the window crosses
+    /// midnight.
+    private static func windowLabel(_ window: DateInterval) -> String {
+        let calendar = Calendar.current
+        let day = Date.FormatStyle.dateTime.weekday(.abbreviated).day()
+        let startDay = calendar.startOfDay(for: window.start)
+        if window.start == startDay,
+           window.end == calendar.date(byAdding: .day, value: 1, to: startDay) {
+            return window.start.formatted(day)
+        }
+        let clock = TimeSpan.clock
+        // A window ending exactly at midnight still belongs to its day.
+        let lastMoment = window.end.addingTimeInterval(-1)
+        if calendar.isDate(lastMoment, inSameDayAs: window.start) {
+            return "\(window.start.formatted(day)) · \(clock.string(from: window.start)) – \(clock.string(from: window.end))"
+        }
+        return "\(window.start.formatted(day)) \(clock.string(from: window.start)) – "
+            + "\(lastMoment.formatted(day)) \(clock.string(from: window.end))"
     }
 
     private var filterField: some View {
@@ -307,16 +392,56 @@ package struct LogView: View {
     }
 
     private var noMatchState: some View {
-        VStack(spacing: 8) {
+        let text = filterText.trimmingCharacters(in: .whitespaces)
+        return VStack(spacing: 8) {
             Spacer()
             Image(systemName: "line.3.horizontal.decrease.circle")
                 .font(.system(size: 32))
                 .foregroundStyle(.secondary)
-            Text("No moments match “\(filterText.trimmingCharacters(in: .whitespaces))”")
+            Text(text.isEmpty ? "No moments match the filter"
+                              : "No moments match “\(text)”")
                 .foregroundStyle(.secondary)
-            Button("Clear Filter") { filterText = "" }
+            Button("Clear Filter") { clearFilter() }
             Spacer()
         }
         .frame(maxWidth: .infinity, minHeight: 200)
+    }
+}
+
+/// One removable chip of the Log's structured filter (#298): a label in its
+/// tag colour, or the window on the accent — the `TagPill` shape with an ×
+/// at its trailing end.
+private struct FilterChip: View {
+    let text: String
+    let symbol: String?
+    let color: Color
+    let help: String
+    let remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if let symbol {
+                Image(systemName: symbol)
+                    .font(.caption2.weight(.semibold))
+            }
+            Text(text)
+                .font(.caption2)
+                .lineLimit(1)
+            Button(action: remove) {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.bold))
+                    .padding(2)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(text) from the filter")
+        }
+        .padding(.leading, 7)
+        .padding(.trailing, 4)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(color))
+        .foregroundStyle(color.contrastingTextColor)
+        .help(help)
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
     }
 }

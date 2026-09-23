@@ -28,9 +28,15 @@ import Charts
 /// bar strip to that series (the other slices and rows dim) and a second
 /// tap clears it. Both are view state, keyed by the breakdown value so a
 /// key change starts the row fresh.
+///
+/// The Log is the next hop (#298): a selected series grows a Log button
+/// on its legend row, and every series row (folded ones too) offers
+/// "Show in Log" in its context menu — the Log opens filtered to the
+/// series' label, or the label pair under `across`.
 package struct HistoryChartsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openAppSection) private var openAppSection
     /// Width the grid gives each row — every row gets the same, so one
     /// measurement serves all. Zero until the first layout pass.
     @State private var rowWidth: CGFloat = 0
@@ -239,6 +245,14 @@ package struct HistoryChartsView: View {
                         }
                     }
                 }
+                // The Log hop (#298): the series' labels become the Log's
+                // chips. Other isn't a series, so it never gets here.
+                let open: (String) -> Void = { label in
+                    guard let labels = HistoryModel.labels(forSeries: label, row: breakdown)
+                    else { return }
+                    model.history.requestLog(filter: LogFilter(labels: labels))
+                    openAppSection(.log)
+                }
                 let pairLayout = isCompact
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
                     : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
@@ -254,11 +268,11 @@ package struct HistoryChartsView: View {
                     if breakdown.across == nil {
                         breakdownList(totals: totals, tail: fold.tail, colors: colors,
                                       grand: grand, expanded: expanded,
-                                      selected: selected, select: select)
+                                      selected: selected, select: select, open: open)
                     } else {
                         combinedBreakdownList(totals: totals, tail: fold.tail, colors: colors,
                                               grand: grand, expanded: expanded,
-                                              selected: selected, select: select)
+                                              selected: selected, select: select, open: open)
                     }
                 }
 
@@ -499,7 +513,8 @@ package struct HistoryChartsView: View {
     private func breakdownList(totals: [SeriesTotal], tail: [SeriesTotal],
                                colors: [String: Color], grand: TimeInterval,
                                expanded: Binding<Bool>,
-                               selected: String?, select: @escaping (String) -> Void) -> some View {
+                               selected: String?, select: @escaping (String) -> Void,
+                               open: @escaping (String) -> Void) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 5) {
             ForEach(totals) { item in
                 if item.label == Self.otherLabel {
@@ -507,13 +522,13 @@ package struct HistoryChartsView: View {
                              expanded: expanded, font: .callout,
                              selected: selected, select: select)
                     if expanded.wrappedValue {
-                        tailRows(tail, grand: grand)
+                        tailRows(tail, grand: grand, open: open)
                     }
                 } else {
                     seriesRow(label: item.label, title: item.label,
                               color: colors[item.label] ?? .gray,
                               seconds: item.seconds, grand: grand, font: .callout,
-                              selected: selected, select: select)
+                              selected: selected, select: select, open: open)
                 }
             }
         }
@@ -521,30 +536,52 @@ package struct HistoryChartsView: View {
 
     /// One selectable legend row: dot, title, duration, share. `label` is
     /// the series (a pair label under across), `title` what the row shows.
-    /// With a filter active, every other row dims to point at the one kept.
+    /// With a filter active, every other row dims to point at the one kept
+    /// — and that one grows the Log button (#298); the context menu offers
+    /// the same hop on every row.
     private func seriesRow(label: String, title: String, color: Color,
                            seconds: TimeInterval, grand: TimeInterval, font: Font,
                            indent: CGFloat = 0,
-                           selected: String?, select: @escaping (String) -> Void) -> some View {
+                           selected: String?, select: @escaping (String) -> Void,
+                           open: @escaping (String) -> Void) -> some View {
         GridRow {
-            Button {
-                select(label)
-            } label: {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(color)
-                        .frame(width: 8, height: 8)
-                    Text(title)
-                        .lineLimit(1)
+            HStack(spacing: 6) {
+                Button {
+                    select(label)
+                } label: {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 8, height: 8)
+                        Text(title)
+                            .lineLimit(1)
+                    }
+                    .padding(.leading, indent)
+                    .contentShape(Rectangle())
                 }
-                .padding(.leading, indent)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .accessibilityLabel(title)
+                .accessibilityValue(selected == label ? "filtering the bars" : "")
+                .help(selected == label ? "Show every series in the bars"
+                      : "Show only this series in the bars")
+                .contextMenu {
+                    Button("Show in Log", systemImage: "list.bullet.rectangle") {
+                        open(label)
+                    }
+                }
+                if selected == label {
+                    Button {
+                        open(label)
+                    } label: {
+                        Image(systemName: "list.bullet.rectangle")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Show these moments in the Log")
+                    .help("Show these moments in the Log")
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(title)
-            .accessibilityValue(selected == label ? "filtering the bars" : "")
-            .help(selected == label ? "Show every series in the bars"
-                  : "Show only this series in the bars")
             Text(formatDuration(seconds))
                 .monospacedDigit()
                 .gridColumnAlignment(.trailing)
@@ -613,8 +650,10 @@ package struct HistoryChartsView: View {
 
     /// The folded values under an open Other row: indented, a hollow dot in
     /// place of a slice color (they share Other's gray slice), each with its
-    /// own duration and share of the donut.
-    private func tailRows(_ tail: [SeriesTotal], grand: TimeInterval) -> some View {
+    /// own duration and share of the donut. Not selectable (they have no
+    /// bars of their own), but the Log hop is in their context menu.
+    private func tailRows(_ tail: [SeriesTotal], grand: TimeInterval,
+                          open: @escaping (String) -> Void) -> some View {
         ForEach(tail) { item in
             GridRow {
                 HStack(spacing: 6) {
@@ -625,6 +664,12 @@ package struct HistoryChartsView: View {
                         .lineLimit(1)
                 }
                 .padding(.leading, 14)
+                .contentShape(Rectangle())
+                .contextMenu {
+                    Button("Show in Log", systemImage: "list.bullet.rectangle") {
+                        open(item.label)
+                    }
+                }
                 Text(formatDuration(item.seconds))
                     .monospacedDigit()
                     .gridColumnAlignment(.trailing)
@@ -692,7 +737,8 @@ package struct HistoryChartsView: View {
     private func combinedBreakdownList(totals: [SeriesTotal], tail: [SeriesTotal],
                                        colors: [String: Color], grand: TimeInterval,
                                        expanded: Binding<Bool>,
-                                       selected: String?, select: @escaping (String) -> Void) -> some View {
+                                       selected: String?, select: @escaping (String) -> Void,
+                                       open: @escaping (String) -> Void) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 5) {
             ForEach(combinedSections(from: totals)) { section in
                 if section.rows.isEmpty {
@@ -703,7 +749,7 @@ package struct HistoryChartsView: View {
                              expanded: expanded, font: .callout.weight(.medium),
                              selected: selected, select: select)
                     if expanded.wrappedValue {
-                        tailRows(tail, grand: grand)
+                        tailRows(tail, grand: grand, open: open)
                     }
                 } else {
                     // Headings aren't series, so they don't select; they
@@ -723,7 +769,7 @@ package struct HistoryChartsView: View {
                     seriesRow(label: row.pair, title: row.inner,
                               color: colors[row.pair] ?? .gray,
                               seconds: row.seconds, grand: grand, font: .callout, indent: 14,
-                              selected: selected, select: select)
+                              selected: selected, select: select, open: open)
                 }
             }
         }

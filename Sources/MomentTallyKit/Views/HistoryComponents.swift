@@ -518,7 +518,9 @@ extension TimeSpan {
         return "\(startText) – \(Self.clock.string(from: end))"
     }
 
-    private static let clock: DateFormatter = {
+    /// The 24-hour clock every surface spells times in; the Log's window
+    /// chip (#298) borrows it.
+    package static let clock: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "HH:mm"

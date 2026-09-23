@@ -366,10 +366,10 @@ package struct TagReviewView: View {
     }
 
     /// Hand a span to the Log tab and switch over — the same #130 hand-off
-    /// the Calendar's blocks use. `requestLogEdit` moves the Log's week to
-    /// the span first when it's outside the loaded one.
+    /// the Calendar's blocks use. `requestLog` moves the Log's week to the
+    /// span first when it's outside the loaded one.
     private func openInLog(_ span: TimeSpan) {
-        model.history.requestLogEdit(of: span)
+        model.history.requestLog(editing: span)
         openAppSection(.log)
     }
 

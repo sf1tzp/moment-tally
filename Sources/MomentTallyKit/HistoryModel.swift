@@ -177,26 +177,60 @@ package final class HistoryModel {
     /// Log tab should scroll to and open for editing when it next appears.
     /// The Log view clears it once consumed.
     package var pendingLogEditID: Int?
+    /// The Log's structured filter (#298): the label chips and the window
+    /// another surface handed it — a legend value from History, a day from
+    /// the Calendar. Only the chips live here; the Log's typed text stays
+    /// with its field, composed over this via `LogFilter.withText`. The Log
+    /// clears it chip by chip, or whole.
+    package var logFilter = LogFilter()
+    /// Bumped by every `requestLog`: the Log clears its typed text on the
+    /// change, so a hand-off lands on exactly what it asked for rather than
+    /// on that narrowed by whatever was left in the field.
+    package private(set) var logHandoffCount = 0
 
-    /// Ask the Log tab to open this span's editor (#130). For a running span
-    /// this also claims the shared edit session — synchronously, before the
-    /// caller triggers the tab switch: the Log can render its expanded row in
-    /// the same pass, and an unclaimed running editor collapses itself (see
-    /// `TimeSpanEditorView.runningBody`).
-    package func requestLogEdit(of span: TimeSpan) {
-        pendingLogEditID = span.id
-        if span.isRunning {
+    /// The one door into the Log (#298): show the rows `filter` keeps and,
+    /// with `editing`, scroll to that span and open its editor (#130). The
+    /// filter replaces the chips outright — a hand-off lands on what it
+    /// asked for, not on what was left over — and an editing hand-off with
+    /// no filter lands on the plain list, its row expanded.
+    ///
+    /// For a running span this also claims the shared edit session —
+    /// synchronously, before the caller triggers the tab switch: the Log can
+    /// render its expanded row in the same pass, and an unclaimed running
+    /// editor collapses itself (see `TimeSpanEditorView.runningBody`).
+    package func requestLog(filter: LogFilter = LogFilter(), editing span: TimeSpan? = nil) {
+        logFilter = LogFilter(labels: filter.labels, window: filter.window)
+        logHandoffCount += 1
+        pendingLogEditID = span?.id
+        if let span, span.isRunning {
             app.claimEditingNow(span)
         }
         // The Log shows one week; a hand-off can point outside it (Label
-        // Review scans months back, #69). Move the week over so the span is
-        // actually in the loaded list — the Log consumes the pending id once
-        // the reload delivers it.
-        if !weekInterval.contains(span.start),
-           let start = Calendar.current.dateInterval(of: .weekOfYear, for: span.start)?.start {
+        // Review scans months back, #69; a Calendar day in another month).
+        // Move the week over so the target is actually in the loaded list —
+        // the Log consumes a pending id once the reload delivers it.
+        let target = span?.start ?? filter.window?.start
+        if let target, !weekInterval.contains(target),
+           let start = Calendar.current.dateInterval(of: .weekOfYear, for: target)?.start {
             weekStart = start
             Task { await reload() }
         }
+    }
+
+    /// The label chips a History legend series stands for (#298): the row's
+    /// key with the series value, or both keys under `across` — the pair
+    /// label split at its first separator, `seriesLabel`'s "(no value)"
+    /// read back as the empty value. Nil for a label that isn't a series
+    /// (the folded Other).
+    package nonisolated static func labels(forSeries label: String,
+                                           row: ChartBreakdown) -> [SpanLabel]? {
+        func value(_ text: String) -> String { text == "(no value)" ? "" : text }
+        guard let across = row.across else {
+            return [SpanLabel(key: row.key, value: value(label))]
+        }
+        guard let separator = label.range(of: pairSeparator) else { return nil }
+        return [SpanLabel(key: row.key, value: value(String(label[..<separator.lowerBound]))),
+                SpanLabel(key: across, value: value(String(label[separator.upperBound...])))]
     }
 
     /// True once a load has completed, so mutations elsewhere in the app (e.g.
@@ -477,6 +511,7 @@ package final class HistoryModel {
         // The range and rows are the user's setup, not the store's data —
         // they stay (a key the new store lacks just charts empty).
         pendingLogEditID = nil  // span ids mean nothing in the new store
+        logFilter = LogFilter()
     }
 
     package func reload() async {
