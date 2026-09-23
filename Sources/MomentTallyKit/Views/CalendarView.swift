@@ -12,7 +12,9 @@ import MomentTallyCore
 /// (pinch, the −/+ buttons, ⌘−/⌘=) changes the points per hour of the
 /// week and day grids, and the grid shows the working day by default —
 /// 07:00–22:00, widened to cover any span outside it — so the empty night
-/// doesn't eat the canvas; a 24h toggle shows everything.
+/// doesn't eat the canvas; a 24h toggle shows everything. The zoom has a
+/// floor: the visible hours always fill the grid's viewport (#303), so a
+/// portrait iPad or a tall window never ends in a blank band.
 ///
 /// Overlapping spans share the column width via lane packing; tapping a
 /// block jumps to the Log tab with that span open for editing (#130 — the
@@ -46,6 +48,10 @@ package struct CalendarView: View {
     @State private var topHour: Double = 8
     /// Set when a pinch ends: the hour at the top when it began.
     @State private var pinchAnchor: Double?
+    /// The grid's viewport height (#303): the visible hours stretch to fill
+    /// it when the zoom alone would leave the page short — a working day
+    /// at 40pt/h is 600pt, and a portrait iPad has 1000 to give.
+    @State private var viewportHeight: CGFloat = 0
 
     private let gutterWidth: CGFloat = 46
 
@@ -60,7 +66,17 @@ package struct CalendarView: View {
     }
 
     private var setup: CalendarSetup { model.history.calendarSetup }
-    private var hourHeight: CGFloat { CGFloat(setup.hourHeight) }
+    /// The points per hour that fill the viewport with the visible hours —
+    /// the zoom's floor. Zero until the viewport is known (or when there is
+    /// none: the outer-scroll embedding lays the grid out at its zoom).
+    private var fillHourHeight: Double {
+        guard viewportHeight > 0 else { return 0 }
+        return Double(viewportHeight) / Double(max(1, visibleHours.count))
+    }
+    /// The effective scale: the zoom, or the fill floor when that's taller
+    /// (#303) — so the grid always reaches the bottom of its viewport and
+    /// zooming in past the fill still grows it through the scroll.
+    private var hourHeight: CGFloat { CGFloat(max(setup.hourHeight, fillHourHeight)) }
 
     package var body: some View {
         @Bindable var history = model.history
@@ -210,7 +226,10 @@ package struct CalendarView: View {
                     Image(systemName: "minus.magnifyingglass")
                 }
                 .keyboardShortcut("-", modifiers: .command)
-                .disabled(setup.hourHeight <= CalendarSetup.hourHeightRange.lowerBound)
+                // Nothing to zoom out to once the grid is at its fill
+                // floor: a smaller zoom would draw the same grid.
+                .disabled(setup.hourHeight <= max(CalendarSetup.hourHeightRange.lowerBound,
+                                                  fillHourHeight))
                 .accessibilityLabel("Zoom out")
                 .help("Zoom out (⌘−)")
                 Button { zoom(by: 1.25) } label: {
@@ -242,8 +261,11 @@ package struct CalendarView: View {
         .help("Refresh")
     }
 
+    /// Steps from the effective scale, not the stored zoom: with the grid
+    /// at its fill floor, the first zoom-in should grow it, not spend a
+    /// step catching the stored value up.
     private func zoom(by factor: Double) {
-        setHourHeight(setup.hourHeight * factor)
+        setHourHeight(Double(hourHeight) * factor)
     }
 
     private func setHourHeight(_ value: Double) {
@@ -311,7 +333,7 @@ package struct CalendarView: View {
         .gesture(
             MagnifyGesture()
                 .onChanged { value in
-                    let base = pinchBase ?? setup.hourHeight
+                    let base = pinchBase ?? Double(hourHeight)
                     pinchBase = base
                     setHourHeight(base * value.magnification)
                 }
@@ -337,6 +359,11 @@ package struct CalendarView: View {
                             }
                     }
                     .coordinateSpace(name: "calendarScroll")
+                    // The fill floor follows the viewport: a window resize
+                    // or a rotation re-stretches the grid.
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        viewportHeight = height
+                    }
                     .onPreferenceChange(ScrollOffsetKey.self) { offset in
                         topHour = Double(hours.lowerBound) + Double(offset + Self.labelClearance) / hourHeight
                     }
