@@ -5,7 +5,7 @@ import Foundation
 /// of cases lives here. (History adds "the displayed week" as a nil case on
 /// its optional selection rather than here: a navigable week isn't a trailing
 /// window, and the review has no use for it.)
-package enum TrailingRange: String, CaseIterable, Identifiable {
+package enum TrailingRange: String, CaseIterable, Identifiable, Codable {
     case days30, days90, year, all
     package var id: String { rawValue }
 
