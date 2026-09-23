@@ -24,7 +24,32 @@ On a machine with no codesigning identity (e.g. macbook-air), skip `just
 build` and use plain `swift build`. Demo mode (`--demo` or `MOMENTTALLY_DEMO=1`)
 never touches the Keychain — token reads and sync connects are guarded by
 `!isDemo` — so the unsigned binary launches with zero prompts and is the
-preferred target for screenshots and AX driving there.
+preferred target for screenshots and AX driving there. Add
+`MOMENTTALLY_DEMO_ONBOARDED=1` to start past the onboarding tour (demo mode
+only; the real flag is never touched) — a verify launch is then:
+
+```bash
+MOMENTTALLY_DEMO=1 MOMENTTALLY_DEMO_ONBOARDED=1 ./.build/debug/MomentTally &
+SIMCTL_CHILD_MOMENTTALLY_DEMO=1 SIMCTL_CHILD_MOMENTTALLY_DEMO_ONBOARDED=1 just ios-run
+```
+
+## Looking at it (token budget)
+
+Screenshots are the cost of a verify session, and a review eye needs a
+third of capture density. `source .claude/skills/shared/verify.zsh` (it
+sources the capture drivers' lib.zsh too) and use:
+
+- `vshot out.png "Moment Tally"` / `simshot out.png "iPad mini (A17 Pro)"`
+  — window-ID and simulator stills downsampled to `VSHOT_MAX` (900px long
+  edge; `VSHOT_MAX=0` for full size). Read these, not raw captures.
+- `vsheet sheet.png 500 3 a.png b.png …` — one contact sheet from many
+  shots (tile.swift): an eight-tab audit is one image read, not eight.
+- `devhub_tap "<sim>" x y [image.png]` / `devhub_swipe "<sim>" x1 y1 x2 y2
+  [image.png]` — touch the simulator at the pixel coordinates of a
+  screenshot you just read (default space: device pixels). The device
+  screen's frame is read live from Device Hub's accessibility tree
+  (`iOSContentGroup`), so a toggled sidebar/inspector re-maps itself; the
+  helper raises the window and focuses it with a title click first.
 
 **Keychain gotcha (fixed 2026-07-23 on macmini):** if launches prompt for the
 login-keychain password after every rebuild, the "TraggoMenuApp Dev" cert has
@@ -93,18 +118,12 @@ xcrun simctl ui "iPhone 17 Pro" appearance dark            # theme flips (light|
   Device Hub has no Rotate menu item: the rotate control is the last
   button in the device window's bottom toolbar (`cliclick` it — window
   origin + ~366,1023 at the matrix tiling), and `simctl` can't rotate.
-  Drag-scrolls in a device window work with the usual `dd:/m:/du:` recipe,
-  and taps are `cliclick c:` at the device point mapped onto the window
-  (`screencapture -R` the window region once, read the device screen's
-  frame off it: Mac point = frame origin + device point × frame/device
-  scale). The first click on a non-key Device Hub window only focuses it —
-  `AXRaise` the window, click a neutral spot, *then* tap. A stray click on
-  the window's toolbar toggles the sidebar or the Inspector, which shrinks
-  the device view, throws off every mapping and (via the Inspector's
-  Appearance row) can flip the simulator dark: re-check with a window
-  capture when taps stop landing, then View › Hide Sidebar / Inspectors ›
-  Hide Inspector and View › Zoom to Fit; `simctl ui <dev> appearance light`
-  restores the theme.
+  Touch through `devhub_tap` / `devhub_swipe` (above) rather than by-hand
+  `cliclick` mapping. A stray click on the window's toolbar toggles the
+  sidebar or the Inspector, which shrinks the device view and (via the
+  Inspector's Appearance row) can flip the simulator dark: View › Hide
+  Sidebar / Inspectors › Hide Inspector and View › Zoom to Fit restore the
+  view, `simctl ui <dev> appearance light` the theme.
 - **Device Hub, not Simulator.app:** Xcode 27 replaced Simulator.app with
   `Xcode.app/Contents/Applications/DeviceHub.app` — a tabbed window that
   shows one device at a time (a sidebar click switches the tab), hence one

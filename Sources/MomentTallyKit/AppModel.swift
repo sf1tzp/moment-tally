@@ -237,6 +237,10 @@ package final class AppModel {
         let suite = "MomentTallyDemo"
         let defaults = UserDefaults(suiteName: suite)!   // constant, valid name
         defaults.removePersistentDomain(forName: suite)
+        // A verify run's demo launch starts past the tour on request.
+        if DemoMode.skipsOnboarding {
+            defaults.set(true, forKey: Keys.hasCompletedOnboarding)
+        }
         return defaults
     }
 
