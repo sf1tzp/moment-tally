@@ -56,29 +56,11 @@ package struct CalendarSetup: Codable, Equatable {
     package var mode: CalendarMode = .week
     package var hourHeight: Double = 40
     package var fullDay: Bool = false
-    /// Month mode's day cards carry the icon of the day's top tally set
-    /// (#304) — Settings › Calendar › Top day icons turns them off when a
-    /// month reads cluttered.
-    package var showDayIcons: Bool = true
 
-    package init(mode: CalendarMode = .week, hourHeight: Double = 40, fullDay: Bool = false,
-                 showDayIcons: Bool = true) {
+    package init(mode: CalendarMode = .week, hourHeight: Double = 40, fullDay: Bool = false) {
         self.mode = mode
         self.hourHeight = hourHeight
         self.fullDay = fullDay
-        self.showDayIcons = showDayIcons
-    }
-
-    private enum CodingKeys: String, CodingKey { case mode, hourHeight, fullDay, showDayIcons }
-
-    /// Keys added after the first release decode as their defaults, so a
-    /// setup stored by an older build still restores.
-    package init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        mode = try c.decodeIfPresent(CalendarMode.self, forKey: .mode) ?? .week
-        hourHeight = try c.decodeIfPresent(Double.self, forKey: .hourHeight) ?? 40
-        fullDay = try c.decodeIfPresent(Bool.self, forKey: .fullDay) ?? false
-        showDayIcons = try c.decodeIfPresent(Bool.self, forKey: .showDayIcons) ?? true
     }
 
     package static let defaultsKey = "calendarSetup"
@@ -153,22 +135,10 @@ package final class HistoryModel {
     package private(set) var calendarDay: Date
     /// The first of the month the Calendar's month mode shows.
     package private(set) var calendarMonth: Date
-    /// Spans fetched per calendar month, keyed by the month's first day —
-    /// their own windows, like the charts' range, so the Log and Calendar
-    /// week stay a week. Month mode scrolls through months (#304), so
-    /// several can be resident; each loads as its section comes into view.
-    package private(set) var monthSpansByMonth: [Date: [TimeSpan]] = [:]
-    /// The months a fetch is in flight for; `isLoadingMonth` is their any.
-    package private(set) var loadingMonths: Set<Date> = []
-    package var isLoadingMonth: Bool { !loadingMonths.isEmpty }
-    /// Bumped when every resident month goes stale (a mutation landed): the
-    /// month sections key their load task on it so they refetch in place.
-    package private(set) var monthDataVersion = 0
-
-    /// The spans fetched for `month` (its first day), empty until loaded.
-    package func monthSpans(for month: Date) -> [TimeSpan] {
-        monthSpansByMonth[month] ?? []
-    }
+    /// Spans fetched for the calendar month — its own window, like the
+    /// charts' range, so the Log and Calendar week stay a week.
+    package private(set) var monthSpans: [TimeSpan] = []
+    package var isLoadingMonth = false
     /// Spans fetched for the charts' trailing range — kept apart from `spans`
     /// so the Log and Calendar stay on their week whatever the charts show.
     package private(set) var rangeSpans: [TimeSpan] = []
@@ -211,13 +181,10 @@ package final class HistoryModel {
     @ObservationIgnored private var loadedRange: TrailingRange?
     /// Invalidates in-flight range fetches when the range changes mid-fetch.
     @ObservationIgnored private var rangeGeneration = 0
-    /// The months `monthSpansByMonth` holds fresh data for — a month drops
-    /// out when a mutation lands (the data stays on screen, stale, until
-    /// its section refetches).
-    @ObservationIgnored private var loadedMonths: Set<Date> = []
-    /// Per-month fetch generations: a refetch of one month drops that
-    /// month's superseded fetch, not its neighbours'.
-    @ObservationIgnored private var monthGenerations: [Date: Int] = [:]
+    /// The month `monthSpans` was last fetched for — nil when never loaded
+    /// or gone stale after a mutation.
+    @ObservationIgnored private var loadedMonth: Date?
+    @ObservationIgnored private var monthGeneration = 0
 
     /// True while `init` restores the stored setup, so the observers above
     /// don't write it straight back.
@@ -376,11 +343,9 @@ package final class HistoryModel {
         }
     }
 
-    package var monthInterval: DateInterval { Self.monthInterval(of: calendarMonth) }
-
-    package static func monthInterval(of month: Date) -> DateInterval {
-        let end = Calendar.current.date(byAdding: .month, value: 1, to: month) ?? month
-        return DateInterval(start: month, end: end)
+    package var monthInterval: DateInterval {
+        let end = Calendar.current.date(byAdding: .month, value: 1, to: calendarMonth) ?? calendarMonth
+        return DateInterval(start: calendarMonth, end: end)
     }
 
     package var monthLabel: String {
@@ -398,13 +363,6 @@ package final class HistoryModel {
         Task { await loadMonthIfNeeded() }
     }
 
-    /// The month scroll (#304) reporting which month sits at the top: the
-    /// header label and the stepping follow it. No fetch — the sections
-    /// load themselves as they appear.
-    package func setCalendarMonth(_ month: Date) {
-        if month != calendarMonth { calendarMonth = month }
-    }
-
     /// Entering month mode from a week or day: show that month.
     package func alignMonthToDisplayedDay() {
         if let month = Calendar.current.dateInterval(of: .month, for: calendarDay)?.start,
@@ -413,43 +371,40 @@ package final class HistoryModel {
         }
     }
 
-    /// Fetch `month` (the calendar month by default) unless it is already
-    /// resident and fresh.
-    package func loadMonthIfNeeded(_ month: Date? = nil) async {
-        let month = month ?? calendarMonth
-        guard !loadedMonths.contains(month) else { return }
-        await reloadMonth(month)
+    /// Fetch the calendar month unless `monthSpans` already holds it.
+    package func loadMonthIfNeeded() async {
+        guard loadedMonth != calendarMonth else { return }
+        await reloadMonth()
     }
 
-    /// Page through one month, the range fetch's shape (#163): progress via
-    /// `loadingMonths`, a per-month generation counter drops a superseded
-    /// fetch of the same month.
-    package func reloadMonth(_ month: Date? = nil) async {
-        let month = month ?? calendarMonth
+    /// Page through the month, the range fetch's shape (#163): progress via
+    /// `isLoadingMonth`, a generation counter drops superseded fetches.
+    package func reloadMonth() async {
         guard let backend = app.api, app.isReady else { return }
-        let generation = (monthGenerations[month] ?? 0) + 1
-        monthGenerations[month] = generation
-        loadingMonths.insert(month)
-        defer { if generation == monthGenerations[month] { loadingMonths.remove(month) } }
+        monthGeneration += 1
+        let generation = monthGeneration
+        let month = calendarMonth
+        isLoadingMonth = true
+        defer { if generation == monthGeneration { isLoadingMonth = false } }
         do {
-            let interval = Self.monthInterval(of: month)
+            let interval = monthInterval
             var finished: [TimeSpan] = []
             var token: PageToken?
             for _ in 0..<500 {
                 let page = try await backend.timeSpans(from: interval.start, to: interval.end, page: token)
-                guard generation == monthGenerations[month] else { return }
+                guard generation == monthGeneration else { return }
                 finished += page.timeSpans
                 guard let next = page.nextPage, !page.timeSpans.isEmpty else { break }
                 token = next
             }
             let running = try await backend.timers()
-            guard generation == monthGenerations[month] else { return }
+            guard generation == monthGeneration else { return }
             var seen = Set<Int>()
-            monthSpansByMonth[month] = (running + finished).filter { seen.insert($0.id).inserted }
-            loadedMonths.insert(month)
+            monthSpans = (running + finished).filter { seen.insert($0.id).inserted }
+            loadedMonth = month
             errorMessage = nil
         } catch {
-            guard generation == monthGenerations[month] else { return }
+            guard generation == monthGeneration else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -468,11 +423,10 @@ package final class HistoryModel {
         rangeSpans = []
         loadedRange = nil
         isLoadingRange = false
-        for month in monthGenerations.keys { monthGenerations[month, default: 0] += 1 }
-        monthSpansByMonth = [:]
-        loadedMonths = []
-        loadingMonths = []
-        monthDataVersion += 1
+        monthGeneration += 1
+        monthSpans = []
+        loadedMonth = nil
+        isLoadingMonth = false
         errorMessage = nil
         // The range and rows are the user's setup, not the store's data —
         // they stay (a key the new store lacks just charts empty).
@@ -520,12 +474,10 @@ package final class HistoryModel {
     package func reloadIfLoaded() async {
         if hasLoaded { await reload() }
         await reloadRangeIfLoaded()
-        if !loadedMonths.isEmpty {
-            // Stale, not refetched here: the version bump re-runs the
-            // on-screen sections' load tasks, and any other resident month
-            // refetches when its section next appears.
-            loadedMonths = []
-            monthDataVersion += 1
+        if loadedMonth != nil {
+            // Stale, not refetched: the month refetches on its next look.
+            loadedMonth = nil
+            if calendarSetup.mode == .month { await reloadMonth() }
         }
     }
 
