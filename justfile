@@ -37,6 +37,7 @@ ios-build sim="iPhone 17 Pro": ios-project
 # SIMCTL_CHILD_MOMENTTALLY_DEMO=1 just ios-run
 ios-run sim="iPhone 17 Pro": ios-build
   xcrun simctl boot "{{sim}}" 2>/dev/null || true
+  scripts/sim-appearance.sh "{{sim}}"
   xcrun simctl install "{{sim}}" \
     ".build/ios-dd/Build/Products/Debug-iphonesimulator/Moment Tally.app"
   xcrun simctl launch "{{sim}}" com.streetfortress.MomentTally
@@ -49,12 +50,15 @@ ios-run sim="iPhone 17 Pro": ios-build
 ios-matrix:
   scripts/ios-matrix.sh
 
+
 # ios-matrix, then build once and install + launch on every booted
-# simulator — the change on every size class at once.
+# simulator — the change on every size class at once. Simulators follow the
+# Mac's appearance (scripts/sim-appearance.sh; MT_SIM_APPEARANCE overrides).
 ios-matrix-run: ios-matrix ios-build
   #!/usr/bin/env bash
   set -euo pipefail
   app=".build/ios-dd/Build/Products/Debug-iphonesimulator/Moment Tally.app"
+  scripts/sim-appearance.sh
   for udid in $(xcrun simctl list devices booted -j | python3 -c '
   import json, sys
   for devs in json.load(sys.stdin)["devices"].values():
@@ -62,6 +66,9 @@ ios-matrix-run: ios-matrix ios-build
     xcrun simctl install "$udid" "$app"
     xcrun simctl launch "$udid" com.streetfortress.MomentTally
   done
+
+ios-matrix-demo:
+  SIMCTL_CHILD_MOMENTTALLY_DEMO=1 SIMCTL_CHILD_MOMENTTALLY_DEMO_ONBOARDED=1 just ios-matrix-run
 
 # The core suite (MomentTallyCoreTests — everything free of the Mac
 # executable) against an iOS simulator destination.

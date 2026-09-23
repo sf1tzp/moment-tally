@@ -2,20 +2,37 @@ import Foundation
 import MomentTallyCore
 import Observation
 
-/// What the History (charts) tab groups time by: either every value of one tag
-/// key (like the web UI's "Projects" pie for `proj`), or the member tags of a
-/// saved tag set (one series per key:value pair in the set).
-package enum ChartGrouping: Hashable {
-    case key(String)
-    case tagSet(TagSet.ID)
+/// One breakdown row on the History tab (#291): the window's time grouped
+/// by the values of one tag key, optionally split `across` a second key —
+/// the "in Groups" nesting of #151, now a per-row choice rather than a
+/// header mode. Keys only: tallies (tag sets) left the picker with #291, so
+/// adding dimensionality is always the explicit `across` action.
+package struct ChartBreakdown: Hashable, Codable, Identifiable {
+    package var id: UUID
+    package var key: String
+    package var across: String?
+
+    package init(id: UUID = UUID(), key: String, across: String? = nil) {
+        self.id = id
+        self.key = key
+        self.across = across
+    }
 }
 
-/// A chart grouping resolved to plain data — the tag key, or a tag set's
-/// member labels in stored order — so the aggregation decisions below can be
-/// pure functions, unit-testable without a model or backend.
-package enum GroupingDefinition: Hashable {
-    case key(String)
-    case tagSetMembers([SpanLabel])
+/// The History tab's persisted setup: the range and the breakdown rows, so
+/// the charts you set up are there when you come back (#291). Stored as
+/// JSON in the app's UserDefaults suite, which is already split between the
+/// demo scratch suite and the real one.
+package struct HistorySetup: Codable, Equatable {
+    package var range: TrailingRange?
+    package var rows: [ChartBreakdown]
+
+    package init(range: TrailingRange? = nil, rows: [ChartBreakdown] = []) {
+        self.range = range
+        self.rows = rows
+    }
+
+    package static let defaultsKey = "historyChartSetup"
 }
 
 /// One aggregated series slice: a label ("infra", "proj: infra") and a duration.
@@ -63,20 +80,18 @@ package final class HistoryModel {
     package private(set) var spans: [TimeSpan] = []
     package var isLoading = false
     package var errorMessage: String?
-    /// The grouping the charts tab renders. Nil until first shown, then
-    /// defaulted from the data (see `defaultGrouping`).
-    package var chartGrouping: ChartGrouping?
-    /// Optional second grouping, rendered as a second donut beside the first
-    /// for comparing two breakdowns of the same week. Nil = off.
-    package var chartGrouping2: ChartGrouping?
-    /// When true (and a second grouping is set) the charts render one combined
-    /// breakdown — the first grouping split by the second — instead of two
-    /// side-by-side donuts. Session-only, like the groupings.
-    package var chartsCombined: Bool = false
+    /// The breakdown rows the charts tab renders, in display order. Empty
+    /// until first shown, then defaulted from the data (see
+    /// `defaultBreakdown`). Persisted with the range as `HistorySetup`.
+    package var chartRows: [ChartBreakdown] = [] {
+        didSet { persistSetup() }
+    }
     /// The window the charts tab aggregates (#163): nil charts the displayed
     /// week (shared with Log and Calendar), a trailing range charts a wider
-    /// window fetched separately below. Session-only, like the groupings.
-    package var chartRange: TrailingRange?
+    /// window fetched separately below. Persisted with the rows.
+    package var chartRange: TrailingRange? {
+        didSet { persistSetup() }
+    }
     /// Spans fetched for the charts' trailing range — kept apart from `spans`
     /// so the Log and Calendar stay on their week whatever the charts show.
     package private(set) var rangeSpans: [TimeSpan] = []
@@ -120,10 +135,53 @@ package final class HistoryModel {
     /// Invalidates in-flight range fetches when the range changes mid-fetch.
     @ObservationIgnored private var rangeGeneration = 0
 
+    /// True while `init` restores the stored setup, so the observers above
+    /// don't write it straight back.
+    @ObservationIgnored private var isRestoringSetup = false
+
     package init(app: AppModel) {
         self.app = app
         weekStart = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start
             ?? Calendar.current.startOfDay(for: Date())
+        restoreSetup()
+    }
+
+    // MARK: Chart setup persistence (#291)
+
+    private func restoreSetup() {
+        guard let data = app.defaults.data(forKey: HistorySetup.defaultsKey),
+              let setup = try? JSONDecoder().decode(HistorySetup.self, from: data)
+        else { return }
+        isRestoringSetup = true
+        defer { isRestoringSetup = false }
+        chartRange = setup.range
+        chartRows = setup.rows
+    }
+
+    private func persistSetup() {
+        guard !isRestoringSetup else { return }
+        let setup = HistorySetup(range: chartRange, rows: chartRows)
+        if let data = try? JSONEncoder().encode(setup) {
+            app.defaults.set(data, forKey: HistorySetup.defaultsKey)
+        }
+    }
+
+    /// Append a breakdown of the first key no row groups by yet — or, with
+    /// every key taken, another row of the default key, so a second cut of
+    /// the same key (say, `across` a different one) is a click away.
+    package func addBreakdown() {
+        let used = Set(chartRows.map(\.key))
+        if let key = groupableKeys.first(where: { !used.contains($0) }) {
+            chartRows.append(ChartBreakdown(key: key))
+        } else if let key = defaultBreakdown()?.key {
+            chartRows.append(ChartBreakdown(key: key))
+        }
+    }
+
+    /// Remove a row — never the last one; the tab always shows one chart.
+    package func removeBreakdown(id: ChartBreakdown.ID) {
+        guard chartRows.count > 1 else { return }
+        chartRows.removeAll { $0.id == id }
     }
 
     // MARK: Week navigation
@@ -188,11 +246,9 @@ package final class HistoryModel {
         rangeSpans = []
         loadedRange = nil
         isLoadingRange = false
-        chartRange = nil
         errorMessage = nil
-        chartGrouping = nil     // re-derived from the new backend's data
-        chartGrouping2 = nil
-        chartsCombined = false
+        // The range and rows are the user's setup, not the store's data —
+        // they stay (a key the new store lacks just charts empty).
         pendingLogEditID = nil  // span ids mean nothing in the new store
     }
 
@@ -431,142 +487,67 @@ package final class HistoryModel {
         return max(0, clippedEnd.timeIntervalSince(start))
     }
 
-    /// The series a span contributes to under a grouping, or [] if none.
-    /// Grouping by key: the span's value for that key. Grouping by tag set:
-    /// one series per member tag the span carries (a span matching several
-    /// member tags counts toward each).
-    private func seriesLabels(for span: TimeSpan, grouping: ChartGrouping) -> [String] {
-        guard let definition = definition(of: grouping) else { return [] }
-        return Self.seriesLabels(tags: span.labels, definition: definition)
-    }
-
-    /// A grouping resolved to plain data (tag-set ids looked up in the app's
-    /// stored sets), or nil for a since-deleted set.
-    private func definition(of grouping: ChartGrouping) -> GroupingDefinition? {
-        switch grouping {
-        case .key(let key):
-            return .key(key)
-        case .tagSet(let id):
-            guard let set = app.tagSets.first(where: { $0.id == id }) else { return nil }
-            return .tagSetMembers(set.labels)
+    /// The series a span contributes to under a breakdown, or nil for none:
+    /// the span's value for the row's key, or — with `across` set — the
+    /// strict "outer · inner" pair of `pairLabel`.
+    private func seriesLabel(for span: TimeSpan, row: ChartBreakdown) -> String? {
+        if let across = row.across {
+            return Self.pairLabel(tags: span.labels, outer: row.key, inner: across)
         }
+        return Self.seriesLabel(tags: span.labels, key: row.key)
     }
 
-    /// Pure core of `seriesLabels(for:grouping:)`, shared with the combined
-    /// pair mapping below. Tag-set matches come back in the set's stored
-    /// label order.
-    package nonisolated static func seriesLabels(tags: [SpanLabel],
-                                                 definition: GroupingDefinition) -> [String] {
-        switch definition {
-        case .key(let key):
-            return tags.first(where: { $0.key == key }).map { [$0.value.isEmpty ? "(no value)" : $0.value] } ?? []
-        case .tagSetMembers(let members):
-            return members
-                .filter { tags.contains($0) }
-                .map { $0.value.isEmpty ? $0.key : "\($0.key): \($0.value)" }
-        }
+    /// The series label for a key: the span's value for it, "(no value)"
+    /// for an empty value, nil when the span lacks the key. Pure, shared
+    /// with `pairLabel`.
+    package nonisolated static func seriesLabel(tags: [SpanLabel], key: String) -> String? {
+        tags.first(where: { $0.key == key }).map { $0.value.isEmpty ? "(no value)" : $0.value }
     }
 
-    /// Chart-window totals per series, largest first.
-    package func totals(for grouping: ChartGrouping) -> [SeriesTotal] {
-        var sums: [String: TimeInterval] = [:]
-        let interval = chartInterval
-        for span in chartSpans {
-            let seconds = clippedSeconds(of: span, in: interval)
-            guard seconds > 0 else { continue }
-            for label in seriesLabels(for: span, grouping: grouping) {
-                sums[label, default: 0] += seconds
-            }
-        }
-        return sums.map { SeriesTotal(label: $0.key, seconds: $0.value) }
-            .sorted { $0.seconds > $1.seconds }
-    }
-
-    /// Per-bucket, per-series totals across the chart window, for the daily
-    /// chart (buckets are days for a week, wider for trailing ranges).
-    package func dailyTotals(for grouping: ChartGrouping) -> [DailyTotal] {
-        var result: [DailyTotal] = []
-        for day in chartBuckets {
-            var sums: [String: TimeInterval] = [:]
-            for span in chartSpans {
-                let seconds = clippedSeconds(of: span, in: day)
-                guard seconds > 0 else { continue }
-                for label in seriesLabels(for: span, grouping: grouping) {
-                    sums[label, default: 0] += seconds
-                }
-            }
-            for (label, seconds) in sums {
-                result.append(DailyTotal(day: day.start, label: label, seconds: seconds))
-            }
-        }
-        return result
-    }
-
-    // MARK: Combined aggregation (#109)
-
-    /// Separator inside a combined pair label. `HistoryChartsView` splits on
-    /// its first occurrence to regroup pairs by outer value.
+    /// Separator inside an "outer · inner" pair label. `HistoryChartsView`
+    /// splits on its first occurrence to regroup pairs by outer value.
     package nonisolated static let pairSeparator = " · "
 
-    /// The single "outer · inner" pair series a span contributes to in the
-    /// combined view, or nil to exclude it. Strict semantics — every span
-    /// lands in exactly one cell or none:
-    /// - A span missing either dimension is excluded entirely, so the
-    ///   combined donut's total can undershoot the split view's left donut
-    ///   for the same week.
-    /// - A span matching several members of a tag-set dimension counts only
-    ///   toward the FIRST matched member in the set's stored label order —
-    ///   no cross-product, sums never exceed tracked time.
+    /// The single "outer · inner" pair series a span contributes to under an
+    /// `across` breakdown, or nil to exclude it. Strict semantics — every
+    /// span lands in exactly one cell or none: a span missing either key is
+    /// excluded entirely, so an `across` donut's total can undershoot the
+    /// plain donut of the same key.
     package nonisolated static func pairLabel(tags: [SpanLabel],
-                                              outer: GroupingDefinition,
-                                              inner: GroupingDefinition) -> String? {
-        guard let outerLabel = seriesLabels(tags: tags, definition: outer).first,
-              let innerLabel = seriesLabels(tags: tags, definition: inner).first
+                                              outer: String, inner: String) -> String? {
+        guard let outerLabel = seriesLabel(tags: tags, key: outer),
+              let innerLabel = seriesLabel(tags: tags, key: inner)
         else { return nil }
         return "\(outerLabel)\(pairSeparator)\(innerLabel)"
     }
 
-    /// The pair series a span contributes to in the combined view — [] or one
-    /// element under the strict semantics, which live in `pairLabel` above.
-    private func pairLabels(for span: TimeSpan,
-                            outer: ChartGrouping, inner: ChartGrouping) -> [String] {
-        guard let outerDefinition = definition(of: outer),
-              let innerDefinition = definition(of: inner),
-              let label = Self.pairLabel(tags: span.labels,
-                                         outer: outerDefinition,
-                                         inner: innerDefinition)
-        else { return [] }
-        return [label]
-    }
-
-    /// Chart-window totals of the outer grouping broken down by the inner one
-    /// — one series per "outer · inner" pair, largest first.
-    package func combinedTotals(outer: ChartGrouping, inner: ChartGrouping) -> [SeriesTotal] {
+    /// Chart-window totals per series of a breakdown, largest first; ties
+    /// break alphabetically, so equal series keep one order across renders
+    /// (an unstable tie flipped which of two 3h 45m values folded into Other
+    /// on every legend toggle).
+    package func totals(for row: ChartBreakdown) -> [SeriesTotal] {
         var sums: [String: TimeInterval] = [:]
         let interval = chartInterval
         for span in chartSpans {
             let seconds = clippedSeconds(of: span, in: interval)
-            guard seconds > 0 else { continue }
-            for label in pairLabels(for: span, outer: outer, inner: inner) {
-                sums[label, default: 0] += seconds
-            }
+            guard seconds > 0, let label = seriesLabel(for: span, row: row) else { continue }
+            sums[label, default: 0] += seconds
         }
         return sums.map { SeriesTotal(label: $0.key, seconds: $0.value) }
-            .sorted { $0.seconds > $1.seconds }
+            .sorted { $0.seconds != $1.seconds ? $0.seconds > $1.seconds : $0.label < $1.label }
     }
 
-    /// Per-bucket, per-pair totals across the chart window —
-    /// `dailyTotals(for:)` for the combined view.
-    package func combinedDailyTotals(outer: ChartGrouping, inner: ChartGrouping) -> [DailyTotal] {
+    /// Per-bucket, per-series totals of a breakdown across the chart window,
+    /// for its bar strip (buckets are days for a week, wider for trailing
+    /// ranges).
+    package func dailyTotals(for row: ChartBreakdown) -> [DailyTotal] {
         var result: [DailyTotal] = []
         for day in chartBuckets {
             var sums: [String: TimeInterval] = [:]
             for span in chartSpans {
                 let seconds = clippedSeconds(of: span, in: day)
-                guard seconds > 0 else { continue }
-                for label in pairLabels(for: span, outer: outer, inner: inner) {
-                    sums[label, default: 0] += seconds
-                }
+                guard seconds > 0, let label = seriesLabel(for: span, row: row) else { continue }
+                sums[label, default: 0] += seconds
             }
             for (label, seconds) in sums {
                 result.append(DailyTotal(day: day.start, label: label, seconds: seconds))
@@ -587,23 +568,23 @@ package final class HistoryModel {
         spans.reduce(0) { $0 + clippedSeconds(of: $1, in: day) }
     }
 
-    /// The most sensible default chart grouping: the tag key used most in the
+    /// The most sensible default breakdown: the tag key used most in the
     /// chart window, falling back to the first known tag definition.
-    package func defaultGrouping() -> ChartGrouping? {
+    package func defaultBreakdown() -> ChartBreakdown? {
         var counts: [String: Int] = [:]
         for span in chartSpans {
             for tag in span.labels { counts[tag.key, default: 0] += 1 }
         }
         if let best = counts.max(by: { $0.value < $1.value })?.key {
-            return .key(best)
+            return ChartBreakdown(key: best)
         }
         if let first = app.tagDefinitions.first?.key {
-            return .key(first)
+            return ChartBreakdown(key: first)
         }
         return nil
     }
 
-    /// Tag keys offered by the grouping picker: every key seen in the chart
+    /// Tag keys offered by the row pickers: every key seen in the chart
     /// window plus every defined key, deduplicated, alphabetical.
     package var groupableKeys: [String] {
         var keys = Set(app.tagDefinitions.map(\.key))

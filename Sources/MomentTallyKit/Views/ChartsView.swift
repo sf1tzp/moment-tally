@@ -1,20 +1,46 @@
 import SwiftUI
 import Charts
 
-/// The History tab: a donut + totals breakdown and a daily stacked bar chart
-/// for the displayed window — the shared week by default, or a trailing
-/// range picked like the Mark Review's scan window (#163), with the bars
-/// widening from days to weeks to months as the window grows. Instead of the
-/// web UI's build-your-own dashboards, flexibility lives in the grouping
-/// controls: two side-by-side donut columns, each with its own "Group by"
-/// picker (any tag key, or a Tag Set — one series per member tag), so two
-/// breakdowns of the same window sit next to each other. A "Count marks"
-/// toggle (#109) in the header row can instead nest the first grouping
-/// inside the second ("in Groups"): one full-width donut and one daily stack
-/// of strict "outer · inner" pairs (#151).
+/// The History tab: breakdown rows over the displayed window — the shared
+/// week by default, or a trailing range picked like the Mark Review's scan
+/// window (#163), with the bars widening from days to weeks to months as
+/// the window grows. Each row (#291) is one breakdown: a sentence of pickers
+/// ("by [key] across [key]"), a donut with its totals legend, and a short
+/// bar strip of the same series per bucket. One row by default; **Add
+/// breakdown** appends another, and rows flow two-up once the canvas is
+/// wide enough (a Mac window pulled out past its floor, an iPad landscape
+/// canvas) — a second cut of the same window beside the first. Picking a key
+/// `across` nests the row's grouping inside it: one donut of strict
+/// "outer · inner" pairs (#151), the old header-wide "in Groups" mode made
+/// per row. The setup persists with the range (`HistorySetup`).
+///
+/// Density follows the canvas (#292): the measured row width picks the
+/// donut size, the bar strip height and how many series show before the
+/// tail folds into "Other" — never past the palette's eight hues, since a
+/// donut stops reading past that however big it is. The legend still
+/// enumerates everything: the Other row is a disclosure listing the folded
+/// values inline.
+///
+/// Two interactions inside a row (#293), the same on the Mac (click) and
+/// iOS (tap): the Other slice — or the zoom button on its legend row — drills
+/// the row into its tail, re-charting only the folded values under a
+/// breadcrumb back; a series in the legend, or its slice, filters the row's
+/// bar strip to that series (the other slices and rows dim) and a second
+/// tap clears it. Both are view state, keyed by the breakdown value so a
+/// key change starts the row fresh.
 package struct HistoryChartsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    /// Width the grid gives each row — every row gets the same, so one
+    /// measurement serves all. Zero until the first layout pass.
+    @State private var rowWidth: CGFloat = 0
+    /// Rows whose Other disclosure is open. View state, not persisted.
+    @State private var expandedOther: Set<ChartBreakdown.ID> = []
+    /// Rows drilled into their Other tail (#293): per level, how many
+    /// leading series that level charted, so the row skips their sum.
+    @State private var drill: [ChartBreakdown: [Int]] = [:]
+    /// The one series a row's strip is filtered to (#293).
+    @State private var seriesFilter: [ChartBreakdown: String] = [:]
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
@@ -50,14 +76,20 @@ package struct HistoryChartsView: View {
         }
         .task {
             await history.loadIfNeeded()
-            if history.chartGrouping == nil {
-                history.chartGrouping = history.defaultGrouping()
+            if history.chartRows.isEmpty, let row = history.defaultBreakdown() {
+                history.chartRows = [row]
             }
         }
         // Covers both first appearance and every range change; switching
         // back to a still-loaded range is a no-op inside.
         .task(id: history.chartRange) {
             await history.loadRangeIfNeeded()
+        }
+        // A new window is new data: a drill's skip count and a filter's
+        // series were chosen against the old one.
+        .onChange(of: history.chartRange) {
+            drill = [:]
+            seriesFilter = [:]
         }
     }
 
@@ -66,29 +98,13 @@ package struct HistoryChartsView: View {
     /// The charts' own date row, in place of the shared `WeekNavigatorView`
     /// (#163): the range picker leads — Week keeps the `‹ Today ›` stepping
     /// cluster, a trailing range swaps it for the window's concrete dates.
-    /// The trailing side mirrors the navigator (mode toggle, progress,
-    /// refresh) so the three history tabs keep one row shape.
+    /// The trailing side mirrors the navigator (progress, refresh) so the
+    /// three history tabs keep one row shape.
     private var header: some View {
-        Group {
-            if isCompact {
-                // The one row overflows a portrait phone; the mode toggle
-                // gets a line of its own.
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        rangeCluster
-                        Spacer()
-                        refreshCluster
-                    }
-                    modeToggle
-                }
-            } else {
-                HStack(spacing: 8) {
-                    rangeCluster
-                    Spacer()
-                    modeToggle
-                    refreshCluster
-                }
-            }
+        HStack(spacing: 8) {
+            rangeCluster
+            Spacer()
+            refreshCluster
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -133,65 +149,35 @@ package struct HistoryChartsView: View {
         .help("Refresh")
     }
 
-    /// The mode toggle, slotted into the header row (#151):
-    /// "Separately" shows two independent breakdowns side by side; "in
-    /// Groups" counts the first grouping split by the second in a single
-    /// donut. Meaningless with one grouping, so it's disabled (and split
-    /// rendered) until a second grouping is picked.
-    private var modeToggle: some View {
-        @Bindable var history = model.history
-        return HStack(spacing: 6) {
-            // fixedSize: the navigator row resolves its Spacer by squeezing
-            // flexible children, which wrapped this caption onto two lines.
-            Text("Count marks")
-                .foregroundStyle(.secondary)
-                .fixedSize()
-            Picker("Count marks", selection: $history.chartsCombined) {
-                Text("Separately").tag(false)
-                Text("in Groups").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-        }
-        .disabled(history.chartGrouping2 == nil)
+    /// Rows flow into as many columns as fit a minimum row width: one on a
+    /// phone, a floor-sized Mac window or a portrait iPad, two once the
+    /// canvas passes ~1060pt. A lone row takes the whole width instead of
+    /// the adaptive half (it has nothing to sit beside, and the width buys
+    /// it a bigger donut), and compact widths pin a single flexible column
+    /// rather than trusting the adaptive item to shrink below its minimum.
+    private var rowColumns: [GridItem] {
+        isCompact || model.history.chartRows.count == 1
+            ? [GridItem(.flexible(), alignment: .topLeading)]
+            : [GridItem(.adaptive(minimum: 520), spacing: 24, alignment: .topLeading)]
     }
 
     private var chartsBody: some View {
         @Bindable var history = model.history
         return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if let (outer, inner) = combinedGroupings {
-                    combinedBody(outer: outer, inner: inner,
-                                 outerSelection: $history.chartGrouping,
-                                 innerSelection: $history.chartGrouping2)
-                } else {
-                    // Two columns, each a "Group by" picker over its donut. The
-                    // second compares another breakdown of the same window; until
-                    // one is picked (or it has no data) a placeholder ring holds
-                    // its place.
-                    // AnyLayout keeps one child tree across the compact ⇄
-                    // regular flip, so iPad Split View resizes animate the
-                    // rearrangement instead of rebuilding it (#126).
-                    let columnsLayout = isCompact
-                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
-                        : AnyLayout(HStackLayout(alignment: .top, spacing: 20))
-                    columnsLayout {
-                        donutColumn(selection: $history.chartGrouping, includeNone: false)
-                        Divider()
-                        donutColumn(selection: $history.chartGrouping2, includeNone: true)
+                LazyVGrid(columns: rowColumns, alignment: .leading, spacing: 20) {
+                    ForEach($history.chartRows) { $row in
+                        breakdownRow($row)
                     }
                 }
 
-                HStack {
-                    Text(bucketHeaderLabel)
-                        .font(.subheadline.weight(.semibold))
-                    Spacer()
-                    Text(perDayTotalLabel)
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                Button {
+                    history.addBreakdown()
+                } label: {
+                    Label("Add breakdown", systemImage: "plus")
                 }
-                dailyBody
+                .disabled(history.groupableKeys.isEmpty)
+                .help("Another breakdown of the same window")
             }
             .padding(12)
             .padding(.bottom, 12)
@@ -204,44 +190,220 @@ package struct HistoryChartsView: View {
         }
     }
 
+    // MARK: Breakdown row
+
+    /// One breakdown: the picker sentence, then the donut and its legend
+    /// (side by side, or stacked on a compact width), then the bar strip
+    /// with its own "Per day … Total" caption.
     @ViewBuilder
-    private func donutColumn(selection: Binding<ChartGrouping?>,
-                             includeNone: Bool) -> some View {
+    private func breakdownRow(_ row: Binding<ChartBreakdown>) -> some View {
+        let breakdown = row.wrappedValue
+        let metrics = rowMetrics
+        let levels = drill[breakdown] ?? []
+        let skip = levels.reduce(0, +)
+        let selected = seriesFilter[breakdown]
         VStack(alignment: .leading, spacing: 10) {
-            groupingPicker("Group by", selection: selection, includeNone: includeNone)
-            if let grouping = selection.wrappedValue {
-                let totals = folded(model.history.totals(for: grouping))
-                if totals.isEmpty {
-                    placeholderDonut("No marked time")
-                } else {
-                    let colors = colorMap(for: totals, grouping: grouping)
-                    let grand = totals.reduce(0) { $0 + $1.seconds }
-                    let pairLayout = isCompact
-                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
-                        : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
-                    pairLayout {
-                        donut(totals: totals, colors: colors, grand: grand)
-                            .frame(maxWidth: isCompact ? .infinity : nil)
-                        breakdownList(totals: totals, colors: colors, grand: grand)
+            rowHeader(row)
+            let all = model.history.totals(for: breakdown)
+            // Drilled: the parent levels' series leave entirely, and the
+            // tail folds again at the same cap (a deep tail drills further).
+            let fold = folded(Array(all.dropFirst(skip)), cap: metrics.cap)
+            let totals = fold.kept
+            if !levels.isEmpty {
+                breadcrumb(for: breakdown, levels: levels.count)
+            }
+            if totals.isEmpty {
+                // Strict pairing under `across`: only spans carrying BOTH
+                // keys count.
+                placeholderDonut(breakdown.across == nil
+                                 ? "No marked time" : "No time marked with both keys",
+                                 size: metrics.donut)
+            } else {
+                let colors = colorMap(for: totals, row: breakdown)
+                let grand = totals.reduce(0) { $0 + $1.seconds }
+                let expanded = Binding<Bool>(
+                    get: { expandedOther.contains(breakdown.id) },
+                    set: { open in
+                        if open { expandedOther.insert(breakdown.id) }
+                        else { expandedOther.remove(breakdown.id) }
+                    })
+                // One handler for slice and legend taps: Other drills, a
+                // series toggles the strip filter.
+                let select: (String) -> Void = { label in
+                    withAnimation(.snappy) {
+                        if label == Self.otherLabel {
+                            drill[breakdown, default: []].append(totals.count - 1)
+                            seriesFilter[breakdown] = nil
+                        } else {
+                            seriesFilter[breakdown] = selected == label ? nil : label
+                        }
                     }
                 }
-            } else {
-                placeholderDonut("Pick a grouping to compare")
+                let pairLayout = isCompact
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+                    : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
+                pairLayout {
+                    // Strict pairing excludes spans missing either key, so
+                    // an across total can undershoot the window's — "matched"
+                    // keeps it from contradicting the caption's "Total".
+                    donut(totals: totals, colors: colors, grand: grand,
+                          caption: skip > 0 ? "in Other"
+                                   : breakdown.across == nil ? "tracked" : "matched",
+                          size: metrics.donut, selected: selected, select: select)
+                        .frame(maxWidth: isCompact ? .infinity : nil)
+                    if breakdown.across == nil {
+                        breakdownList(totals: totals, tail: fold.tail, colors: colors,
+                                      grand: grand, expanded: expanded,
+                                      selected: selected, select: select)
+                    } else {
+                        combinedBreakdownList(totals: totals, tail: fold.tail, colors: colors,
+                                              grand: grand, expanded: expanded,
+                                              selected: selected, select: select)
+                    }
+                }
+
+                HStack {
+                    Text(selected.map { "\(bucketHeaderLabel) · \($0)" } ?? bucketHeaderLabel)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer()
+                    Text(stripTotalLabel(for: breakdown, matched: grand))
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                dailyChart(marks(for: breakdown, totals: totals, colors: colors,
+                                 excluding: Set(all.prefix(skip).map(\.label)),
+                                 selected: selected),
+                           height: metrics.strip)
             }
         }
-        // Each column owns half the window so the layout stays a two-column
-        // grid even when a column is only a placeholder ring.
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
     }
 
-    /// Stand-in ring, same size as a real donut, for a column with no
-    /// grouping picked or no data.
-    private func placeholderDonut(_ caption: String) -> some View {
+    // MARK: Canvas-aware metrics (#292)
+
+    /// What a row's width buys it: donut diameter, bar strip height, and
+    /// the series cap before the tail folds into Other.
+    private struct RowMetrics {
+        let donut: CGFloat
+        let strip: CGFloat
+        let cap: Int
+    }
+
+    /// Steps by the measured row width. Compact widths stack the legend
+    /// under the donut, so their cap is about the column's length, not the
+    /// donut's height; regular widths fit the legend beside the donut — a
+    /// 160pt ring carries seven callout rows, 180 and up the full eight.
+    /// Eight is the palette, and the ceiling everywhere (see the type doc).
+    private var rowMetrics: RowMetrics {
+        if isCompact { return RowMetrics(donut: 160, strip: 120, cap: 6) }
+        switch rowWidth {
+        case 700...: return RowMetrics(donut: 220, strip: 160, cap: 8)
+        case 520...: return RowMetrics(donut: 180, strip: 140, cap: 8)
+        default: return RowMetrics(donut: 160, strip: 120, cap: 7)
+        }
+    }
+
+    /// The row's sentence of pickers — "by [key] across [key]" — with the
+    /// remove button trailing. Removing is offered only while another row
+    /// remains: the tab always shows one chart.
+    private func rowHeader(_ row: Binding<ChartBreakdown>) -> some View {
+        let history = model.history
+        return HStack(spacing: 6) {
+            Text("by")
+                .foregroundStyle(.secondary)
+            // labelsHidden: the sentence provides the pickers' context; the
+            // label strings stay for accessibility.
+            keyPicker("Group by", selection: row.key, excluding: row.wrappedValue.across)
+                .labelsHidden()
+            Text("across")
+                .foregroundStyle(.secondary)
+            acrossPicker("Across", selection: row.across, excluding: row.wrappedValue.key)
+                .labelsHidden()
+            Spacer()
+            if history.chartRows.count > 1 {
+                Button {
+                    history.removeBreakdown(id: row.wrappedValue.id)
+                } label: {
+                    Image(systemName: "xmark.circle")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Remove breakdown")
+                .help("Remove breakdown")
+            }
+        }
+    }
+
+    /// Under a drilled row's pickers: the way back (the row's title, a
+    /// button popping every level) and one "› Other" per level down.
+    private func breadcrumb(for breakdown: ChartBreakdown, levels: Int) -> some View {
+        HStack(spacing: 4) {
+            Button {
+                withAnimation(.snappy) {
+                    drill[breakdown] = nil
+                    seriesFilter[breakdown] = nil
+                }
+            } label: {
+                Label(rowTitle(breakdown), systemImage: "chevron.left")
+            }
+            .buttonStyle(.borderless)
+            .help("Back to every value")
+            ForEach(0..<levels, id: \.self) { _ in
+                Text("›")
+                    .foregroundStyle(.tertiary)
+                Text(Self.otherLabel)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.callout)
+    }
+
+    /// "type", or "type × project" for an across row.
+    private func rowTitle(_ breakdown: ChartBreakdown) -> String {
+        breakdown.across.map { "\(breakdown.key) × \($0)" } ?? breakdown.key
+    }
+
+    /// The row's grouping key. A persisted key the window no longer carries
+    /// stays listed, so the picker never shows an empty selection.
+    private func keyPicker(_ label: String, selection: Binding<String>,
+                           excluding: String?) -> some View {
+        var keys = model.history.groupableKeys.filter { $0 != excluding }
+        if !keys.contains(selection.wrappedValue) {
+            keys.insert(selection.wrappedValue, at: 0)
+        }
+        return Picker(label, selection: selection) {
+            ForEach(keys, id: \.self) { key in
+                Text(key).tag(key)
+            }
+        }
+        .fixedSize()
+    }
+
+    /// The optional second key the row's grouping nests inside.
+    private func acrossPicker(_ label: String, selection: Binding<String?>,
+                              excluding: String) -> some View {
+        var keys = model.history.groupableKeys.filter { $0 != excluding }
+        if let current = selection.wrappedValue, !keys.contains(current) {
+            keys.insert(current, at: 0)
+        }
+        return Picker(label, selection: selection) {
+            Text("None").tag(String?.none)
+            ForEach(keys, id: \.self) { key in
+                Text(key).tag(String?.some(key))
+            }
+        }
+        .fixedSize()
+    }
+
+    /// Stand-in ring, same size as a real donut, for a row with no data.
+    private func placeholderDonut(_ caption: String, size: CGFloat) -> some View {
         Circle()
             .inset(by: 15)
             .stroke(Color.secondary.opacity(0.15),
                     style: StrokeStyle(lineWidth: 30, dash: [8, 5]))
-            .frame(width: 160, height: 160)
+            .frame(width: size, height: size)
             .overlay {
                 Text(caption)
                     .font(.caption)
@@ -251,27 +413,13 @@ package struct HistoryChartsView: View {
             }
     }
 
-    /// The (outer, inner) groupings when the combined layout applies: the
-    /// toggle is on and both groupings are picked. Nil renders the split
-    /// layout — with no second grouping there is nothing to combine, whatever
-    /// the flag says.
-    private var combinedGroupings: (outer: ChartGrouping, inner: ChartGrouping)? {
-        guard model.history.chartsCombined,
-              let outer = model.history.chartGrouping,
-              let inner = model.history.chartGrouping2 else { return nil }
-        return (outer, inner)
-    }
-
-    /// "Total 25h 20m" for the chart window — except in combined mode, where
-    /// the bars only chart pair-matched time, so the header echoes the
+    /// "Total 25h 20m" for the chart window — except under `across`, where
+    /// the bars only chart pair-matched time, so the caption echoes the
     /// donut's "matched" figure instead of contradicting it.
-    private var perDayTotalLabel: String {
-        if let (outer, inner) = combinedGroupings {
-            let matched = model.history.combinedTotals(outer: outer, inner: inner)
-                .reduce(0) { $0 + $1.seconds }
-            return "Matched \(formatDuration(matched))"
-        }
-        return "Total \(formatDuration(model.history.chartTotalSeconds))"
+    private func stripTotalLabel(for row: ChartBreakdown, matched: TimeInterval) -> String {
+        row.across == nil
+            ? "Total \(formatDuration(model.history.chartTotalSeconds))"
+            : "Matched \(formatDuration(matched))"
     }
 
     /// "Per day" / "Per week" / "Per month", following the bar width the
@@ -284,175 +432,17 @@ package struct HistoryChartsView: View {
         }
     }
 
-    /// Combined mode, full width (#151): the old caption sentence is now the
-    /// header, with both grouping pickers embedded in it — "Counting time by
-    /// [outer] across all [inner] values" — so the selectors and the
-    /// explanation of the nesting are one thing. Below it the donut and its
-    /// two-level breakdown get the whole window width instead of half.
-    @ViewBuilder
-    private func combinedBody(outer: ChartGrouping, inner: ChartGrouping,
-                              outerSelection: Binding<ChartGrouping?>,
-                              innerSelection: Binding<ChartGrouping?>) -> some View {
-        // labelsHidden: the sentence provides the pickers' context, so their
-        // own labels would read "Counting time by Group by [type]…"; the
-        // label strings stay for accessibility.
-        HStack(spacing: 6) {
-            Text("Counting time by")
-            groupingPicker("Group by", selection: outerSelection, includeNone: false)
-                .labelsHidden()
-            Text("across all")
-            // Picking None here drops back to the split layout (see
-            // `combinedGroupings`), same as it did from the old right column.
-            groupingPicker("Across", selection: innerSelection, includeNone: true)
-                .labelsHidden()
-            Text("values")
-        }
-        let totals = folded(model.history.combinedTotals(outer: outer, inner: inner))
-        if totals.isEmpty {
-            // Strict pairing: only spans carrying BOTH dimensions count.
-            placeholderDonut("No time marked with both groupings")
-                .frame(maxWidth: .infinity)
-        } else {
-            let colors = paletteSlots(for: totals)
-            let grand = totals.reduce(0) { $0 + $1.seconds }
-            // Full width lets the pair go wider than a split column, so instead
-            // of hugging the left edge (a trailing Spacer left the right half
-            // empty, #151 follow-up) the donut and its legend centre as a unit,
-            // with flanking Spacers giving symmetric breathing room. A bigger
-            // donut than the split view's earns the extra prominence.
-            if isCompact {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Strict pairing excludes spans missing either dimension,
-                    // so this total can undershoot the week's — "matched"
-                    // keeps it from contradicting the footer's "tracked".
-                    donut(totals: totals, colors: colors, grand: grand,
-                          caption: "matched", size: 200)
-                        .frame(maxWidth: .infinity)
-                    combinedBreakdownList(totals: totals, colors: colors, grand: grand)
-                }
-                .frame(maxWidth: .infinity)
-            } else {
-                HStack(alignment: .center, spacing: 28) {
-                    Spacer(minLength: 24)
-                    // Strict pairing excludes spans missing either dimension,
-                    // so this total can undershoot the week's — "matched"
-                    // keeps it from contradicting the footer's "tracked".
-                    donut(totals: totals, colors: colors, grand: grand,
-                          caption: "matched", size: 200)
-                    combinedBreakdownList(totals: totals, colors: colors, grand: grand)
-                    Spacer(minLength: 24)
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-    }
-
-    /// The daily bars mirror the donut columns: one stack per grouping,
-    /// side by side within each day. Two stacks rather than one combined —
-    /// a span matching both groupings would double-count in a single stack.
-    /// In combined mode that risk is gone (strict pairing lands each span in
-    /// at most one pair), so the day collapses to a single stack of the same
-    /// folded pair series and colors as the combined donut.
-    @ViewBuilder
-    private var dailyBody: some View {
-        let marks = dailyMarks
-        if marks.isEmpty {
-            Text(model.history.chartRange == nil
-                 ? "No marked time this week" : "No marked time in this range")
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-        } else {
-            dailyChart(marks, splitColumns: combinedGroupings == nil)
-        }
-    }
-
-    /// One bar-segment of the daily chart, color resolved up front so the two
-    /// groupings can't collide on shared labels. `column` separates the
-    /// groupings' stacks (never displayed — the legend is hidden).
-    private struct DailyMark: Identifiable {
-        let id: String
-        let day: Date
-        let seconds: TimeInterval
-        let color: Color
-        let column: String
-    }
-
-    /// Marks for every active grouping, ordered so each stack keeps its
-    /// biggest series at the baseline (same rule as before). Combined mode
-    /// yields a single column of pair series instead.
-    private var dailyMarks: [DailyMark] {
-        if let (outer, inner) = combinedGroupings {
-            let totals = folded(model.history.combinedTotals(outer: outer, inner: inner))
-            guard !totals.isEmpty else { return [] }
-            return marks(column: "1", totals: totals,
-                         daily: model.history.combinedDailyTotals(outer: outer, inner: inner),
-                         colors: paletteSlots(for: totals))
-        }
-        let groupings: [(String, ChartGrouping)] = [
-            model.history.chartGrouping.map { ("1", $0) },
-            model.history.chartGrouping2.map { ("2", $0) },
-        ].compactMap { $0 }
-
-        var result: [DailyMark] = []
-        for (column, grouping) in groupings {
-            let totals = folded(model.history.totals(for: grouping))
-            guard !totals.isEmpty else { continue }
-            result += marks(column: column, totals: totals,
-                            daily: model.history.dailyTotals(for: grouping),
-                            colors: colorMap(for: totals, grouping: grouping))
-        }
-        return result
-    }
-
-    /// Fold, rank, and color one stack's daily series into marks.
-    private func marks(column: String, totals: [SeriesTotal],
-                       daily: [DailyTotal], colors: [String: Color]) -> [DailyMark] {
-        let rank = Dictionary(uniqueKeysWithValues:
-            totals.map(\.label).enumerated().map { ($1, $0) })
-        return foldedDaily(daily, keeping: Set(totals.map(\.label)))
-            .sorted { (rank[$0.label] ?? .max, $0.day) < (rank[$1.label] ?? .max, $1.day) }
-            .map {
-                DailyMark(id: "\(column)-\($0.id)", day: $0.day,
-                          seconds: $0.seconds,
-                          color: colors[$0.label] ?? .gray, column: column)
-            }
-    }
-
-    private func groupingPicker(_ label: String,
-                                selection: Binding<ChartGrouping?>,
-                                includeNone: Bool) -> some View {
-        Picker(label, selection: selection) {
-            if includeNone {
-                Text("None").tag(ChartGrouping?.none)
-            }
-            Section("Mark keys") {
-                ForEach(model.history.groupableKeys, id: \.self) { key in
-                    Text(key).tag(ChartGrouping?.some(.key(key)))
-                }
-            }
-            let sets = model.tagSets.filter { !$0.labels.isEmpty }
-            if !sets.isEmpty {
-                Section("Tallies") {
-                    ForEach(sets) { set in
-                        Text(set.name.isEmpty ? "Untitled" : set.name)
-                            .tag(ChartGrouping?.some(.tagSet(set.id)))
-                    }
-                }
-            }
-        }
-        .fixedSize()
-    }
-
     // MARK: Charts
 
     private func donut(totals: [SeriesTotal], colors: [String: Color], grand: TimeInterval,
-                       caption: String = "tracked", size: CGFloat = 160) -> some View {
+                       caption: String, size: CGFloat,
+                       selected: String?, select: @escaping (String) -> Void) -> some View {
         Chart(totals) { item in
             SectorMark(angle: .value("Time", item.seconds),
-                       innerRadius: .ratio(0.62),
+                       innerRadius: .ratio(Self.donutHole),
                        angularInset: 1.5)
                 .foregroundStyle(colors[item.label] ?? .gray)
+                .opacity(selected == nil || item.label == selected ? 1 : 0.25)
                 .cornerRadius(2)
         }
         .chartLegend(.hidden)   // the breakdown list is the legend
@@ -466,31 +456,182 @@ package struct HistoryChartsView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .contentShape(Circle())
+        .onTapGesture(coordinateSpace: .local) { point in
+            if let label = slice(at: point, size: size, totals: totals) {
+                select(label)
+            }
+        }
+        .accessibilityHint("Tap a slice to filter the bars to it; tap Other to chart only its values")
     }
 
-    private func breakdownList(totals: [SeriesTotal], colors: [String: Color], grand: TimeInterval) -> some View {
+    private static let donutHole: CGFloat = 0.62
+
+    /// The series under a point of the donut's frame, or nil in the hole or
+    /// outside the ring. Sectors run clockwise from twelve o'clock in data
+    /// order, each spanning its share of the grand total — the same geometry
+    /// `SectorMark` draws, computed here rather than through a chart
+    /// selection so the Mac click and the iOS tap behave alike (the chart's
+    /// own angle selection tracks hover on the Mac).
+    private func slice(at point: CGPoint, size: CGFloat, totals: [SeriesTotal]) -> String? {
+        let radius = size / 2
+        let dx = point.x - radius, dy = point.y - radius
+        let distance = (dx * dx + dy * dy).squareRoot()
+        guard distance <= radius, distance >= radius * Self.donutHole * 0.9 else { return nil }
+        let grand = totals.reduce(0) { $0 + $1.seconds }
+        guard grand > 0 else { return nil }
+        // atan2 with (x, -y): 0 at the top, increasing clockwise.
+        var angle = atan2(dx, -dy)
+        if angle < 0 { angle += 2 * .pi }
+        let fraction = angle / (2 * .pi)
+        var cumulative = 0.0
+        for item in totals {
+            cumulative += item.seconds / grand
+            if fraction < cumulative { return item.label }
+        }
+        return totals.last?.label
+    }
+
+    /// The donut's legend: one row per kept series, and — when the tail
+    /// folded — an Other row that discloses the folded values inline, so
+    /// every value is enumerable without changing the chart. Series rows are
+    /// buttons: the strip filter (#293).
+    private func breakdownList(totals: [SeriesTotal], tail: [SeriesTotal],
+                               colors: [String: Color], grand: TimeInterval,
+                               expanded: Binding<Bool>,
+                               selected: String?, select: @escaping (String) -> Void) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 5) {
             ForEach(totals) { item in
-                GridRow {
+                if item.label == Self.otherLabel {
+                    otherRow(seconds: item.seconds, count: tail.count, grand: grand,
+                             expanded: expanded, font: .callout,
+                             selected: selected, select: select)
+                    if expanded.wrappedValue {
+                        tailRows(tail, grand: grand)
+                    }
+                } else {
+                    seriesRow(label: item.label, title: item.label,
+                              color: colors[item.label] ?? .gray,
+                              seconds: item.seconds, grand: grand, font: .callout,
+                              selected: selected, select: select)
+                }
+            }
+        }
+    }
+
+    /// One selectable legend row: dot, title, duration, share. `label` is
+    /// the series (a pair label under across), `title` what the row shows.
+    /// With a filter active, every other row dims to point at the one kept.
+    private func seriesRow(label: String, title: String, color: Color,
+                           seconds: TimeInterval, grand: TimeInterval, font: Font,
+                           indent: CGFloat = 0,
+                           selected: String?, select: @escaping (String) -> Void) -> some View {
+        GridRow {
+            Button {
+                select(label)
+            } label: {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 8, height: 8)
+                    Text(title)
+                        .lineLimit(1)
+                }
+                .padding(.leading, indent)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityValue(selected == label ? "filtering the bars" : "")
+            .help(selected == label ? "Show every series in the bars"
+                  : "Show only this series in the bars")
+            Text(formatDuration(seconds))
+                .monospacedDigit()
+                .gridColumnAlignment(.trailing)
+            shareText(seconds, of: grand)
+        }
+        .font(font)
+        .opacity(selected == nil || selected == label ? 1 : 0.45)
+    }
+
+    /// "11%" — a series' share of the donut, blank for an empty donut.
+    private func shareText(_ seconds: TimeInterval, of grand: TimeInterval) -> some View {
+        Text(grand > 0
+             ? (seconds / grand).formatted(.percent.precision(.fractionLength(0)))
+             : "")
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+            .gridColumnAlignment(.trailing)
+    }
+
+    /// The Other row of either legend: a disclosure with the folded count,
+    /// the gray dot of its slice, and the tail's subtotal and share.
+    private func otherRow(seconds: TimeInterval, count: Int, grand: TimeInterval,
+                          expanded: Binding<Bool>, font: Font,
+                          selected: String?, select: @escaping (String) -> Void) -> some View {
+        GridRow {
+            HStack(spacing: 6) {
+                Button {
+                    withAnimation(.snappy) { expanded.wrappedValue.toggle() }
+                } label: {
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(colors[item.label] ?? .gray)
+                            .fill(Color.gray)
                             .frame(width: 8, height: 8)
-                        Text(item.label)
+                        Text("\(Self.otherLabel) (\(count))")
                             .lineLimit(1)
+                        Image(systemName: expanded.wrappedValue ? "chevron.down" : "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
                     }
-                    Text(formatDuration(item.seconds))
-                        .monospacedDigit()
-                        .gridColumnAlignment(.trailing)
-                    Text(grand > 0
-                         ? (item.seconds / grand).formatted(.percent.precision(.fractionLength(0)))
-                         : "")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .gridColumnAlignment(.trailing)
+                    .contentShape(Rectangle())
                 }
-                .font(.callout)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Other, \(count) values")
+                .accessibilityValue(expanded.wrappedValue ? "expanded" : "collapsed")
+                .help(expanded.wrappedValue ? "Hide the folded values" : "Show the folded values")
+                // The drill (#293), also reachable by tapping the slice.
+                Button {
+                    select(Self.otherLabel)
+                } label: {
+                    Image(systemName: "plus.magnifyingglass")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Chart only the Other values")
+                .help("Chart only these values")
             }
+            Text(formatDuration(seconds))
+                .monospacedDigit()
+                .gridColumnAlignment(.trailing)
+            shareText(seconds, of: grand)
+        }
+        .font(font)
+        .opacity(selected == nil ? 1 : 0.45)   // Other is never the filter
+    }
+
+    /// The folded values under an open Other row: indented, a hollow dot in
+    /// place of a slice color (they share Other's gray slice), each with its
+    /// own duration and share of the donut.
+    private func tailRows(_ tail: [SeriesTotal], grand: TimeInterval) -> some View {
+        ForEach(tail) { item in
+            GridRow {
+                HStack(spacing: 6) {
+                    Circle()
+                        .strokeBorder(Color.gray, lineWidth: 1)
+                        .frame(width: 8, height: 8)
+                    Text(item.label)
+                        .lineLimit(1)
+                }
+                .padding(.leading, 14)
+                Text(formatDuration(item.seconds))
+                    .monospacedDigit()
+                    .gridColumnAlignment(.trailing)
+                shareText(item.seconds, of: grand)
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -545,72 +686,88 @@ package struct HistoryChartsView: View {
         return sections
     }
 
-    /// Two-level legend for the combined donut: an outer heading (subtotal
+    /// Two-level legend for an `across` donut: an outer heading (subtotal
     /// and share of the grand total, slightly heavier weight) over indented
     /// inner rows whose dots match the donut's pair slices.
-    private func combinedBreakdownList(totals: [SeriesTotal], colors: [String: Color],
-                                       grand: TimeInterval) -> some View {
+    private func combinedBreakdownList(totals: [SeriesTotal], tail: [SeriesTotal],
+                                       colors: [String: Color], grand: TimeInterval,
+                                       expanded: Binding<Bool>,
+                                       selected: String?, select: @escaping (String) -> Void) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 5) {
             ForEach(combinedSections(from: totals)) { section in
-                GridRow {
-                    HStack(spacing: 6) {
-                        if section.rows.isEmpty {
-                            // The folded "Other" is itself a slice, so it
-                            // keeps a dot; real headings aren't slices.
-                            Circle()
-                                .fill(colors[section.label] ?? .gray)
-                                .frame(width: 8, height: 8)
-                        }
+                if section.rows.isEmpty {
+                    // The folded "Other" is itself a slice (so it keeps a
+                    // dot; real headings aren't slices) and discloses the
+                    // folded pairs by their full "outer · inner" label.
+                    otherRow(seconds: section.seconds, count: tail.count, grand: grand,
+                             expanded: expanded, font: .callout.weight(.medium),
+                             selected: selected, select: select)
+                    if expanded.wrappedValue {
+                        tailRows(tail, grand: grand)
+                    }
+                } else {
+                    // Headings aren't series, so they don't select; they
+                    // dim with their rows unless one of those is the filter.
+                    GridRow {
                         Text(section.label)
                             .lineLimit(1)
-                    }
-                    Text(formatDuration(section.seconds))
-                        .monospacedDigit()
-                        .gridColumnAlignment(.trailing)
-                    Text(grand > 0
-                         ? (section.seconds / grand).formatted(.percent.precision(.fractionLength(0)))
-                         : "")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .gridColumnAlignment(.trailing)
-                }
-                .font(.callout.weight(.medium))
-                ForEach(section.rows) { row in
-                    GridRow {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(colors[row.pair] ?? .gray)
-                                .frame(width: 8, height: 8)
-                            Text(row.inner)
-                                .lineLimit(1)
-                        }
-                        .padding(.leading, 14)
-                        Text(formatDuration(row.seconds))
+                        Text(formatDuration(section.seconds))
                             .monospacedDigit()
                             .gridColumnAlignment(.trailing)
-                        Text("")    // per-pair shares would just be noise
+                        shareText(section.seconds, of: grand)
                     }
-                    .font(.callout)
+                    .font(.callout.weight(.medium))
+                    .opacity(selected == nil || section.rows.contains { $0.pair == selected } ? 1 : 0.45)
+                }
+                ForEach(section.rows) { row in
+                    seriesRow(label: row.pair, title: row.inner,
+                              color: colors[row.pair] ?? .gray,
+                              seconds: row.seconds, grand: grand, font: .callout, indent: 14,
+                              selected: selected, select: select)
                 }
             }
         }
     }
 
-    private func dailyChart(_ marks: [DailyMark], splitColumns: Bool) -> some View {
-        Chart(marks) { item in
-            let bar = BarMark(x: .value("Day", item.day, unit: model.history.chartBucketUnit),
-                              y: .value("Hours", item.seconds / 3600))
-            if splitColumns {
-                // With one grouping the single band spans the bucket; with
-                // two, each bucket shows the groupings' stacks side by side.
-                bar.position(by: .value("Grouping", item.column))
-                    .foregroundStyle(item.color)
-                    .cornerRadius(2)
-            } else {
-                // Combined mode: one stack of pair segments, no column split.
-                bar.foregroundStyle(item.color)
-                    .cornerRadius(2)
+    // MARK: Bar strip
+
+    /// One bar-segment of a row's strip, color resolved up front from the
+    /// row's own map (so two rows sharing a label can't collide).
+    private struct DailyMark: Identifiable {
+        let id: String
+        let day: Date
+        let seconds: TimeInterval
+        let color: Color
+    }
+
+    /// Fold, rank, and color one row's daily series into marks, ordered so
+    /// the stack keeps its biggest series at the baseline. `excluding` drops
+    /// a drilled row's parent series outright (they're above the drill, not
+    /// in its Other); `selected` keeps just the filtered series.
+    private func marks(for row: ChartBreakdown, totals: [SeriesTotal],
+                       colors: [String: Color], excluding: Set<String>,
+                       selected: String?) -> [DailyMark] {
+        let rank = Dictionary(uniqueKeysWithValues:
+            totals.map(\.label).enumerated().map { ($1, $0) })
+        let daily = model.history.dailyTotals(for: row).filter { !excluding.contains($0.label) }
+        return foldedDaily(daily, keeping: Set(totals.map(\.label)))
+            .filter { selected == nil || $0.label == selected }
+            .sorted { (rank[$0.label] ?? .max, $0.day) < (rank[$1.label] ?? .max, $1.day) }
+            .map {
+                DailyMark(id: $0.id, day: $0.day, seconds: $0.seconds,
+                          color: colors[$0.label] ?? .gray)
             }
+    }
+
+    /// The row's stacked bars — short, a volume strip under the donut rather
+    /// than a chart competing with it. Every row has its own, so a second
+    /// breakdown never interleaves its stacks with the first's.
+    private func dailyChart(_ marks: [DailyMark], height: CGFloat) -> some View {
+        Chart(marks) { item in
+            BarMark(x: .value("Day", item.day, unit: model.history.chartBucketUnit),
+                    y: .value("Hours", item.seconds / 3600))
+                .foregroundStyle(item.color)
+                .cornerRadius(2)
         }
         // Pin the domain to the whole window, or a single bucket of data
         // would stretch its bar across the full plot width.
@@ -623,7 +780,7 @@ package struct HistoryChartsView: View {
             }
         }
         .chartYAxis {
-            AxisMarks { value in
+            AxisMarks(values: .automatic(desiredCount: 3)) { value in
                 AxisGridLine()
                 if let hours = value.as(Double.self) {
                     AxisValueLabel {
@@ -632,7 +789,7 @@ package struct HistoryChartsView: View {
                 }
             }
         }
-        .frame(height: 200)
+        .frame(height: height)
     }
 
     /// X-axis tick positions per range: the week marks every day; trailing
@@ -686,9 +843,9 @@ package struct HistoryChartsView: View {
     }
 
     /// Palette slots by alphabetical label order (plus the gray "Other") —
-    /// the base assignment for both maps below, and the whole map for the
-    /// combined pair series: per-value override colors never apply to a
-    /// pair, since it spans two values and neither one's color can claim it.
+    /// the base assignment, and the whole map for an `across` row's pair
+    /// series: per-value override colors never apply to a pair, since it
+    /// spans two values and neither one's color can claim it.
     private func paletteSlots(for totals: [SeriesTotal]) -> [String: Color] {
         let labels = totals.map(\.label).filter { $0 != Self.otherLabel }.sorted()
         var map: [String: Color] = [Self.otherLabel: .gray]
@@ -698,45 +855,41 @@ package struct HistoryChartsView: View {
         return map
     }
 
-    private func colorMap(for totals: [SeriesTotal], grouping: ChartGrouping) -> [String: Color] {
+    private func colorMap(for totals: [SeriesTotal], row: ChartBreakdown) -> [String: Color] {
         var map = paletteSlots(for: totals)
         // With "color by value" on, user-picked overrides beat palette slots
         // so the charts match the tag pills elsewhere in the app.
-        if model.colorTagsByValue {
-            for label in totals.map(\.label) where label != Self.otherLabel {
-                if let override = overrideColor(for: label, grouping: grouping) {
-                    map[label] = override
-                }
+        guard row.across == nil, model.colorTagsByValue else { return map }
+        for label in totals.map(\.label) where label != Self.otherLabel {
+            if let override = model.valueColor(key: row.key, value: label) {
+                map[label] = override
             }
         }
         return map
-    }
-
-    /// The user's per-value color for a series label, if one is set. Labels
-    /// are values when grouping by key, "key: value" for tag-set members.
-    private func overrideColor(for label: String, grouping: ChartGrouping) -> Color? {
-        switch grouping {
-        case .key(let key):
-            return model.valueColor(key: key, value: label)
-        case .tagSet(let id):
-            guard let set = model.tagSets.first(where: { $0.id == id }),
-                  let tag = set.labels.first(where: {
-                      ($0.value.isEmpty ? $0.key : "\($0.key): \($0.value)") == label
-                  }) else { return nil }
-            return model.valueColor(key: tag.key, value: tag.value)
-        }
     }
 
     // MARK: Folding (cap series count, never cycle hues)
 
     private static let otherLabel = "Other"
 
-    /// Keep the top 7 series; everything else folds into a gray "Other".
-    private func folded(_ totals: [SeriesTotal]) -> [SeriesTotal] {
-        guard totals.count > 8 else { return totals }
-        let kept = totals.prefix(7)
-        let rest = totals.dropFirst(7).reduce(0) { $0 + $1.seconds }
-        return Array(kept) + [SeriesTotal(label: Self.otherLabel, seconds: rest)]
+    /// A row's series after folding: `kept` is what the donut and strip
+    /// chart (ending in the gray Other when anything folded), `tail` the
+    /// folded values themselves, for the legend's disclosure.
+    private struct Folded {
+        let kept: [SeriesTotal]
+        let tail: [SeriesTotal]
+    }
+
+    /// Up to `cap` series chart as they are; past that the top `cap - 1`
+    /// stay and the rest fold into Other — so a row never shows more than
+    /// `cap` slices, Other included.
+    private func folded(_ totals: [SeriesTotal], cap: Int) -> Folded {
+        guard totals.count > cap else { return Folded(kept: totals, tail: []) }
+        let kept = Array(totals.prefix(cap - 1))
+        let tail = Array(totals.dropFirst(cap - 1))
+        let rest = tail.reduce(0) { $0 + $1.seconds }
+        return Folded(kept: kept + [SeriesTotal(label: Self.otherLabel, seconds: rest)],
+                      tail: tail)
     }
 
     private func foldedDaily(_ daily: [DailyTotal], keeping: Set<String>) -> [DailyTotal] {

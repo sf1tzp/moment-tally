@@ -68,15 +68,17 @@ skills, so the two don't drift.
   works. Buttons identify nicely by their `help` attribute (read it per
   element inside a `try`; some elements throw).
 - **Duplicate pop-up buttons alias the same control** (learned 2026-08-03 on
-  the History tab): both "Group by" pickers enumerate as `AXPopUpButton`s,
-  but `pop up button 2 of scroll area 1` reports picker 1's position/value
-  and clicking it opens picker 1's menu — the right picker is unreachable
-  through the tree. Workaround: read the right column's "Group by"
-  `AXStaticText` position, `cliclick c:<x+95>,<y+6>` to open the real
-  picker, then select by *menu type-select* (`keystroke "<item name>"`,
-  `key code 36`). Typing the full item name wins over shorter siblings
-  ("project" beats "proj") because a menu item can't prefix-match a buffer
-  longer than itself.
+  the History tab, still true of the #291 rows): a History breakdown row's
+  "Group by" and "Across" pickers both enumerate as `AXPopUpButton`s, but
+  `pop up button N of scroll area 1` beyond the first reports picker 1's
+  position/value and clicking it opens picker 1's menu — the others are
+  unreachable through the tree. Workaround: read the row's "by" / "across"
+  `AXStaticText` position, `cliclick` the picker just right of it (rehearsed
+  window-relative offsets: first row's Group-by ≈ (116, 153), its Across ≈
+  (235, 138) at the 780×640 floor), then select by *menu type-select*
+  (`keystroke "<item name>"`, `key code 36`). Typing the full item name wins
+  over shorter siblings ("project" beats "proj") because a menu item can't
+  prefix-match a buffer longer than itself.
 - After `click` on a (working) pop up button, poll for `menu 1` *and* the
   target menu item — items populate late. A script that dies mid-menu
   leaves it open, and the next click toggles it shut: send Escape
@@ -289,11 +291,16 @@ skills, so the two don't drift.
 - `screencapture -v` refuses to overwrite: an existing target file fails
   the take at the very end with "Failed to save to final location" (the
   choreography still runs and mutates state). `rm` the target first.
-- **Segmented controls by coordinates need the group's y-centre**: the
-  History "Count marks" AXRadioGroup is 24pt tall; a click 2pt *above* its
-  reported y silently misses (the pickers then get driven in the wrong
-  mode). Compute `y + 12` from the AXRadioGroup position, or click via AX.
-- The History Group-by aliasing above is **side-by-side-mode only**: in
-  combined ("in Groups") mode both pop-ups enumerate with correct positions
-  and values. And in side-by-side mode, an AX `click pop up button 1` opens
-  the *left* picker reliably — good enough for restoring its value.
+- **Segmented controls by coordinates need the group's y-centre**: an
+  AXRadioGroup is 24pt tall; a click 2pt *above* its reported y silently
+  misses. Compute `y + 12` from the AXRadioGroup position, or click via AX.
+  (The History "Count marks" group that taught this left with #291; the
+  rule holds for any segmented control.)
+- History rows (#291): "Add breakdown" carries no AX name; it is
+  `button 1 of scroll area 1 of group 1 of group 1 of window "Moment Tally"`
+  with help "Another breakdown of the same window" (a `click` on it works).
+  A row's remove button has help "Remove breakdown" and is absent while only
+  one row remains. The first row's `pop up button 1` opens reliably via AX
+  — good enough for restoring its key; use coordinates for the rest. The
+  legend's Other row (#292) is a plain button labelled "Other, N values"
+  with value expanded/collapsed.

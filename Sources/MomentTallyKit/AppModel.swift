@@ -27,8 +27,9 @@ package final class AppModel {
 
     /// Where every settings read/write goes: the standard domain normally, a
     /// scratch suite in demo mode. One indirection instead of guards at each
-    /// call site.
-    @ObservationIgnored private let defaults: UserDefaults
+    /// call site. Package visible so sub-models persist their own setup in
+    /// the same place (`HistoryModel`'s chart rows, #291).
+    @ObservationIgnored package let defaults: UserDefaults
 
     // (Sparkle auto-update and Start at Login used to live here; they are
     // Mac app-shell concerns — Sparkle and SMAppService have no iOS

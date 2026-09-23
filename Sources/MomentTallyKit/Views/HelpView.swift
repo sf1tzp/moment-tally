@@ -339,19 +339,19 @@ private struct HelpSection: Identifiable {
             title: "Graph your statistics in the History view",
             symbol: "chart.pie",
             body: """
-            Two donut charts, each with its own **Group by**: a mark key (one slice per \
-            value) or a tally (one slice per member mark), so two breakdowns of the \
-            same window sit side by side. The bars below show each day — one stack per \
-            donut when both are active.
+            A breakdown is a donut of the window's time grouped **by** a mark key — \
+            one slice per value — with a bar strip under it showing the same series \
+            per day. **Add breakdown** puts another one below (or beside it, on a \
+            wide window) for a second cut of the same window; the setup stays as you \
+            left it.
 
             The **range picker** sets the charts' window: the displayed week (with the \
             usual ‹ Today › stepping), or a trailing window — last 30 or 90 days, \
             12 months, or all history.
 
-            With two group-bys active, **Count marks** switches from counting them \
-            *separately* to counting **in groups**: one combined donut whose slices are \
-            the pairings that actually occurred. Group one side by `type` and the other \
-            by `client` and the slices read type × client — swap either side to cut the \
+            Pick a second key **across** and the row counts in groups: one donut whose \
+            slices are the pairings that actually occurred. Group by `type` across \
+            `client` and the slices read type × client — swap either key to cut the \
             same time by type × project or meeting × client.
             """),
         HelpSection(
