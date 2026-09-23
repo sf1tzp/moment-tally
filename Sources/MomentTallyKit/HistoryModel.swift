@@ -35,6 +35,40 @@ package struct HistorySetup: Codable, Equatable {
     package static let defaultsKey = "historyChartSetup"
 }
 
+/// How the Calendar presents time (#286): one day at full width, the
+/// 7-column week, or a month of day blocks.
+package enum CalendarMode: String, Codable, CaseIterable, Identifiable {
+    case day, week, month
+    package var id: String { rawValue }
+    package var label: String {
+        switch self {
+        case .day: "Day"
+        case .week: "Week"
+        case .month: "Month"
+        }
+    }
+}
+
+/// The Calendar's persisted presentation (#286): mode, the time scale
+/// (points per hour — the zoom), and whether the grid shows all 24 hours
+/// or the working day (07:00–22:00, widened to cover any span outside it).
+package struct CalendarSetup: Codable, Equatable {
+    package var mode: CalendarMode = .week
+    package var hourHeight: Double = 40
+    package var fullDay: Bool = false
+
+    package init(mode: CalendarMode = .week, hourHeight: Double = 40, fullDay: Bool = false) {
+        self.mode = mode
+        self.hourHeight = hourHeight
+        self.fullDay = fullDay
+    }
+
+    package static let defaultsKey = "calendarSetup"
+    /// Zoom bounds: 20pt/h shows a whole day in a short window, 200pt/h
+    /// gives quarter-hour moments a readable block.
+    package static let hourHeightRange: ClosedRange<Double> = 20...200
+}
+
 /// One aggregated series slice: a label ("infra", "proj: infra") and a duration.
 package struct SeriesTotal: Identifiable {
     package var id: String { label }
@@ -92,6 +126,19 @@ package final class HistoryModel {
     package var chartRange: TrailingRange? {
         didSet { persistSetup() }
     }
+    /// The Calendar's presentation (#286), persisted on its own key.
+    package var calendarSetup = CalendarSetup() {
+        didSet { persistCalendarSetup() }
+    }
+    /// The day the Calendar's day mode shows (start of day). Kept inside the
+    /// displayed week: stepping past the week's edge moves the week along.
+    package private(set) var calendarDay: Date
+    /// The first of the month the Calendar's month mode shows.
+    package private(set) var calendarMonth: Date
+    /// Spans fetched for the calendar month — its own window, like the
+    /// charts' range, so the Log and Calendar week stay a week.
+    package private(set) var monthSpans: [TimeSpan] = []
+    package var isLoadingMonth = false
     /// Spans fetched for the charts' trailing range — kept apart from `spans`
     /// so the Log and Calendar stay on their week whatever the charts show.
     package private(set) var rangeSpans: [TimeSpan] = []
@@ -134,6 +181,10 @@ package final class HistoryModel {
     @ObservationIgnored private var loadedRange: TrailingRange?
     /// Invalidates in-flight range fetches when the range changes mid-fetch.
     @ObservationIgnored private var rangeGeneration = 0
+    /// The month `monthSpans` was last fetched for — nil when never loaded
+    /// or gone stale after a mutation.
+    @ObservationIgnored private var loadedMonth: Date?
+    @ObservationIgnored private var monthGeneration = 0
 
     /// True while `init` restores the stored setup, so the observers above
     /// don't write it straight back.
@@ -143,19 +194,33 @@ package final class HistoryModel {
         self.app = app
         weekStart = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start
             ?? Calendar.current.startOfDay(for: Date())
+        calendarDay = Calendar.current.startOfDay(for: Date())
+        calendarMonth = Calendar.current.dateInterval(of: .month, for: Date())?.start
+            ?? Calendar.current.startOfDay(for: Date())
         restoreSetup()
     }
 
     // MARK: Chart setup persistence (#291)
 
     private func restoreSetup() {
-        guard let data = app.defaults.data(forKey: HistorySetup.defaultsKey),
-              let setup = try? JSONDecoder().decode(HistorySetup.self, from: data)
-        else { return }
         isRestoringSetup = true
         defer { isRestoringSetup = false }
-        chartRange = setup.range
-        chartRows = setup.rows
+        if let data = app.defaults.data(forKey: HistorySetup.defaultsKey),
+           let setup = try? JSONDecoder().decode(HistorySetup.self, from: data) {
+            chartRange = setup.range
+            chartRows = setup.rows
+        }
+        if let data = app.defaults.data(forKey: CalendarSetup.defaultsKey),
+           let calendar = try? JSONDecoder().decode(CalendarSetup.self, from: data) {
+            calendarSetup = calendar
+        }
+    }
+
+    private func persistCalendarSetup() {
+        guard !isRestoringSetup else { return }
+        if let data = try? JSONEncoder().encode(calendarSetup) {
+            app.defaults.set(data, forKey: CalendarSetup.defaultsKey)
+        }
     }
 
     private func persistSetup() {
@@ -219,7 +284,14 @@ package final class HistoryModel {
     package func goToNextWeek() { shiftWeek(by: 1) }
 
     package func goToToday() {
-        if let start = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start {
+        let now = Date()
+        calendarDay = Calendar.current.startOfDay(for: now)
+        if let month = Calendar.current.dateInterval(of: .month, for: now)?.start,
+           month != calendarMonth {
+            calendarMonth = month
+            Task { await loadMonthIfNeeded() }
+        }
+        if let start = Calendar.current.dateInterval(of: .weekOfYear, for: now)?.start {
             weekStart = start
             Task { await reload() }
         }
@@ -228,7 +300,112 @@ package final class HistoryModel {
     private func shiftWeek(by weeks: Int) {
         if let start = Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: weekStart) {
             weekStart = start
+            // Keep the day inside the week: same weekday, new week.
+            if let day = Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: calendarDay) {
+                calendarDay = day
+            }
             Task { await reload() }
+        }
+    }
+
+    // MARK: Calendar day + month navigation (#286)
+
+    package var dayInterval: DateInterval {
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: calendarDay) ?? calendarDay
+        return DateInterval(start: calendarDay, end: end)
+    }
+
+    package var dayLabel: String {
+        calendarDay.formatted(.dateTime.weekday(.wide).month(.abbreviated).day().year())
+    }
+
+    package var isToday: Bool { dayInterval.contains(Date()) }
+
+    package func goToPreviousDay() { shiftDay(by: -1) }
+    package func goToNextDay() { shiftDay(by: 1) }
+
+    /// Step the day; crossing the week's edge moves the week with it, so
+    /// the Log stays on the week the Calendar shows.
+    private func shiftDay(by days: Int) {
+        guard let day = Calendar.current.date(byAdding: .day, value: days, to: calendarDay) else { return }
+        showDay(day)
+    }
+
+    /// Show one day in day mode — the week header's day tap, a month
+    /// block's tap, the day stepper.
+    package func showDay(_ date: Date, switchingMode: Bool = false) {
+        calendarDay = Calendar.current.startOfDay(for: date)
+        if switchingMode { calendarSetup.mode = .day }
+        if !weekInterval.contains(calendarDay),
+           let start = Calendar.current.dateInterval(of: .weekOfYear, for: calendarDay)?.start {
+            weekStart = start
+            Task { await reload() }
+        }
+    }
+
+    package var monthInterval: DateInterval {
+        let end = Calendar.current.date(byAdding: .month, value: 1, to: calendarMonth) ?? calendarMonth
+        return DateInterval(start: calendarMonth, end: end)
+    }
+
+    package var monthLabel: String {
+        calendarMonth.formatted(.dateTime.month(.wide).year())
+    }
+
+    package var isCurrentMonth: Bool { monthInterval.contains(Date()) }
+
+    package func goToPreviousMonth() { shiftMonth(by: -1) }
+    package func goToNextMonth() { shiftMonth(by: 1) }
+
+    private func shiftMonth(by months: Int) {
+        guard let month = Calendar.current.date(byAdding: .month, value: months, to: calendarMonth) else { return }
+        calendarMonth = month
+        Task { await loadMonthIfNeeded() }
+    }
+
+    /// Entering month mode from a week or day: show that month.
+    package func alignMonthToDisplayedDay() {
+        if let month = Calendar.current.dateInterval(of: .month, for: calendarDay)?.start,
+           month != calendarMonth {
+            calendarMonth = month
+        }
+    }
+
+    /// Fetch the calendar month unless `monthSpans` already holds it.
+    package func loadMonthIfNeeded() async {
+        guard loadedMonth != calendarMonth else { return }
+        await reloadMonth()
+    }
+
+    /// Page through the month, the range fetch's shape (#163): progress via
+    /// `isLoadingMonth`, a generation counter drops superseded fetches.
+    package func reloadMonth() async {
+        guard let backend = app.api, app.isReady else { return }
+        monthGeneration += 1
+        let generation = monthGeneration
+        let month = calendarMonth
+        isLoadingMonth = true
+        defer { if generation == monthGeneration { isLoadingMonth = false } }
+        do {
+            let interval = monthInterval
+            var finished: [TimeSpan] = []
+            var token: PageToken?
+            for _ in 0..<500 {
+                let page = try await backend.timeSpans(from: interval.start, to: interval.end, page: token)
+                guard generation == monthGeneration else { return }
+                finished += page.timeSpans
+                guard let next = page.nextPage, !page.timeSpans.isEmpty else { break }
+                token = next
+            }
+            let running = try await backend.timers()
+            guard generation == monthGeneration else { return }
+            var seen = Set<Int>()
+            monthSpans = (running + finished).filter { seen.insert($0.id).inserted }
+            loadedMonth = month
+            errorMessage = nil
+        } catch {
+            guard generation == monthGeneration else { return }
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -246,6 +423,10 @@ package final class HistoryModel {
         rangeSpans = []
         loadedRange = nil
         isLoadingRange = false
+        monthGeneration += 1
+        monthSpans = []
+        loadedMonth = nil
+        isLoadingMonth = false
         errorMessage = nil
         // The range and rows are the user's setup, not the store's data —
         // they stay (a key the new store lacks just charts empty).
@@ -293,6 +474,11 @@ package final class HistoryModel {
     package func reloadIfLoaded() async {
         if hasLoaded { await reload() }
         await reloadRangeIfLoaded()
+        if loadedMonth != nil {
+            // Stale, not refetched: the month refetches on its next look.
+            loadedMonth = nil
+            if calendarSetup.mode == .month { await reloadMonth() }
+        }
     }
 
     /// First-load hook for the tab views: fetch once, then leave navigation

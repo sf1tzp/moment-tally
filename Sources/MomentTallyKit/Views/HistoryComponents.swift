@@ -509,12 +509,21 @@ private struct MinuteSteppingDatePicker: View {
 
 extension TimeSpan {
     /// "10:32 – 11:25", or "10:32 –" while running.
+    /// "13:00 – 15:30" — 24-hour, matching the Calendar's hour gutter and
+    /// the History axis. (The locale-hour style with the meridiem omitted
+    /// read 13:00 as "01:00", #286.)
     package var timeRangeLabel: String {
-        let f = Date.FormatStyle.dateTime.hour(.twoDigits(amPM: .omitted)).minute()
-        let startText = start.formatted(f)
+        let startText = Self.clock.string(from: start)
         guard let end else { return "\(startText) –" }
-        return "\(startText) – \(end.formatted(f))"
+        return "\(startText) – \(Self.clock.string(from: end))"
     }
+
+    private static let clock: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm"
+        return f
+    }()
 
     /// Duration so far (running spans count up to now).
     package var durationSeconds: TimeInterval {
