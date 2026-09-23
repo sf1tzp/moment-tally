@@ -30,6 +30,22 @@ package enum DemoMode {
         }
         return arguments.contains("--demo")
     }
+
+    /// Whether a demo launch should start past the onboarding tour. The
+    /// scratch defaults suite is wiped every demo launch, so the tour shows
+    /// on each one — right for a demo, three clicks of overhead for every
+    /// verify run. `MOMENTTALLY_DEMO_ONBOARDED=1` pre-marks it complete;
+    /// only consulted in demo mode, so it can never touch the real flag.
+    package static var skipsOnboarding: Bool {
+        skipsOnboarding(environment: ProcessInfo.processInfo.environment)
+    }
+
+    package static func skipsOnboarding(environment: [String: String]) -> Bool {
+        if let value = environment["MOMENTTALLY_DEMO_ONBOARDED"], !value.isEmpty, value != "0" {
+            return true
+        }
+        return false
+    }
 }
 
 // MARK: - Demo store

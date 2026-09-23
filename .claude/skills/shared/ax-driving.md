@@ -58,7 +58,9 @@ skills, so the two don't drift.
   text as focused while eating one Tab per date element.
 - A fresh demo launch opens onboarding: click `button 1 of group 1 of
   window 1` repeatedly to advance, then close the walkthrough window it
-  hands off to (`AXCloseButton`) before driving anything else.
+  hands off to (`AXCloseButton`) before driving anything else — or launch
+  with `MOMENTTALLY_DEMO_ONBOARDED=1` and skip all of that (verify runs;
+  capture batches that shoot onboarding leave it unset).
 - Views at `.opacity(0)` (e.g. hover-revealed controls) are absent from the
   AX tree entirely — not present-but-invisible. To reach them, hover with a
   real cursor move first (`cliclick m:x,y`, app frontmost), then re-query;

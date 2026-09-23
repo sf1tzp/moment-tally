@@ -43,6 +43,12 @@ import Testing
         #expect(!DemoMode.isActive(environment: [:], arguments: ["app"]))
     }
 
+    @Test func onboardingSkipFlag() {
+        #expect(DemoMode.skipsOnboarding(environment: ["MOMENTTALLY_DEMO_ONBOARDED": "1"]))
+        #expect(!DemoMode.skipsOnboarding(environment: ["MOMENTTALLY_DEMO_ONBOARDED": "0"]))
+        #expect(!DemoMode.skipsOnboarding(environment: [:]))
+    }
+
     // MARK: Determinism
 
     @Test func seedIsDeterministicForAFixedReferenceDate() {
