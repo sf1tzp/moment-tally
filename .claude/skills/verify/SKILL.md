@@ -50,6 +50,12 @@ sources the capture drivers' lib.zsh too) and use:
   screen's frame is read live from Device Hub's accessibility tree
   (`iOSContentGroup`), so a toggled sidebar/inspector re-maps itself; the
   helper raises the window and focuses it with a title click first.
+- `pr_shots <pr> [-m "lead"] a.png b.png …` — attach the shots you read to
+  the PR as one comment (Gitea issue assets via the tea login's token;
+  `tea` itself can't attach). A verify pass on a PR branch ends with this:
+  the reviewer sees what you saw. File names become captions
+  (`mac-week-1000x950.png` → "mac week 1000x950"), so name them for the
+  reader, and prefer a `vsheet` per surface to a comment per shot.
 
 **Keychain gotcha (fixed 2026-07-23 on macmini):** if launches prompt for the
 login-keychain password after every rebuild, the "TraggoMenuApp Dev" cert has

@@ -120,3 +120,43 @@ devhub_swipe() {
   local mx=$(( (ax + bx) / 2 )) my=$(( (ay + by) / 2 ))
   cliclick "m:$ax,$ay" w:200 "dd:$ax,$ay" w:100 "m:$mx,$my" w:60 "m:$bx,$by" w:200 "du:$bx,$by"
 }
+
+# --- PR evidence -----------------------------------------------------------
+# The shots a verify session reads are the shots a reviewer wants: attach
+# them to the PR. `tea` has no attachment support, so this goes to Gitea's
+# API with the tea login's token — an issue asset per file (PRs are issues),
+# then one comment embedding them.
+#
+#   pr_shots <pr-index> [-m "lead paragraph"] <file.png>...
+#
+# Each file's name (minus extension, dashes → spaces) is its caption, so
+# name shots for the reader: ipad-portrait-fill.png, mac-week-1000x950.png.
+# Contact sheets (`vsheet`) keep a PR to one comment per verify pass.
+_gitea_repo() {   # owner/name from the origin remote
+  git remote get-url origin | sed -E 's#\.git$##; s#.*[:/]([^/]+/[^/]+)$#\1#'
+}
+_gitea_host() {   # https://host from the origin remote (ssh:// or https)
+  git remote get-url origin | sed -E 's#^[a-z+]+://([^@]+@)?##; s#^[^@]+@##; s#[:/].*##; s#^#https://#'
+}
+_gitea_token() {
+  awk '/token:/{print $2; exit}' "$HOME/Library/Application Support/tea/config.yml"
+}
+pr_shots() {
+  local pr=$1; shift
+  local lead=""
+  if [[ $1 == -m ]]; then lead=$2; shift 2; fi
+  local token=$(_gitea_token) api="$(_gitea_host)/api/v1/repos/$(_gitea_repo)/issues/$pr"
+  local body=$lead file name caption url
+  for file in "$@"; do
+    name=${file:t}
+    url=$(curl -sS -H "Authorization: token $token" -F "attachment=@$file" \
+            "$api/assets?name=$name" \
+          | python3 -c 'import sys,json; print(json.load(sys.stdin)["browser_download_url"])') \
+      || { echo "pr_shots: upload failed for $file" >&2; return 1; }
+    caption=${${name%.*}//-/ }
+    body+=$'\n\n'"**$caption**"$'\n'"![$caption]($url)"
+  done
+  python3 -c 'import sys,json; print(json.dumps({"body": sys.argv[1].strip()}))' "$body" \
+    | curl -sS -o /dev/null -w '%{http_code}\n' -H "Authorization: token $token" \
+           -H 'Content-Type: application/json' -d @- "$api/comments"
+}
