@@ -406,9 +406,11 @@ private struct RunningSessionEditor: View {
 /// The label rows shared by both editor regimes: one row per tag (color
 /// swatch, key, value, remove) plus the add-mark button.
 private struct LabelRowsEditor: View {
+    @Environment(AppModel.self) private var model
     @Binding var rows: [TagRow]
     /// The row being drag-reordered — see RowReorder.swift.
     @State private var dragged: UUID?
+    @FocusState private var focusedValueRow: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -422,6 +424,7 @@ private struct LabelRowsEditor: View {
                     Text(":").foregroundStyle(.secondary)
                     TextField("value", text: $tag.value)
                         .autocorrectionDisabled()
+                        .focused($focusedValueRow, equals: tag.id)
                     Button(role: .destructive) {
                         // Read the id before removeAll — reading the `tag`
                         // binding inside the predicate re-enters the array's
@@ -446,6 +449,19 @@ private struct LabelRowsEditor: View {
         // Covers both the expand-in-place appearance of the whole editor and
         // rows added/removed while it's open.
         .refreshesKeyViewLoop(on: rows.count)
+        // A start that still carries a value-less label lands here with the
+        // model asking for that value focused (#255). Deferred a runloop hop
+        // — a @FocusState write during the appearance pass is dropped, the
+        // same lesson the popover's editor learned (#162).
+        .onAppear {
+            guard model.wantsValueFocusOnEditorAppear else { return }
+            model.wantsValueFocusOnEditorAppear = false
+            guard let target = rows.first(where: {
+                !$0.key.trimmingCharacters(in: .whitespaces).isEmpty
+                    && $0.value.trimmingCharacters(in: .whitespaces).isEmpty
+            }) else { return }
+            DispatchQueue.main.async { focusedValueRow = target.id }
+        }
     }
 }
 

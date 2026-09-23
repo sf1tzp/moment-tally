@@ -125,6 +125,11 @@ package final class AppModel {
     /// `SpanEditSession`. Surviving here (not in view `@State`) is what lets
     /// drafts outlive the popover closing (#70).
     package var editSession: SpanEditSession?
+    /// One-shot: the next label editor to appear focuses its first empty
+    /// value field (#255, the iOS launcher's value-less start — the #162
+    /// fill-in-the-value-per-start workflow routed to the Log's row editor).
+    /// Raised before the hand-off, consumed by `LabelRowsEditor` on appear.
+    package var wantsValueFocusOnEditorAppear = false
     package var errorMessage: String?
     package var isBusy = false
     /// Updated once per second while a timer runs so elapsed labels tick.

@@ -11,6 +11,15 @@ import MomentTallyCore
 struct LauncherSurface: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openAppSection) private var openAppSection
+    /// The card open across its row (#255) — grid state, since the row
+    /// layout re-flows the other cards around it.
+    @State private var expandedID: TagSet.ID?
+    /// The running span whose editor this surface presented as a sheet.
+    /// The sheet shows only for sessions opened *here* (a running row, the
+    /// blank timer): the Log's expanded row claims the same shared session,
+    /// and a value-less start (#255) hands off to that editor on purpose —
+    /// a sheet popping over it would defeat the hand-off.
+    @State private var sheetSpanID: TimeSpan.ID?
 
     private static let minCardWidth: CGFloat = 150
     private static let spacing: CGFloat = 12
@@ -40,10 +49,13 @@ struct LauncherSurface: View {
         // (#70's "drafts must survive teardown" lesson — commits go
         // through the model's one funnel either way).
         .sheet(isPresented: Binding(
-            get: { model.editSession != nil },
+            get: { sheetSpanID != nil && model.editSession?.spanID == sheetSpanID },
             set: { shown in
-                if !shown, model.editSession != nil {
-                    Task { await model.finishEditing() }
+                if !shown {
+                    sheetSpanID = nil
+                    if model.editSession != nil {
+                        Task { await model.finishEditing() }
+                    }
                 }
             }
         )) {
@@ -67,6 +79,29 @@ struct LauncherSurface: View {
             }
         }
         .padding(Self.spacing)
+        // A tap on the surface outside any card collapses the open one
+        // without starting (#255); cards' own buttons win over this.
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard expandedID != nil else { return }
+            withAnimation(.snappy) { expandedID = nil }
+        }
+    }
+
+    /// Every start from a card or its chips (#255): collapse, start, and —
+    /// when the labels still carry a value-less one (`deliverable:`) — hand
+    /// the new span to the Log's row editor with that value field focused,
+    /// the #162 fill-in-the-value-per-start workflow. `requestLogEdit`
+    /// claims the session synchronously so the Log renders its expanded row
+    /// in the same pass as the section switch (#130).
+    private func start(_ labels: [SpanLabel]) async {
+        withAnimation(.snappy) { expandedID = nil }
+        guard let created = await model.start(tags: labels) else { return }
+        if labels.contains(where: { $0.value.isEmpty }) {
+            model.wantsValueFocusOnEditorAppear = true
+            model.history.requestLogEdit(of: created)
+            openAppSection(.log)
+        }
     }
 
     // MARK: Running
@@ -90,6 +125,7 @@ struct LauncherSurface: View {
         Button {
             Task {
                 if let created = await model.start(tags: []) {
+                    sheetSpanID = created.id
                     await model.beginEditing(created)
                 }
             }
@@ -107,6 +143,7 @@ struct LauncherSurface: View {
     private func runningRow(_ timer: TimeSpan) -> some View {
         HStack(spacing: 12) {
             Button {
+                sheetSpanID = timer.id
                 Task { await model.beginEditing(timer) }
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
@@ -167,12 +204,23 @@ struct LauncherSurface: View {
                     .buttonStyle(.borderedProminent)
                 }
             } else {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(),
-                                                             spacing: Self.spacing),
-                                         count: columns),
-                          spacing: Self.spacing) {
-                    ForEach(model.tagSets) { set in
-                        TagSetCard(set: set)
+                // The expanded card opens in place, two slots wide, and the
+                // rest re-flow (#255); one Layout over one ForEach keeps
+                // every card's identity through the reshuffle, so the
+                // frames animate.
+                let sets = model.tagSets
+                LauncherRowLayout(columns: columns, spacing: Self.spacing,
+                                  expandedIndex: sets.firstIndex { $0.id == expandedID }) {
+                    ForEach(sets) { set in
+                        TagSetCard(set: set, expansion: CardExpansion(
+                            isExpanded: expandedID == set.id,
+                            expand: {
+                                withAnimation(.snappy) { expandedID = set.id }
+                            },
+                            collapse: {
+                                withAnimation(.snappy) { expandedID = nil }
+                            },
+                            start: { await start($0) }))
                     }
                 }
             }
@@ -180,6 +228,112 @@ struct LauncherSurface: View {
     }
 }
 
+/// The touch launcher's card grid (#255): `columns` equal-width slots per
+/// row, except that the subview at `expandedIndex` opens *in place* to two
+/// slots wide (the whole row on a two-column phone) at its own natural
+/// height. It stays in the row it was in and opens out from under the
+/// thumb: a card in the left half grows rightward, one in the right half
+/// grows leftward over its left neighbour, which is displaced and
+/// re-flows after it; the cards after it re-flow around the wider slot.
+/// Rows take their tallest card, so an open card's neighbours grow with
+/// it rather than leaving a ragged row.
+struct LauncherRowLayout: Layout {
+    var columns: Int
+    var spacing: CGFloat
+    var expandedIndex: Int?
+
+    private struct Slot {
+        var index: Int
+        var frame: CGRect
+    }
+
+    /// Lay the subviews into frames for `width`, returning them and the
+    /// total height.
+    private func slots(width: CGFloat, subviews: Subviews) -> ([Slot], CGFloat) {
+        let columns = max(1, columns)
+        let slotWidth = (width - spacing * CGFloat(columns - 1)) / CGFloat(columns)
+        let expandedSpan = min(2, columns)
+        var placed: [Slot] = []
+        // The row being filled: which subview, its first column, how many
+        // columns it spans, and its measured height at that width.
+        var row: [(index: Int, column: Int, span: Int, height: CGFloat)] = []
+        var column = 0
+        var y: CGFloat = 0
+
+        func widthFor(span: Int) -> CGFloat {
+            slotWidth * CGFloat(span) + spacing * CGFloat(span - 1)
+        }
+        func flushRow() {
+            guard !row.isEmpty else { return }
+            let height = row.map(\.height).max() ?? 0
+            for item in row {
+                let x = CGFloat(item.column) * (slotWidth + spacing)
+                placed.append(Slot(index: item.index,
+                                   frame: CGRect(x: x, y: y, width: widthFor(span: item.span),
+                                                 height: height)))
+            }
+            y += height + spacing
+            row.removeAll()
+            column = 0
+        }
+        func place(_ index: Int, span: Int) {
+            if column + span > columns { flushRow() }
+            let height = subviews[index].sizeThatFits(
+                ProposedViewSize(width: widthFor(span: span), height: nil)).height
+            row.append((index, column, span, height))
+            column += span
+        }
+
+        // Reading order, except that a card the open one displaces from its
+        // own row is dealt again right after it.
+        var queue = Array(subviews.indices)
+        var i = 0
+        while i < queue.count {
+            let index = queue[i]
+            i += 1
+            if index == expandedIndex {
+                // The card's own slot first: a full row wraps before it,
+                // as it would for the closed card.
+                if column >= columns { flushRow() }
+                // Open in place, out from under the thumb: right of centre
+                // the card grows leftward over its neighbour (and a card
+                // whose span would overrun the row has to anyway); the
+                // covered cards are dealt again right after it, so the
+                // left neighbour shuffles down and the open card stays put.
+                let rightHalf = column * 2 > columns - 1
+                let pullBack = rightHalf
+                    ? min(column, expandedSpan - 1)
+                    : max(0, column + expandedSpan - columns)
+                if pullBack > 0 {
+                    let displaced = row.suffix(pullBack).map(\.index)
+                    row.removeLast(pullBack)
+                    column -= pullBack
+                    queue.insert(contentsOf: displaced, at: i)
+                }
+                place(index, span: expandedSpan)
+            } else {
+                place(index, span: 1)
+            }
+        }
+        flushRow()
+        return (placed, max(0, y - spacing))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.replacingUnspecifiedDimensions().width
+        let (_, height) = slots(width: width, subviews: subviews)
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let (placed, _) = slots(width: bounds.width, subviews: subviews)
+        for slot in placed {
+            let frame = slot.frame.offsetBy(dx: bounds.minX, dy: bounds.minY)
+            subviews[slot.index].place(at: frame.origin,
+                                       proposal: ProposedViewSize(frame.size))
+        }
+    }
+}
 /// The iPhone home (#124): `LauncherSurface` under a navigation title, with
 /// the section routes in a trailing menu — the compact-width counterpart of
 /// the iPad split root's buttons-below-the-launcher (#126).

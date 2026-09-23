@@ -93,7 +93,18 @@ xcrun simctl ui "iPhone 17 Pro" appearance dark            # theme flips (light|
   Device Hub has no Rotate menu item: the rotate control is the last
   button in the device window's bottom toolbar (`cliclick` it — window
   origin + ~366,1023 at the matrix tiling), and `simctl` can't rotate.
-  Drag-scrolls in a device window work with the usual `dd:/m:/du:` recipe.
+  Drag-scrolls in a device window work with the usual `dd:/m:/du:` recipe,
+  and taps are `cliclick c:` at the device point mapped onto the window
+  (`screencapture -R` the window region once, read the device screen's
+  frame off it: Mac point = frame origin + device point × frame/device
+  scale). The first click on a non-key Device Hub window only focuses it —
+  `AXRaise` the window, click a neutral spot, *then* tap. A stray click on
+  the window's toolbar toggles the sidebar or the Inspector, which shrinks
+  the device view, throws off every mapping and (via the Inspector's
+  Appearance row) can flip the simulator dark: re-check with a window
+  capture when taps stop landing, then View › Hide Sidebar / Inspectors ›
+  Hide Inspector and View › Zoom to Fit; `simctl ui <dev> appearance light`
+  restores the theme.
 - **Device Hub, not Simulator.app:** Xcode 27 replaced Simulator.app with
   `Xcode.app/Contents/Applications/DeviceHub.app` — a tabbed window that
   shows one device at a time (a sidebar click switches the tab), hence one

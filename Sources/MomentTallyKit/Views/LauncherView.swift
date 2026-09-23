@@ -167,6 +167,28 @@ private struct NewTagSetCard: View {
     }
 }
 
+/// How a touch launcher grid expands a card in place (#255): the grid owns
+/// which card is open (it gives that card its whole row), the card asks to
+/// open and routes its starts. Absent on the Mac, where hover intent floats
+/// the chips over the card instead.
+package struct CardExpansion {
+    package var isExpanded: Bool
+    package var expand: () -> Void
+    package var collapse: () -> Void
+    /// Every start from the card goes through here — the plain start and
+    /// the chips' — so the grid can collapse and hand off in one place.
+    package var start: ([SpanLabel]) async -> Void
+
+    package init(isExpanded: Bool, expand: @escaping () -> Void,
+                 collapse: @escaping () -> Void,
+                 start: @escaping ([SpanLabel]) async -> Void) {
+        self.isExpanded = isExpanded
+        self.expand = expand
+        self.collapse = collapse
+        self.start = start
+    }
+}
+
 /// One launcher card: the set's icon and name on a tile tinted with the first
 /// tag's color (the set's own fallback color when it has no tags — the
 /// quick-labels-only case — and accent when that isn't picked either).
@@ -177,6 +199,12 @@ private struct NewTagSetCard: View {
 /// rows' 180ms hover intent — a sweep or a mid-drag reshuffle doesn't count)
 /// also floats the quick-label chips over it — same one-click "set plus
 /// honing label" as the popover's quick-start rows.
+///
+/// Touch has no hover, so a card with quick labels expands on tap instead
+/// (#255, via `expansion`): the tap opens the card in place with the chips
+/// laid out as separate targets, and a second tap on a chip starts; a tap
+/// on the open card itself only folds it back. A card without quick labels
+/// starts on the one tap.
 package struct TagSetCard: View {
     @Environment(AppModel.self) private var model
     package let set: TagSet
@@ -188,6 +216,8 @@ package struct TagSetCard: View {
     /// the dragged card under the cursor and sweeps others past it, so the
     /// chip reveal stays suppressed until the drop.
     package var reordering = false
+    /// The touch grid's expand-in-place seam (#255); nil on the Mac.
+    package var expansion: CardExpansion?
     @State private var hovering = false
     /// Chips reveal on hover *intent* — the popover rows' 180ms pause — not
     /// raw hover, so a cursor sweeping the grid (or the post-drop settle)
@@ -195,15 +225,17 @@ package struct TagSetCard: View {
     @State private var chipsShown = false
     @State private var chipIntent: Task<Void, Never>?
 
-    package init(set: TagSet, isPreview: Bool = false, reordering: Bool = false) {
+    package init(set: TagSet, isPreview: Bool = false, reordering: Bool = false,
+                 expansion: CardExpansion? = nil) {
         self.set = set
         self.isPreview = isPreview
         self.reordering = reordering
+        self.expansion = expansion
     }
 
     /// Touch platforms get standing affordances where the Mac uses hover
     /// (#124): the running card's stop scrim stays on, and quick-label
-    /// chips reveal on long-press instead of hover intent.
+    /// chips come from the tap-to-expand face (#255) instead of hover intent.
     private static var touchIdioms: Bool {
         #if os(iOS)
         true
@@ -217,49 +249,84 @@ package struct TagSetCard: View {
     private var isRunning: Bool { !isPreview && model.isRunning(set) }
     private var busy: Bool { !isPreview && model.isBusy }
 
+    private var isExpanded: Bool { expansion?.isExpanded ?? false }
+
     package var body: some View {
-        Button {
-            guard !isPreview else { return }
-            if Self.touchIdioms { revealChips(false) }
-            Task {
-                if let running = model.runningTimer(for: set) {
-                    await model.stop(id: running.id)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                tapped()
+            } label: {
+                if isExpanded {
+                    // The expanded identity row: icon beside the name,
+                    // leading, so the chips read as belonging to it.
+                    HStack(spacing: 10) {
+                        TagSetIcon(set: set, size: 28)
+                        Text(set.name.isEmpty ? "Untitled" : set.name)
+                            .font(.headline)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .contentShape(Rectangle())
                 } else {
-                    await model.start(tagSet: set)
+                    VStack(spacing: 8) {
+                        TagSetIcon(set: set, size: 28)
+                        Text(set.name.isEmpty ? "Untitled" : set.name)
+                            .font(.headline)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 96)
+                    .contentShape(Rectangle())
                 }
             }
-        } label: {
-            VStack(spacing: 8) {
-                TagSetIcon(set: set, size: 28)
-                Text(set.name.isEmpty ? "Untitled" : set.name)
-                    .font(.headline)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, minHeight: 96)
-            .foregroundStyle(set.showsGradient
-                             ? Brand.tileGlyph(for: tint)
-                             : tint.contrastingTextColor)
-            .background(RoundedRectangle(cornerRadius: 10).fill(
-                set.showsGradient
-                ? AnyShapeStyle(Brand.tileGradient(for: tint))
-                : AnyShapeStyle(tint)))
-            .overlay {
-                if isRunning && (hovering || Self.touchIdioms) {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(.black.opacity(0.35))
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(.white)
+            .buttonStyle(.plain)
+            .disabled(busy)
+
+            // The chips as their own row of full-size targets below the
+            // identity, on the scrim the hover overlay uses — outside the
+            // card's button so a chip tap is a chip tap, never a card tap.
+            if isExpanded, let expansion {
+                let quicks = model.quickLabels(for: set)
+                FlowLayout(spacing: 6) {
+                    ForEach(quicks) { quick in
+                        QuickLabelChip(set: set, quick: quick, filled: true) {
+                            await expansion.start($0)
+                        }
+                    }
                 }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8)
+                    .fill(.black.opacity(0.25)))
+                .environment(\.colorScheme, .dark)
+                .padding([.horizontal, .bottom], 8)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(.white.opacity(hovering && !busy ? 0.6 : 0),
-                                  lineWidth: 2)
-            )
         }
-        .buttonStyle(.plain)
-        .disabled(busy)
+        .foregroundStyle(set.showsGradient
+                         ? Brand.tileGlyph(for: tint)
+                         : tint.contrastingTextColor)
+        .background(RoundedRectangle(cornerRadius: 10).fill(
+            set.showsGradient
+            ? AnyShapeStyle(Brand.tileGradient(for: tint))
+            : AnyShapeStyle(tint)))
+        .overlay {
+            if isRunning && (hovering || Self.touchIdioms) {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(.black.opacity(0.35))
+                    .allowsHitTesting(false)
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.white)
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(.white.opacity((hovering && !busy) || isExpanded ? 0.6 : 0),
+                              lineWidth: 2)
+        )
         .opacity(busy || (isRunning && !hovering && !Self.touchIdioms) ? 0.5 : 1)
         // The chips are separate buttons, so they sit over the card rather
         // than nesting inside its label — on the same full-card scrim the
@@ -276,8 +343,7 @@ package struct TagSetCard: View {
                     FlowLayout(spacing: 4) {
                         ForEach(quicks) { quick in
                             // In preview the chips keep their hover feedback
-                            // but the start routes to a no-op; on touch the
-                            // start also dismisses the long-press reveal.
+                            // but the start routes to a no-op.
                             QuickLabelChip(set: set, quick: quick, filled: true,
                                            start: chipStart)
                         }
@@ -297,14 +363,6 @@ package struct TagSetCard: View {
         .onChange(of: reordering) { _, dragging in
             revealChips(hovering && !dragging)
         }
-        // The hover-intent reveal, re-expressed for touch (#124): press and
-        // hold a startable card to float its quick-label chips; tapping a
-        // chip (or the card itself — clicking off a chip still starts the
-        // set plain) starts and dismisses.
-        .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in
-            guard Self.touchIdioms, !isRunning, !isPreview else { return }
-            withAnimation(.snappy(duration: 0.18)) { chipsShown.toggle() }
-        })
         .help(isRunning
               ? "Stop the running timer"
               : set.labels.isEmpty
@@ -314,15 +372,33 @@ package struct TagSetCard: View {
                 }.joined(separator: ", "))
     }
 
-    /// The chips' start action: a no-op in preview; on touch, a start that
-    /// also dismisses the reveal (there is no pointer exit to do it).
-    private var chipStart: (([SpanLabel]) async -> Void)? {
-        if isPreview { return { _ in } }
-        guard Self.touchIdioms else { return nil }
-        return { labels in
-            _ = await model.start(tags: labels)
-            withAnimation(.snappy(duration: 0.18)) { chipsShown = false }
+    /// The tap (#255): a running card stops; a startable card with quick
+    /// labels and a grid that can expand it opens instead of starting, and
+    /// once open the tap only folds it back — the chips are the open card's
+    /// only starts; the rest — no quick labels, or the Mac — start plain.
+    private func tapped() {
+        guard !isPreview else { return }
+        if let running = model.runningTimer(for: set) {
+            Task { await model.stop(id: running.id) }
+            return
         }
+        if let expansion {
+            if expansion.isExpanded {
+                expansion.collapse()
+            } else if !model.quickLabels(for: set).isEmpty {
+                expansion.expand()
+            } else {
+                Task { await expansion.start(set.labels) }
+            }
+        } else {
+            Task { await model.start(tagSet: set) }
+        }
+    }
+
+    /// The hover overlay chips' start action: a no-op in preview, else the
+    /// chip's own plain start.
+    private var chipStart: (([SpanLabel]) async -> Void)? {
+        isPreview ? { _ in } : nil
     }
 
     /// Hover-intent gate for the chip overlay, same shape as the popover
