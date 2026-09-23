@@ -1002,7 +1002,6 @@ private struct CalendarSegment: Identifiable {
     var id: String { "\(span.id)-\(Int(interval.start.timeIntervalSince1970))" }
 }
 
-<<<<<<< HEAD
 
 /// The block's surface (#302): liquid glass tinted with the block colour
 /// where the OS has it, the flat tinted fill before that. A running span
@@ -1023,7 +1022,10 @@ private struct BlockSurface: ViewModifier {
                 .background(shape.fill(color.opacity(0.9)))
                 .overlay(shape.strokeBorder(running ? Color.accentColor : color.opacity(0.4),
                                             lineWidth: running ? 1.5 : 0.5))
-=======
+        }
+    }
+}
+
 /// A month-view day (#304): a rounded square *filled* with the day's colour
 /// distribution — the pie's sectors, clockwise from twelve, largest first
 /// (the History donut's convention), clipped to the card — with the day
@@ -1111,7 +1113,6 @@ private struct DayCard: View {
                 context.fill(path, with: .color(color(group.label).opacity(0.92)))
                 angle += sweep
             }
->>>>>>> 3487258 (Calendar month: pie-filled day cards, a scroll through months, the top set's icon (#304))
         }
     }
 }
