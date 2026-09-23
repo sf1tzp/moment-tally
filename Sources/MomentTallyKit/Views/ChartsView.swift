@@ -13,9 +13,21 @@ import Charts
 /// `across` nests the row's grouping inside it: one donut of strict
 /// "outer · inner" pairs (#151), the old header-wide "in Groups" mode made
 /// per row. The setup persists with the range (`HistorySetup`).
+///
+/// Density follows the canvas (#292): the measured row width picks the
+/// donut size, the bar strip height and how many series show before the
+/// tail folds into "Other" — never past the palette's eight hues, since a
+/// donut stops reading past that however big it is. The legend still
+/// enumerates everything: the Other row is a disclosure listing the folded
+/// values inline.
 package struct HistoryChartsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    /// Width the grid gives each row — every row gets the same, so one
+    /// measurement serves all. Zero until the first layout pass.
+    @State private var rowWidth: CGFloat = 0
+    /// Rows whose Other disclosure is open. View state, not persisted.
+    @State private var expandedOther: Set<ChartBreakdown.ID> = []
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
@@ -165,17 +177,26 @@ package struct HistoryChartsView: View {
     @ViewBuilder
     private func breakdownRow(_ row: Binding<ChartBreakdown>) -> some View {
         let breakdown = row.wrappedValue
+        let metrics = rowMetrics
         VStack(alignment: .leading, spacing: 10) {
             rowHeader(row)
-            let totals = folded(model.history.totals(for: breakdown))
+            let fold = folded(model.history.totals(for: breakdown), cap: metrics.cap)
+            let totals = fold.kept
             if totals.isEmpty {
                 // Strict pairing under `across`: only spans carrying BOTH
                 // keys count.
                 placeholderDonut(breakdown.across == nil
-                                 ? "No marked time" : "No time marked with both keys")
+                                 ? "No marked time" : "No time marked with both keys",
+                                 size: metrics.donut)
             } else {
                 let colors = colorMap(for: totals, row: breakdown)
                 let grand = totals.reduce(0) { $0 + $1.seconds }
+                let expanded = Binding<Bool>(
+                    get: { expandedOther.contains(breakdown.id) },
+                    set: { open in
+                        if open { expandedOther.insert(breakdown.id) }
+                        else { expandedOther.remove(breakdown.id) }
+                    })
                 let pairLayout = isCompact
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
                     : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
@@ -184,12 +205,15 @@ package struct HistoryChartsView: View {
                     // an across total can undershoot the window's — "matched"
                     // keeps it from contradicting the caption's "Total".
                     donut(totals: totals, colors: colors, grand: grand,
-                          caption: breakdown.across == nil ? "tracked" : "matched")
+                          caption: breakdown.across == nil ? "tracked" : "matched",
+                          size: metrics.donut)
                         .frame(maxWidth: isCompact ? .infinity : nil)
                     if breakdown.across == nil {
-                        breakdownList(totals: totals, colors: colors, grand: grand)
+                        breakdownList(totals: totals, tail: fold.tail, colors: colors,
+                                      grand: grand, expanded: expanded)
                     } else {
-                        combinedBreakdownList(totals: totals, colors: colors, grand: grand)
+                        combinedBreakdownList(totals: totals, tail: fold.tail, colors: colors,
+                                              grand: grand, expanded: expanded)
                     }
                 }
 
@@ -201,10 +225,36 @@ package struct HistoryChartsView: View {
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
-                dailyChart(marks(for: breakdown, totals: totals, colors: colors))
+                dailyChart(marks(for: breakdown, totals: totals, colors: colors),
+                           height: metrics.strip)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
+    }
+
+    // MARK: Canvas-aware metrics (#292)
+
+    /// What a row's width buys it: donut diameter, bar strip height, and
+    /// the series cap before the tail folds into Other.
+    private struct RowMetrics {
+        let donut: CGFloat
+        let strip: CGFloat
+        let cap: Int
+    }
+
+    /// Steps by the measured row width. Compact widths stack the legend
+    /// under the donut, so their cap is about the column's length, not the
+    /// donut's height; regular widths fit the legend beside the donut — a
+    /// 160pt ring carries seven callout rows, 180 and up the full eight.
+    /// Eight is the palette, and the ceiling everywhere (see the type doc).
+    private var rowMetrics: RowMetrics {
+        if isCompact { return RowMetrics(donut: 160, strip: 120, cap: 6) }
+        switch rowWidth {
+        case 700...: return RowMetrics(donut: 220, strip: 160, cap: 8)
+        case 520...: return RowMetrics(donut: 180, strip: 140, cap: 8)
+        default: return RowMetrics(donut: 160, strip: 120, cap: 7)
+        }
     }
 
     /// The row's sentence of pickers — "by [key] across [key]" — with the
@@ -271,12 +321,12 @@ package struct HistoryChartsView: View {
     }
 
     /// Stand-in ring, same size as a real donut, for a row with no data.
-    private func placeholderDonut(_ caption: String) -> some View {
+    private func placeholderDonut(_ caption: String, size: CGFloat) -> some View {
         Circle()
             .inset(by: 15)
             .stroke(Color.secondary.opacity(0.15),
                     style: StrokeStyle(lineWidth: 30, dash: [8, 5]))
-            .frame(width: 160, height: 160)
+            .frame(width: size, height: size)
             .overlay {
                 Text(caption)
                     .font(.caption)
@@ -308,7 +358,7 @@ package struct HistoryChartsView: View {
     // MARK: Charts
 
     private func donut(totals: [SeriesTotal], colors: [String: Color], grand: TimeInterval,
-                       caption: String, size: CGFloat = 160) -> some View {
+                       caption: String, size: CGFloat) -> some View {
         Chart(totals) { item in
             SectorMark(angle: .value("Time", item.seconds),
                        innerRadius: .ratio(0.62),
@@ -329,29 +379,103 @@ package struct HistoryChartsView: View {
         }
     }
 
-    private func breakdownList(totals: [SeriesTotal], colors: [String: Color], grand: TimeInterval) -> some View {
+    /// The donut's legend: one row per kept series, and — when the tail
+    /// folded — an Other row that discloses the folded values inline, so
+    /// every value is enumerable without changing the chart.
+    private func breakdownList(totals: [SeriesTotal], tail: [SeriesTotal],
+                               colors: [String: Color], grand: TimeInterval,
+                               expanded: Binding<Bool>) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 5) {
             ForEach(totals) { item in
-                GridRow {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(colors[item.label] ?? .gray)
-                            .frame(width: 8, height: 8)
-                        Text(item.label)
-                            .lineLimit(1)
+                if item.label == Self.otherLabel {
+                    otherRow(seconds: item.seconds, count: tail.count, grand: grand,
+                             expanded: expanded, font: .callout)
+                    if expanded.wrappedValue {
+                        tailRows(tail, grand: grand)
                     }
-                    Text(formatDuration(item.seconds))
-                        .monospacedDigit()
-                        .gridColumnAlignment(.trailing)
-                    Text(grand > 0
-                         ? (item.seconds / grand).formatted(.percent.precision(.fractionLength(0)))
-                         : "")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .gridColumnAlignment(.trailing)
+                } else {
+                    GridRow {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(colors[item.label] ?? .gray)
+                                .frame(width: 8, height: 8)
+                            Text(item.label)
+                                .lineLimit(1)
+                        }
+                        Text(formatDuration(item.seconds))
+                            .monospacedDigit()
+                            .gridColumnAlignment(.trailing)
+                        shareText(item.seconds, of: grand)
+                    }
+                    .font(.callout)
                 }
-                .font(.callout)
             }
+        }
+    }
+
+    /// "11%" — a series' share of the donut, blank for an empty donut.
+    private func shareText(_ seconds: TimeInterval, of grand: TimeInterval) -> some View {
+        Text(grand > 0
+             ? (seconds / grand).formatted(.percent.precision(.fractionLength(0)))
+             : "")
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+            .gridColumnAlignment(.trailing)
+    }
+
+    /// The Other row of either legend: a disclosure with the folded count,
+    /// the gray dot of its slice, and the tail's subtotal and share.
+    private func otherRow(seconds: TimeInterval, count: Int, grand: TimeInterval,
+                          expanded: Binding<Bool>, font: Font) -> some View {
+        GridRow {
+            Button {
+                withAnimation(.snappy) { expanded.wrappedValue.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.gray)
+                        .frame(width: 8, height: 8)
+                    Text("\(Self.otherLabel) (\(count))")
+                        .lineLimit(1)
+                    Image(systemName: expanded.wrappedValue ? "chevron.down" : "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Other, \(count) values")
+            .accessibilityValue(expanded.wrappedValue ? "expanded" : "collapsed")
+            .help(expanded.wrappedValue ? "Hide the folded values" : "Show the folded values")
+            Text(formatDuration(seconds))
+                .monospacedDigit()
+                .gridColumnAlignment(.trailing)
+            shareText(seconds, of: grand)
+        }
+        .font(font)
+    }
+
+    /// The folded values under an open Other row: indented, a hollow dot in
+    /// place of a slice color (they share Other's gray slice), each with its
+    /// own duration and share of the donut.
+    private func tailRows(_ tail: [SeriesTotal], grand: TimeInterval) -> some View {
+        ForEach(tail) { item in
+            GridRow {
+                HStack(spacing: 6) {
+                    Circle()
+                        .strokeBorder(Color.gray, lineWidth: 1)
+                        .frame(width: 8, height: 8)
+                    Text(item.label)
+                        .lineLimit(1)
+                }
+                .padding(.leading, 14)
+                Text(formatDuration(item.seconds))
+                    .monospacedDigit()
+                    .gridColumnAlignment(.trailing)
+                shareText(item.seconds, of: grand)
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -409,33 +533,31 @@ package struct HistoryChartsView: View {
     /// Two-level legend for an `across` donut: an outer heading (subtotal
     /// and share of the grand total, slightly heavier weight) over indented
     /// inner rows whose dots match the donut's pair slices.
-    private func combinedBreakdownList(totals: [SeriesTotal], colors: [String: Color],
-                                       grand: TimeInterval) -> some View {
+    private func combinedBreakdownList(totals: [SeriesTotal], tail: [SeriesTotal],
+                                       colors: [String: Color], grand: TimeInterval,
+                                       expanded: Binding<Bool>) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 5) {
             ForEach(combinedSections(from: totals)) { section in
-                GridRow {
-                    HStack(spacing: 6) {
-                        if section.rows.isEmpty {
-                            // The folded "Other" is itself a slice, so it
-                            // keeps a dot; real headings aren't slices.
-                            Circle()
-                                .fill(colors[section.label] ?? .gray)
-                                .frame(width: 8, height: 8)
-                        }
+                if section.rows.isEmpty {
+                    // The folded "Other" is itself a slice (so it keeps a
+                    // dot; real headings aren't slices) and discloses the
+                    // folded pairs by their full "outer · inner" label.
+                    otherRow(seconds: section.seconds, count: tail.count, grand: grand,
+                             expanded: expanded, font: .callout.weight(.medium))
+                    if expanded.wrappedValue {
+                        tailRows(tail, grand: grand)
+                    }
+                } else {
+                    GridRow {
                         Text(section.label)
                             .lineLimit(1)
+                        Text(formatDuration(section.seconds))
+                            .monospacedDigit()
+                            .gridColumnAlignment(.trailing)
+                        shareText(section.seconds, of: grand)
                     }
-                    Text(formatDuration(section.seconds))
-                        .monospacedDigit()
-                        .gridColumnAlignment(.trailing)
-                    Text(grand > 0
-                         ? (section.seconds / grand).formatted(.percent.precision(.fractionLength(0)))
-                         : "")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .gridColumnAlignment(.trailing)
+                    .font(.callout.weight(.medium))
                 }
-                .font(.callout.weight(.medium))
                 ForEach(section.rows) { row in
                     GridRow {
                         HStack(spacing: 6) {
@@ -485,7 +607,7 @@ package struct HistoryChartsView: View {
     /// The row's stacked bars — short, a volume strip under the donut rather
     /// than a chart competing with it. Every row has its own, so a second
     /// breakdown never interleaves its stacks with the first's.
-    private func dailyChart(_ marks: [DailyMark]) -> some View {
+    private func dailyChart(_ marks: [DailyMark], height: CGFloat) -> some View {
         Chart(marks) { item in
             BarMark(x: .value("Day", item.day, unit: model.history.chartBucketUnit),
                     y: .value("Hours", item.seconds / 3600))
@@ -512,7 +634,7 @@ package struct HistoryChartsView: View {
                 }
             }
         }
-        .frame(height: 120)
+        .frame(height: height)
     }
 
     /// X-axis tick positions per range: the week marks every day; trailing
@@ -595,12 +717,24 @@ package struct HistoryChartsView: View {
 
     private static let otherLabel = "Other"
 
-    /// Keep the top 7 series; everything else folds into a gray "Other".
-    private func folded(_ totals: [SeriesTotal]) -> [SeriesTotal] {
-        guard totals.count > 8 else { return totals }
-        let kept = totals.prefix(7)
-        let rest = totals.dropFirst(7).reduce(0) { $0 + $1.seconds }
-        return Array(kept) + [SeriesTotal(label: Self.otherLabel, seconds: rest)]
+    /// A row's series after folding: `kept` is what the donut and strip
+    /// chart (ending in the gray Other when anything folded), `tail` the
+    /// folded values themselves, for the legend's disclosure.
+    private struct Folded {
+        let kept: [SeriesTotal]
+        let tail: [SeriesTotal]
+    }
+
+    /// Up to `cap` series chart as they are; past that the top `cap - 1`
+    /// stay and the rest fold into Other — so a row never shows more than
+    /// `cap` slices, Other included.
+    private func folded(_ totals: [SeriesTotal], cap: Int) -> Folded {
+        guard totals.count > cap else { return Folded(kept: totals, tail: []) }
+        let kept = Array(totals.prefix(cap - 1))
+        let tail = Array(totals.dropFirst(cap - 1))
+        let rest = tail.reduce(0) { $0 + $1.seconds }
+        return Folded(kept: kept + [SeriesTotal(label: Self.otherLabel, seconds: rest)],
+                      tail: tail)
     }
 
     private func foldedDaily(_ daily: [DailyTotal], keeping: Set<String>) -> [DailyTotal] {
