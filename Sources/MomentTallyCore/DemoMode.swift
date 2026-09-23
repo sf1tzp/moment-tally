@@ -88,9 +88,10 @@ package extension LocalBackend {
 /// The scheme shows all three recommended patterns:
 ///
 /// - **Quick-marks-only sets** (Cooking, Workout, Reading, Gardening,
-///   Streaming, Volunteering): no preset marks, one chip per
-///   recipe/activity/book/bed/show/org — easy to add or remove without
-///   touching history.
+///   Streaming): no preset marks, one chip per recipe/activity/book/bed/
+///   show — easy to add or remove without touching history. Volunteering
+///   is the inverse — one preset (`org: shelter`), no chips — the plain
+///   one-tap card the touch launcher needs one of (#255).
 /// - **Value-less marks** (Client Rebrand's `deliverable:`, Job Hunt's
 ///   `company:`): quick-starting one opens the popover editor with the
 ///   empty value focused, ready for a typed deliverable name (#149, #162).
@@ -173,7 +174,14 @@ package enum DemoSeed {
         // More quick-marks-only sets, same rule as Cooking/Workout/Reading.
         TagSet(name: "Gardening", symbolName: "leaf", colorHex: "#66bb6a"),
         TagSet(name: "Streaming", symbolName: "tv", colorHex: "#d84315"),
-        TagSet(name: "Volunteering", symbolName: "heart", colorHex: "#ec407a"),
+        // The one set with a preset and *no* quick labels: the plain
+        // one-tap start on touch (#255) needs a card that neither expands
+        // nor hands off. `org: shelter` has no value color, so the card
+        // keeps the org key's hue — the same #ec407a it wore as a
+        // chips-only set, and the captures don't notice.
+        TagSet(name: "Volunteering",
+               tags: [TagRow(key: "org", value: "shelter")],
+               symbolName: "heart"),
     ]
 
     // MARK: Quick labels (popover / Launcher hover chips)
@@ -238,9 +246,7 @@ package enum DemoSeed {
             return [TagRow(key: "show", value: "ted-lasso"),
                     TagRow(key: "show", value: "severance"),
                     TagRow(key: "show", value: "bake-off")]
-        case "Volunteering":
-            return [TagRow(key: "org", value: "shelter"),
-                    TagRow(key: "org", value: "food-bank")]
+        // Volunteering deliberately has none — see the set.
         default:
             return nil
         }

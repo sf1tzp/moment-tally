@@ -163,7 +163,8 @@ import Testing
     }
 
     @Test func everySetCarriesItsQuickLabels() {
-        for set in DemoSeed.tagSets {
+        // All but one: Volunteering is the chipless set (below).
+        for set in DemoSeed.tagSets where set.name != "Volunteering" {
             let quick = DemoSeed.quickLabels(forSetNamed: set.name)
             #expect(quick?.isEmpty == false, "\(set.name) has no quick labels")
         }
@@ -175,12 +176,16 @@ import Testing
         #expect(DemoSeed.quickLabels(forSetNamed: "Wedding Shoot")!.count == 6)
         // The leisure sets are quick-labels-only: chips with no presets, and
         // a colorHex so their launcher cards aren't accent-grey.
-        for name in ["Cooking", "Workout", "Reading",
-                     "Gardening", "Streaming", "Volunteering"] {
+        for name in ["Cooking", "Workout", "Reading", "Gardening", "Streaming"] {
             let set = DemoSeed.tagSets.first { $0.name == name }!
             #expect(set.tags.isEmpty)
             #expect(set.colorHex != nil)
         }
+        // Volunteering is the other way round: a preset and no chips, so
+        // the touch launcher has a card that starts on the one tap (#255).
+        let volunteering = DemoSeed.tagSets.first { $0.name == "Volunteering" }!
+        #expect(volunteering.labels == [SpanLabel(key: "org", value: "shelter")])
+        #expect(DemoSeed.quickLabels(forSetNamed: "Volunteering") == nil)
         // Music Practice's guitar chip shares the preset's key — the
         // same-key honing rule on a hover chip, so starting it swaps the
         // instrument rather than double-labelling the span.
