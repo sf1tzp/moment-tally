@@ -28,6 +28,38 @@ jobs:
       - name: Install build deps
         run: apt-get update -qq && apt-get install -y -qq nodejs libsqlite3-dev
       - uses: actions/checkout@v6
+      # The manifest drops the app layer off-Mac (Package.swift's
+      # `#if os(macOS)`), so the test step below never opens two thirds of
+      # the tree's Swift — #306 merged conflict markers into
+      # MomentTallyKit and this job stayed green. `swiftc -parse` is the
+      # frontend's parse phase alone: it resolves no imports (SwiftUI,
+      # AppKit and CloudKit are just names to it, as a probe against a
+      # module that does not exist confirms), so it syntax-checks every
+      # Swift file in the tree on Linux no matter which platform owns it.
+      # Not a substitute for type-checking the app layer — that still
+      # wants a Mac runner — but conflict markers, a stray brace and an
+      # unterminated string are parse errors, and those are the ones that
+      # land a main nobody can build.
+      #
+      # One file per invocation (`-n1`): batched, the standalone scripts'
+      # code is "not allowed at the top level", since only a lone file is
+      # the main file. xargs runs the rest after one fails and still
+      # exits nonzero (123 on the runner's GNU xargs), so a bad push
+      # names every bad file, not just the first.
+      - name: Parse every Swift file (syntax, all platforms)
+        run: |
+          count=$(find . -name '*.swift' -not -path './.build/*' | wc -l | tr -d ' ')
+          echo "parsing $count Swift files"
+          # This job's own failure mode, one level up: a tree reshuffle
+          # that leaves the find matching nothing would parse nothing and
+          # pass. A floor well under the current count (84) says so out
+          # loud instead.
+          if [ "$count" -lt 50 ]; then
+            echo "::error::expected the tree's Swift files, found $count"
+            exit 1
+          fi
+          find . -name '*.swift' -not -path './.build/*' -print0 \
+            | xargs -0 -n1 -P4 swiftc -parse
       # No dependency cache: GRDB is the only real fetch, and the runner
       # has no cache server wired up — revisit if this job gets slow.
       - name: Test (core + CLI + MomentTallyCoreTests)
