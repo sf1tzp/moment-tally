@@ -15,6 +15,7 @@ public struct MomentTallyRootView: View {
     @State private var selection: Pane = .launcher
     @State private var sheet: SheetRoute?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     @SceneStorage("regular.paneCollapsed") private var paneCollapsed = false
     @SceneStorage("regular.canvas") private var canvas: RegularCanvas = .launcher
 
@@ -52,6 +53,15 @@ public struct MomentTallyRootView: View {
         .environment(\.openAppSection, OpenAppSectionAction { tab in
             open(tab)
         })
+        // iOS has no long-lived background process (#317): the only sync
+        // triggers are the launch kick and the 60 s loop while
+        // foregrounded, so an edit made on the Mac while the phone slept
+        // is stale until the next tick. Pull on every return to the
+        // foreground; pushes (#243) are the latency optimization on top,
+        // never the floor. A no-op when sync is off (cloudSync is nil).
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { model.cloudSync?.kick(after: 0) }
+        }
         .sheet(item: $sheet) { route in
             sheetContent(route)
                 .environment(model)

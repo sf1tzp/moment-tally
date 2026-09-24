@@ -59,6 +59,13 @@ targets:
         product: MomentTallyKit
     settings:
       base:
+        # iCloud sync (#317): the CloudKit container claim, hand-written
+        # and commented like its Mac twins in scripts/. Referenced through
+        # the raw build setting rather than xcodegen's `entitlements:` key,
+        # because that key *generates* the file at `path` from its
+        # `properties` — and with none given it overwrites the file with an
+        # empty dict on every `just ios-project`. Relative to ios/.
+        CODE_SIGN_ENTITLEMENTS: MomentTally.entitlements
         # Universal purchase (#116): the iOS app is the same ASC record as
         # the Mac app, so it shares the Mac bundle id
         # (scripts/Info.plist.in) — which is also what grants access to the

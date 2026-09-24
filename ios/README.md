@@ -5,6 +5,14 @@ Everything Xcode-specific in one directory, deliberately *outside*
 
 - `project.yml` — the xcodegen spec. The `.xcodeproj` it generates is
   gitignored; regenerate with `just ios-project`.
+- `MomentTally.entitlements` — the iCloud container claim (#317), the iOS
+  twin of `scripts/MomentTally.entitlements`. Referenced from `project.yml`
+  through `CODE_SIGN_ENTITLEMENTS`, not xcodegen's `entitlements:` key,
+  which would regenerate (and empty) the file on every `just ios-project`.
+  Automatic signing mints the profiles that grant it; there is no
+  environment key — Xcode leaves simulator and Xcode-run builds unstamped
+  (Development) and the App Store export claims Production, and
+  `BuildEntitlements` reads whichever the binary carries.
 - `App/MomentTallyApp.swift` — the iOS shell: `@main`, font registration,
   and `MomentTallyRootView()`. The Mac twin is
   `Sources/MomentTally/App.swift`. It's ~20 lines because the real iOS

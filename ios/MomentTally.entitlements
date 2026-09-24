@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- iCloud sync on iPhone and iPad (#317). The iOS twin of the two
+	     iCloud keys in scripts/MomentTally.entitlements: the same container
+	     as the Mac, because the universal app (#116) shares the bundle id
+	     and the App ID already carries the iCloud capability. Referenced
+	     from project.yml (CODE_SIGN_ENTITLEMENTS); Xcode's automatic
+	     signing mints the iOS profile that grants these. No sandbox keys:
+	     iOS apps are sandboxed unconditionally.
+
+	     No com.apple.developer.icloud-container-environment here, unlike
+	     the Mac variants: Xcode leaves a simulator or Xcode-run device
+	     build unstamped (measured on Xcode 26.6 and 27.0 — the signed
+	     .xcent carries only the container keys) and only the App Store
+	     export claims Production. BuildEntitlements reads whatever the
+	     binary carries and treats "unstamped" as Development, so the
+	     store's environment guard sees the truth. -->
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.com.streetfortress.MomentTally</string>
+	</array>
+</dict>
+</plist>
