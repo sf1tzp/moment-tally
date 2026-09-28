@@ -136,7 +136,7 @@ let package = Package(
         // XCFramework; bundle-app.sh copies it into Contents/Frameworks.
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0"),
         // Command parsing for the CLI target only.
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0")
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2")
     ],
     targets: [
         // The store and its domain (#80): everything the app and the CLI
