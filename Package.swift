@@ -134,7 +134,7 @@ let package = Package(
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
         // In-app auto-update (issue #46). The SPM distribution is a prebuilt
         // XCFramework; bundle-app.sh copies it into Contents/Frameworks.
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0"),
         // Command parsing for the CLI target only.
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0")
     ],
